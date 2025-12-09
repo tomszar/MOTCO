@@ -1,4 +1,4 @@
-name: Publish to PyPI
+name: Publish to PyPI and Release
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  release:
+  publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
     environment: pypi
@@ -23,5 +23,11 @@ jobs:
         run: uv build
       - name: Publish
         run: uv publish
+
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
       - name: Release
         uses: softprops/action-gh-release@v2
