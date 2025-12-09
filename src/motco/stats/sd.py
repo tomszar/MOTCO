@@ -1,86 +1,153 @@
-from typing import Union
+from typing import Sequence, Union
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
-from sklearn.preprocessing import OneHotEncoder
 
 
-def center_matrix(dat: pd.DataFrame) -> pd.DataFrame:
+def center_matrix(
+    dat: pd.DataFrame,
+    group_col: str,
+    level_col: str,
+    feature_cols: Sequence[str] | None = None,
+) -> pd.DataFrame:
     """
-    Center matrix grouped by sex.
+    Center feature columns by per-group means.
 
     Parameters
     ----------
     dat: pd.DataFrame
-        Original, non-centered dataframe
+        Original, non-centered dataframe.
+    group_col: str
+        Column in `dat` indicating the group (between-subject factor).
+    level_col: str
+        Column in `dat` indicating the level/state (within-group factor).
+    feature_cols: Sequence[str] | None
+        Feature columns to center. If None, all numeric columns except
+        `group_col` and `level_col` are used.
 
     Returns
-    ----------
-    datc: pd.DataFrame
-        Centered dataframe
+    -------
+    pd.DataFrame
+        A copy of `dat` with selected feature columns centered within groups.
     """
     datc = dat.copy()
-    dat_num = dat.copy()
-    del dat_num["DX"]
-    means = dat_num.groupby("PTGENDER").mean()
-    last_col = str(dat.columns.get_loc("DX") - 1)
-    datc.loc[dat["PTGENDER"] == "Female", "0":last_col] = (
-        datc.loc[dat["PTGENDER"] == "Female", "0":last_col] - means.iloc[0, :]
-    )
-    datc.loc[dat["PTGENDER"] == "Male", "0":last_col] = (
-        datc.loc[dat["PTGENDER"] == "Male", "0":last_col] - means.iloc[1, :]
+    if feature_cols is None:
+        feature_cols = [
+            c
+            for c in datc.select_dtypes(include=[np.number]).columns.tolist()
+            if c not in {group_col, level_col}
+        ]
+    if not feature_cols:
+        return datc
+    # Center within groups using group-wise means
+    datc.loc[:, feature_cols] = (
+        datc.loc[:, feature_cols]
+        - datc.groupby(group_col)[feature_cols].transform("mean")
     )
     return datc
 
 
-def get_model_matrix(X: pd.DataFrame, full: bool = True) -> np.ndarray:
+def get_model_matrix(
+    X: pd.DataFrame,
+    group_col: str,
+    level_col: str,
+    full: bool = True,
+) -> np.ndarray:
     """
-    Generate a model matrix from a dataframe of factors.
+    Build a design (model) matrix for group × level factors.
+
+    Coding scheme
+    -------------
+    - Intercept (column of ones).
+    - Group main effects: one-hot with drop-first for groups (G-1 columns).
+    - Level main effects: one-hot with drop-first for levels (L-1 columns).
+    - If `full=True`, include all interaction terms between group and level
+      dummies: (G-1) × (L-1) columns.
+
+    The category order is deterministic: sorted by string representation.
 
     Parameters
     ----------
     X: pd.DataFrame
-        Matrix with factors to convert to model matrix.
+        DataFrame containing `group_col` and `level_col`.
+    group_col: str
+        Name of the group column.
+    level_col: str
+        Name of the level/state column.
     full: bool
-        Whether to return the full matrix. If False, then
-        return the reduced matrix.
+        Whether to include interaction terms.
 
     Returns
     -------
-    model_mat: np.ndarray
+    np.ndarray
         Model matrix with intercept.
     """
-    enc = OneHotEncoder(handle_unknown="ignore")
-    model_mat = enc.fit(X).transform(X).toarray()
-    # Intercept is control female
-    model_mat = np.delete(model_mat, [2, 3], 1)
-    if full:
-        model_mat = np.c_[
-            model_mat,
-            model_mat[:, 0] * model_mat[:, 2],
-            model_mat[:, 1] * model_mat[:, 2],
-        ]
-    # Add intercept
-    model_mat = np.c_[np.ones(model_mat.shape[0]), model_mat]
+    # Determine deterministic category order
+    g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
+    l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
+    g = pd.Categorical(X[group_col].astype(str), categories=g_levels, ordered=True)
+    l = pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True)
+
+    G = pd.get_dummies(g, drop_first=True, dtype=int)
+    L = pd.get_dummies(l, drop_first=True, dtype=int)
+
+    parts = []
+    # Intercept
+    parts.append(pd.DataFrame({"Intercept": np.ones(len(X))}, index=X.index))
+    # Main effects
+    if G.shape[1] > 0:
+        parts.append(G)
+    if L.shape[1] > 0:
+        parts.append(L)
+    # Interactions
+    if full and G.shape[1] > 0 and L.shape[1] > 0:
+        inter_cols = {}
+        for g_col in G.columns:
+            for l_col in L.columns:
+                inter_cols[f"{g_col}:{l_col}"] = G[g_col].values * L[l_col].values
+        parts.append(pd.DataFrame(inter_cols, index=X.index))
+
+    model_mat = pd.concat(parts, axis=1).to_numpy()
     return model_mat
 
 
-def pair_difference(dat: pd.DataFrame) -> tuple:
+def pair_difference(
+    dat: pd.DataFrame,
+    group_col: str,
+    level_col: str,
+    groups: tuple[str, str] | None = None,
+    levels: tuple[str, str] | None = None,
+    feature_cols: Sequence[str] | None = None,
+) -> tuple[float, float]:
     """
-    Estimate the difference in magnitude and direction
-    in two states, divided by sex.
+    Estimate difference in direction (angle, degrees) and magnitude (delta)
+    between two groups across two levels.
+
+    The change vector for a group is defined as `level1 - level2` over the
+    selected feature columns.
 
     Parameters
     ----------
     dat: pd.DataFrame
-        Dataframe to estimate the magnitude, must have DX and PTGENDER
-        columns.
+        DataFrame containing features plus `group_col` and `level_col`.
+    group_col: str
+        Column with groups (between-subject factor).
+    level_col: str
+        Column with levels/states (within-subject factor).
+    groups: tuple[str, str] | None
+        Pair of group labels to compare. If None, infer and require exactly two.
+    levels: tuple[str, str] | None
+        Pair of level labels to use for the change vector. If None, infer and
+        require exactly two.
+    feature_cols: Sequence[str] | None
+        Feature columns to use. If None, all numeric columns except `group_col`
+        and `level_col` are used.
 
     Returns
-    ----------
-    angle, delta: tuple
-        Difference in direction, angle, and difference in magnitue, delta.
+    -------
+    tuple[float, float]
+        (angle_degrees, delta_magnitude_difference)
 
     Notes
     -----
@@ -88,27 +155,58 @@ def pair_difference(dat: pd.DataFrame) -> tuple:
 
     References
     ----------
-    .. [1] Collyer, Michael L., and Dean C. Adams.
-           "Analysis of two‐state multivariate phenotypic change in ecological
-           studies." Ecology 88.3 (2007): 683-692.
-           https://doi.org/10.1890/06-0727
+    .. [1] Collyer, Michael L., and Dean C. Adams. "Analysis of two‐state
+           multivariate phenotypic change in ecological studies." Ecology 88.3
+           (2007): 683-692. https://doi.org/10.1890/06-0727
     """
-    last_col = dat.columns.get_loc("DX")
-    means = {
-        ("Female", "NL"): pd.DataFrame(),
-        ("Female", "Dementia"): pd.DataFrame(),
-        ("Male", "NL"): pd.DataFrame(),
-        ("Male", "Dementia"): pd.DataFrame(),
-    }
-    for g, d in dat.groupby(["PTGENDER", "DX"]):
-        if g in means:
-            means[g] = d.iloc[:, :last_col].mean()
-    yf = means[("Female", "NL")] - means[("Female", "Dementia")]
-    ym = means[("Male", "NL")] - means[("Male", "Dementia")]
-    Def = np.sqrt(np.sum(np.power(yf, 2)))
-    Dem = np.sqrt(np.sum(np.power(ym, 2)))
-    delta = Def - Dem
-    angle = np.arccos(np.inner(yf / Def, ym / Dem)) * 180 / np.pi
+    if feature_cols is None:
+        feature_cols = [
+            c
+            for c in dat.select_dtypes(include=[np.number]).columns.tolist()
+            if c not in {group_col, level_col}
+        ]
+    if not feature_cols:
+        raise ValueError("No feature columns provided or detected.")
+
+    g_vals = sorted(pd.unique(dat[group_col].astype(str)).tolist())
+    l_vals = sorted(pd.unique(dat[level_col].astype(str)).tolist())
+    if groups is None:
+        if len(g_vals) != 2:
+            raise ValueError(
+                f"Expected exactly 2 groups, found {len(g_vals)}: {g_vals}"
+            )
+        groups = (g_vals[0], g_vals[1])
+    if levels is None:
+        if len(l_vals) != 2:
+            raise ValueError(
+                f"Expected exactly 2 levels, found {len(l_vals)}: {l_vals}"
+            )
+        levels = (l_vals[0], l_vals[1])
+
+    # Compute per (group, level) means
+    means = (
+        dat.assign(
+            __g=dat[group_col].astype(str), __l=dat[level_col].astype(str)
+        )
+        .groupby(["__g", "__l"])[feature_cols]
+        .mean()
+    )
+    try:
+        y_g1 = means.loc[(groups[0], levels[0])] - means.loc[(groups[0], levels[1])]
+        y_g2 = means.loc[(groups[1], levels[0])] - means.loc[(groups[1], levels[1])]
+    except KeyError as e:
+        raise ValueError(
+            "Missing combinations for the requested groups/levels in the data."
+        ) from e
+
+    d1 = float(np.linalg.norm(y_g1.values))
+    d2 = float(np.linalg.norm(y_g2.values))
+    delta = abs(d1 - d2)
+    if d1 == 0 or d2 == 0:
+        raise ValueError(
+            "Zero-magnitude change vector for at least one group; angle is undefined."
+        )
+    angle = float(np.degrees(np.arccos(np.inner(y_g1 / d1, y_g2 / d2))))
     return angle, delta
 
 
@@ -271,28 +369,50 @@ def estimate_betas(
     return betas
 
 
-def get_observed_vectors(X, Y) -> pd.DataFrame:
+def get_observed_vectors(
+    X: pd.DataFrame,
+    Y: Union[pd.DataFrame, np.ndarray],
+    group_col: str,
+    level_col: str,
+    full: bool = True,
+) -> pd.DataFrame:
     """
-    Get means, or observed vectors, from standard LS vectors.
+    Get LS-mean vectors for each group × level cell.
 
     Parameters
     ----------
     X: pd.DataFrame
-        X matrix of responses.
-    Y: pd.DataFrame
-        Y matrix of outcomes.
+        DataFrame containing factors `group_col` and `level_col` for each row
+        corresponding to `Y`.
+    Y: Union[pd.DataFrame, np.ndarray]
+        Outcome matrix (n_samples × n_features).
+    group_col: str
+        Group column name in `X`.
+    level_col: str
+        Level/state column name in `X`.
+    full: bool
+        Whether to include interactions in the model.
 
     Returns
     -------
-    means: pd.DataFrame
-        Mean values.
+    pd.DataFrame
+        LS means arranged with a MultiIndex (group, level). Columns follow `Y`.
     """
-    model_full = get_model_matrix(X)
+    model_full = get_model_matrix(X[[group_col, level_col]], group_col, level_col, full)
     betas = estimate_betas(model_full, Y)
-    ls_matrix = _get_ls_vectors()
+
+    g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
+    l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
+    ls_matrix = build_ls_means(g_levels, l_levels, full)
     means = np.matmul(ls_matrix, betas)
 
-    return means
+    # Build a clear index and columns
+    idx = pd.MultiIndex.from_product([g_levels, l_levels], names=[group_col, level_col])
+    if isinstance(Y, pd.DataFrame):
+        cols = Y.columns
+    else:
+        cols = [f"f{i}" for i in range(means.shape[1])]
+    return pd.DataFrame(means, index=idx, columns=cols)
 
 
 def _estimate_size(obs_vect: pd.DataFrame, levels: list[int]) -> int:
@@ -454,21 +574,65 @@ def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:
     return Mp2
 
 
-def _get_ls_vectors() -> np.ndarray:
+def build_ls_means(
+    group_levels: Sequence[str],
+    level_levels: Sequence[str],
+    full: bool = True,
+) -> np.ndarray:
     """
-    Generate a least-squares vectors matrix, with intercept and interaction.
+    Generate LS-mean rows for every group × level cell consistent with
+    `get_model_matrix` coding.
+
+    Parameters
+    ----------
+    group_levels: Sequence[str]
+        Sorted group labels; first is baseline.
+    level_levels: Sequence[str]
+        Sorted level labels; first is baseline.
+    full: bool
+        Whether to include interaction terms.
 
     Returns
     -------
-    ls_matrix: np.ndarray
-        LS vector matrix.
+    np.ndarray
+        LS-mean design matrix with shape (G×L, 1 + (G-1) + (L-1) + I), where
+        I = (G-1)×(L-1) if `full=True` else 0. Row order is by group major,
+        then level minor.
     """
-    f_c = [1, 0, 0, 0, 0, 0]
-    f_m = [1, 0, 1, 0, 0, 0]
-    f_d = [1, 1, 0, 0, 0, 0]
-    m_c = [1, 0, 0, 1, 0, 0]
-    m_m = [1, 0, 1, 1, 0, 1]
-    m_d = [1, 1, 0, 1, 1, 0]
-    ls_matrix = np.array([f_c, f_m, f_d, m_c, m_m, m_d])
+    g_levels = list(group_levels)
+    l_levels = list(level_levels)
+    Gm1 = max(len(g_levels) - 1, 0)
+    Lm1 = max(len(l_levels) - 1, 0)
+    n_rows = max(len(g_levels), 1) * max(len(l_levels), 1)
+    n_cols = 1 + Gm1 + Lm1 + (Gm1 * Lm1 if full else 0)
+    M = np.zeros((n_rows, n_cols), dtype=float)
 
-    return ls_matrix
+    def row_for(i_g: int, i_l: int) -> int:
+        return i_g * len(l_levels) + i_l
+
+    # Column indices
+    col = 0
+    INTERCEPT = col
+    col += 1
+    G_START = col
+    col += Gm1
+    L_START = col
+    col += Lm1
+    I_START = col if full else None
+
+    for gi, g_val in enumerate(g_levels):
+        for li, l_val in enumerate(l_levels):
+            r = row_for(gi, li)
+            # Intercept
+            M[r, INTERCEPT] = 1.0
+            # Group dummies (drop first)
+            if gi > 0 and Gm1 > 0:
+                M[r, G_START + (gi - 1)] = 1.0
+            # Level dummies (drop first)
+            if li > 0 and Lm1 > 0:
+                M[r, L_START + (li - 1)] = 1.0
+            # Interactions
+            if full and gi > 0 and li > 0 and (Gm1 > 0 and Lm1 > 0):
+                idx = (gi - 1) * Lm1 + (li - 1)
+                M[r, I_START + idx] = 1.0
+    return M

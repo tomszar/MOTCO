@@ -23,3 +23,5 @@ jobs:
         run: uv build
       - name: Publish
         run: uv publish
+      - name: Release
+        uses: softprops/action-gh-release@v2

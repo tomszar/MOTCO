@@ -102,17 +102,62 @@ Where:
 - `contrast.json` is a JSON array of index lists, where each inner list enumerates the cohort indices belonging to the same group. Example: `[[0,1],[2,3]]`.
 - Output JSON will include delta (magnitude) and angle (direction) matrices; RRPP adds distributions per permutation.
 
-Important: The `sd.py` utilities include helpers tailored to a specific example dataset (e.g., `get_model_matrix` expects certain categorical columns). For general workflows, prefer preparing explicit model matrices and LS means externally and passing them to the CLI as shown above.
+Important: The `sd.py` utilities are now generalized and no longer assume dataset‑specific column names. See the Python API notes below for helpers to build model matrices and LS means directly from your `group` and `level` columns.
 
 ## Python API (selected)
 
 ```python
 from motco.stats.pls import plsda_doubleCV
 from motco.stats.snf import get_affinity_matrix, SNF, get_spectral
-from motco.stats.sd import estimate_difference, RRPP
+from motco.stats.sd import (
+    estimate_difference,
+    RRPP,
+    center_matrix,
+    get_model_matrix,
+    build_ls_means,
+    get_observed_vectors,
+    pair_difference,
+)
+
+# Example: build model matrix and LS means from group/level columns
+import pandas as pd
+import numpy as np
+
+# X_factors contains two categorical columns: 'group' and 'level'
+X_factors = pd.DataFrame({
+    'group': ['A','A','B','B'],
+    'level': ['t0','t1','t0','t1'],
+})
+
+# Y is the outcome/feature matrix aligned by rows to X_factors (e.g., latent space)
+Y = pd.DataFrame(np.random.randn(4, 3), columns=['z1','z2','z3'])
+
+# Build design and estimate LS means for all group×level cells
+X = get_model_matrix(X_factors, group_col='group', level_col='level', full=True)
+ls = build_ls_means(
+    group_levels=sorted(X_factors['group'].astype(str).unique()),
+    level_levels=sorted(X_factors['level'].astype(str).unique()),
+    full=True,
+)
+deltas, angles, shapes = estimate_difference(Y=Y.values, model_matrix=X, LS_means=ls, contrast=[[0,1],[2,3]])
+
+# Two‑state comparison between two groups at two levels (angle & delta)
+df = X_factors.copy()
+df = pd.concat([df, Y], axis=1)
+angle_deg, delta_mag = pair_difference(df, group_col='group', level_col='level', feature_cols=['z1','z2','z3'])
+
+# Center features within groups (optional preprocessing)
+df_centered = center_matrix(df, group_col='group', level_col='level', feature_cols=['z1','z2','z3'])
 ```
 
 See inline docstrings in the modules under `src/motco/stats/` for full details.
+
+### Breaking changes
+
+- The statistical helpers in `motco.stats.sd` were generalized from dataset‑specific
+  assumptions (e.g., columns like `PTGENDER` and `DX`) to explicit `group_col` and
+  `level_col` parameters. There are no defaults; you must provide your column names.
+  Legacy parameter names (e.g., `sex_col`) are removed.
 
 ## License
 
