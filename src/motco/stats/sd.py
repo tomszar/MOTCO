@@ -296,7 +296,10 @@ def estimate_difference(
     """
     n_groups = len(contrast)
     betas = estimate_betas(model_matrix, Y)
-    obs_vect = pd.DataFrame(np.matmul(LS_means, betas))
+    # Compute LS-mean vectors; keep as DataFrame to minimize behavioral drift
+    obs_vect = pd.DataFrame(
+        np.matmul(np.asarray(LS_means, dtype=float), np.asarray(betas, dtype=float))
+    )
     ys = []
     des = []
     angles = np.zeros((n_groups, n_groups))
@@ -370,7 +373,9 @@ def RRPP(
     y_hat.index = Y.index
     # Resdiuals of reduced mode (these are the permuted units)
     y_res = Y - y_hat
-    ids = y_res.index
+    # Prepare NumPy views to avoid pandas inside the permutation loop
+    y_hat_np = np.asarray(y_hat)
+    y_res_np = np.asarray(y_res)
     # Prepare containers
     deltas: list[np.ndarray] = []
     angles: list[np.ndarray] = []
@@ -378,13 +383,12 @@ def RRPP(
 
     # If no parallelization requested, keep original serial behavior
     if n_jobs in (None, 1):
+        n = int(np.asarray(y_res_np).shape[0])
+        rng = np.random.default_rng()
         for _ in range(permutations):
-            # Permute rows
-            ids_permuted = np.random.permutation(ids)
-            y_res_permuted = y_res.loc[ids_permuted, :]
-            y_res_permuted.index = y_res.index
-            # Create random values
-            y_random = y_hat + y_res_permuted
+            idx = rng.permutation(n)
+            # Create randomized response
+            y_random = y_hat_np + y_res_np[idx, :]
             d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
             deltas.append(d)
             angles.append(a)
@@ -445,10 +449,38 @@ def estimate_betas(
     betas: Union[pd.DataFrame, np.ndarray]
         Beta coefficients
     """
-    left = np.matmul(np.transpose(X), X)
-    right = np.matmul(np.transpose(X), Y)
-    betas = np.matmul(np.linalg.inv(left), right)
-    return betas
+    # Convert inputs to arrays for linear algebra while preserving Y's metadata
+    X_arr = np.asarray(X, dtype=float)
+    Y_is_df = isinstance(Y, pd.DataFrame)
+    if Y_is_df:
+        Y_arr = Y.to_numpy(dtype=float)
+        y_cols = Y.columns
+    else:
+        Y_arr = np.asarray(Y, dtype=float)
+        y_cols = None
+
+    # Solve normal equations using factorization with robust fallbacks
+    XtX = X_arr.T @ X_arr
+    XtY = X_arr.T @ Y_arr
+    try:
+        # Cholesky is fastest and most stable for SPD XtX
+        L = np.linalg.cholesky(XtX)
+        tmp = np.linalg.solve(L, XtY)
+        betas_arr = np.linalg.solve(L.T, tmp)
+    except np.linalg.LinAlgError:
+        try:
+            # Fall back to a direct solve of the normal equations
+            betas_arr = np.linalg.solve(XtX, XtY)
+        except np.linalg.LinAlgError:
+            # Final fallback: least-squares without forming normal equations
+            # This handles rank deficiency and ill-conditioning better.
+            betas_arr, *_ = np.linalg.lstsq(X_arr, Y_arr, rcond=None)
+
+    if Y_is_df:
+        # Return a DataFrame so downstream matmul with numpy yields a DataFrame
+        # and index/column handling stays consistent with previous behavior.
+        return pd.DataFrame(betas_arr, columns=y_cols)
+    return betas_arr
 
 
 def get_observed_vectors(
@@ -497,7 +529,7 @@ def get_observed_vectors(
     return pd.DataFrame(means, index=idx, columns=cols)
 
 
-def _estimate_size(obs_vect: pd.DataFrame, levels: list[int]) -> int:
+def _estimate_size(obs_vect: pd.DataFrame | np.ndarray, levels: list[int]) -> float:
     """
     Estimate the size of a trajectory of two or more levels.
 
@@ -510,23 +542,23 @@ def _estimate_size(obs_vect: pd.DataFrame, levels: list[int]) -> int:
 
     Returns
     -------
-    size: int
+    size: float
         Size of the trajectory.
     """
-    if isinstance(obs_vect, pd.DataFrame) is False:
+    if not isinstance(obs_vect, pd.DataFrame):
         obs_vect = pd.DataFrame(obs_vect)
     n_levels = len(levels)
-    size = 0
+    size = 0.0
     for i, val in enumerate(levels):
         if val < levels[n_levels - 1]:
             y = obs_vect.iloc[val, :] - obs_vect.iloc[levels[i + 1], :]
-            d = np.sqrt(np.sum(np.power(y, 2)))
+            d = float(np.sqrt(np.sum(np.power(y, 2))))
             size += d
-    return size
+    return float(size)
 
 
 def _estimate_orientation(
-    obs_vect: pd.DataFrame,
+    obs_vect: pd.DataFrame | np.ndarray,
     levels: list[int],
 ) -> np.ndarray:
     """
@@ -544,18 +576,18 @@ def _estimate_orientation(
     orientation: int
         Orientation of the trajectory.
     """
-    if isinstance(obs_vect, pd.DataFrame) is False:
+    if not isinstance(obs_vect, pd.DataFrame):
         obs_vect = pd.DataFrame(obs_vect)
     # N of dimensions
     vect = obs_vect.iloc[levels, :]
     k = vect.shape[1]
     # Center matrix
-    vect -= np.mean(vect, axis=0)
+    vect = vect - np.mean(vect, axis=0)
     # SVD
     _, _, V = np.linalg.svd(np.cov(vect.transpose()))
     orientation = V.transpose()[:k, 0]
-    # Check sing
-    c1 = np.matmul(orientation, vect.iloc[0, :])
+    # Check sign
+    c1 = float(np.matmul(orientation, vect.iloc[0, :]))
     sign = c1 / np.abs(c1)
     if sign < 0:
         orientation = -1 * orientation
