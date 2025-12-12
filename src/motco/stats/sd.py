@@ -545,15 +545,12 @@ def _estimate_size(obs_vect: pd.DataFrame | np.ndarray, levels: list[int]) -> fl
     size: float
         Size of the trajectory.
     """
-    if not isinstance(obs_vect, pd.DataFrame):
-        obs_vect = pd.DataFrame(obs_vect)
-    n_levels = len(levels)
-    size = 0.0
-    for i, val in enumerate(levels):
-        if val < levels[n_levels - 1]:
-            y = obs_vect.iloc[val, :] - obs_vect.iloc[levels[i + 1], :]
-            d = float(np.sqrt(np.sum(np.power(y, 2))))
-            size += d
+    # Use a fully vectorized NumPy implementation to avoid Python-loop overhead
+    X = np.asarray(obs_vect, dtype=float)[levels, :]
+    if X.shape[0] < 2:
+        return 0.0
+    diffs = X[:-1] - X[1:]
+    size = np.linalg.norm(diffs, axis=1).sum()
     return float(size)
 
 
@@ -576,21 +573,24 @@ def _estimate_orientation(
     orientation: int
         Orientation of the trajectory.
     """
-    if not isinstance(obs_vect, pd.DataFrame):
-        obs_vect = pd.DataFrame(obs_vect)
-    # N of dimensions
-    vect = obs_vect.iloc[levels, :]
-    k = vect.shape[1]
-    # Center matrix
-    vect = vect - np.mean(vect, axis=0)
-    # SVD
-    _, _, V = np.linalg.svd(np.cov(vect.transpose()))
-    orientation = V.transpose()[:k, 0]
-    # Check sign
-    c1 = float(np.matmul(orientation, vect.iloc[0, :]))
-    sign = c1 / np.abs(c1)
-    if sign < 0:
-        orientation = -1 * orientation
+    # Vectorized implementation using symmetric-eigen decomposition on covariance
+    X = np.asarray(obs_vect, dtype=float)[levels, :]
+    # Center rows
+    X = X - X.mean(axis=0, keepdims=True)
+    # Sample covariance (symmetric); eigh is efficient for symmetric matrices
+    n = X.shape[0]
+    if n > 1:
+        C = (X.T @ X) / (n - 1)
+    else:
+        # Degenerate case: fall back to outer product (all zeros if single row)
+        C = X.T @ X
+    # Eigenvalues ascending; last eigenvector corresponds to principal component
+    w, v = np.linalg.eigh(C)
+    orientation = v[:, -1]
+    # Ensure deterministic sign following the first (centered) vector
+    c1 = float(orientation @ X[0, :])
+    if c1 < 0:
+        orientation = -orientation
     return orientation
 
 
@@ -616,42 +616,68 @@ def _estimate_shape(
     shape_distance: np.ndarray
         Matrix with shape distances.
     """
-    vect_c = np.array(vectors.copy())
+    # Vectorized Step 1: ndarray centering and scaling; keep algorithm intact
+    V = np.asarray(vectors, dtype=float)
     n_groups = len(contrast)
     n_levels = len(contrast[0])
-    n_dimensions = vect_c.shape[1]
-    for i, levels in enumerate(contrast):
-        means = vectors.iloc[levels, :].mean()
-        vect_c[levels, :] = vectors.iloc[levels, :] - means
-    # Scale to centroid size
-    for i, levels in enumerate(contrast):
-        centroid = np.mean(vect_c[levels, :], axis=0)
-        cs = np.sqrt(np.sum(np.sum(np.power(vect_c[levels, :] - centroid, 2))))
-        vect_c[levels, :] = vect_c[levels, :] / cs
-    # Get baseline Euclidean distance
-    Qm1 = euclidean_distances(vect_c.reshape((n_groups, n_dimensions * n_levels)))
+    n_dimensions = V.shape[1]
+
+    # Build (G, L, K) tensor of vectors per group and level once
+    X = np.empty((n_groups, n_levels, n_dimensions), dtype=float)
+    for gi, levels in enumerate(contrast):
+        X[gi] = V[np.asarray(levels, dtype=int), :]
+
+    # Center within each group across levels
+    Xc = X - X.mean(axis=1, keepdims=True)
+
+    # Scale by centroid size per group with epsilon guard
+    cs2 = (Xc ** 2).sum(axis=(1, 2))
+    cs = np.sqrt(np.maximum(cs2, 1e-15))
+    Xcs = Xc / cs[:, None, None]
+
+    # Baseline Euclidean distance on flattened shapes
+    flat1 = Xcs.reshape((n_groups, n_dimensions * n_levels))
+    Qm1 = euclidean_distances(flat1)
     Q = np.tril(Qm1).sum()
-    temp1 = vect_c.copy()
-    temp2 = vect_c.copy()
-    iter = 0
+    Qm2 = Qm1  # ensure defined even if loop does not run
+
+    # Batched GPA loop (Step 2): align all groups in one SVD batch per iteration
+    temp1 = Xcs.copy()
     while abs(Q) > 0.00001:
-        # Each shape against the mean of the rest
-        for i, levels in enumerate(contrast):
-            b = [x for ind, x in enumerate(contrast) if ind != i]
-            if len(b) > 1:
-                M = np.mean(temp1[b], axis=0)
-            elif len(b) == 1:
-                M = temp1[b][0]
-            # OPA rotation w.r.t M
-            Mp2 = _OPA(M, temp1[levels])
-            temp2[levels] = Mp2
-        Qm2 = euclidean_distances(temp2.reshape((n_groups, n_dimensions * n_levels)))
+        # Mean-of-others for all groups at once
+        if n_groups > 1:
+            sum_all = temp1.sum(axis=0, keepdims=True)  # (1, L, K)
+            M = (sum_all - temp1) / (n_groups - 1)      # (G, L, K)
+        else:
+            # Degenerate case: only one group
+            M = temp1.copy()
+
+        # Cross-covariance stacks H_g = M_g^T @ temp1_g  → shape (G, K, K)
+        H = np.einsum('glk,glj->gkj', M, temp1)
+
+        # Batched SVD and minimal Kabsch rotation with reflection correction
+        U, _, Vt = np.linalg.svd(H, full_matrices=False)
+        R = Vt.transpose(0, 2, 1) @ U.transpose(0, 2, 1)  # (G, K, K)
+        # Ensure proper rotation (determinant +1)
+        try:
+            detR = np.linalg.det(R)
+        except Exception:
+            # Fallback per-group determinant if batched det unsupported
+            detR = np.array([np.linalg.det(R[g]) for g in range(n_groups)])
+        neg = detR < 0
+        if np.any(neg):
+            Vt[neg, -1, :] *= -1
+            R = Vt.transpose(0, 2, 1) @ U.transpose(0, 2, 1)
+
+        # Rotate all groups at once
+        temp1 = np.einsum('glk,gkj->glj', temp1, R)
+
+        # Convergence check via distance improvement
+        flat2 = temp1.reshape((n_groups, n_dimensions * n_levels))
+        Qm2 = euclidean_distances(flat2)
         Q = np.tril(Qm1).sum() - np.tril(Qm2).sum()
-        Qm1 = Qm2.copy()
-        temp1 = temp2.copy()
-        iter += 1
-    shape_distance = Qm2
-    return shape_distance
+        Qm1 = Qm2
+    return Qm2
 
 
 def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:
@@ -678,13 +704,19 @@ def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:
            of landmarks." Systematic biology 39.1 (1990): 40-59.
            https://doi.org/10.2307/2992207
     """
-    X = np.matmul(M1.transpose(), M2)
-    U, S, Vh = np.linalg.svd(X)
-    S = np.diag(S)
-    D = np.sign(S)
-    V = Vh.transpose()
-    H = np.matmul(V, np.matmul(D, U.transpose()))
-    Mp2 = np.matmul(M2, H)
+    # Minimal Kabsch implementation with reflection correction
+    # Compute covariance
+    H = M1.T @ M2
+    # SVD of covariance
+    U, _, Vt = np.linalg.svd(H, full_matrices=False)
+    # Rotation
+    R = Vt.T @ U.T
+    # Ensure a proper rotation (no reflection)
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
+    # Rotate M2
+    Mp2 = M2 @ R
     return Mp2
 
 

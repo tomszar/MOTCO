@@ -10,6 +10,7 @@ from motco.stats.sd import (
     estimate_difference,
     RRPP,
 )
+from sklearn.decomposition import PCA
 
 
 def _feature_columns(df: pd.DataFrame, group_col: str, level_col: str) -> list[str]:
@@ -17,7 +18,7 @@ def _feature_columns(df: pd.DataFrame, group_col: str, level_col: str) -> list[s
         c for c in df.select_dtypes(include=[np.number]).columns if c not in {group_col, level_col}
     ]
 
-PERMS = int(os.getenv("MOTCO_TEST_PERMS", "100"))
+PERMS = int(os.getenv("MOTCO_TEST_PERMS", "10000"))
 
 
 def test_example2_expected_results_match(data_dir):
@@ -36,7 +37,9 @@ def test_example2_expected_results_match(data_dir):
 
     M_full = get_model_matrix(X, group_col=group_col, level_col=level_col, full=True)
     LS = build_ls_means(g_levels, l_levels, full=True)
-    Y = df[feat_cols]
+    # Use the first 2 principal components of the feature matrix as the response Y
+    pca = PCA(n_components=2)
+    Y = pd.DataFrame(pca.fit_transform(df[feat_cols]))
 
     # Reduced model: collapse groups → only intercept + level effects
     X_red = X.copy()
