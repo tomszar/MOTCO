@@ -616,7 +616,8 @@ def _estimate_shape(
     shape_distance: np.ndarray
         Matrix with shape distances.
     """
-    # Vectorized Step 1: ndarray centering and scaling; keep algorithm intact
+    # Implement R-equivalent GPA (pgpa + pPsup): similarity Procrustes with per-iteration
+    # re-centering and re-scaling, and beta scaling = sum of (possibly signed) singular values.
     V = np.asarray(vectors, dtype=float)
     n_groups = len(contrast)
     n_levels = len(contrast[0])
@@ -627,56 +628,77 @@ def _estimate_shape(
     for gi, levels in enumerate(contrast):
         X[gi] = V[np.asarray(levels, dtype=int), :]
 
-    # Center within each group across levels
-    Xc = X - X.mean(axis=1, keepdims=True)
+    # Helper: center then scale by centroid size (Frobenius norm of centered matrix)
+    def _center_scale_unit(A: np.ndarray) -> np.ndarray:
+        Z = A - A.mean(axis=0, keepdims=True)
+        cs = float(np.linalg.norm(Z))
+        if not np.isfinite(cs) or cs <= 1e-15:
+            cs = 1.0
+        return Z / cs
 
-    # Scale by centroid size per group with epsilon guard
-    cs2 = (Xc ** 2).sum(axis=(1, 2))
-    cs = np.sqrt(np.maximum(cs2, 1e-15))
-    Xcs = Xc / cs[:, None, None]
+    # Initialize temp1 as in R: temp1[,,i] <- trans(csize(A[,,i])[[2]])
+    temp1 = np.empty_like(X)
+    for i in range(n_groups):
+        temp1[i] = _center_scale_unit(X[i])
 
-    # Baseline Euclidean distance on flattened shapes
-    flat1 = Xcs.reshape((n_groups, n_dimensions * n_levels))
-    Qm1 = euclidean_distances(flat1)
-    Q = np.tril(Qm1).sum()
-    Qm2 = Qm1  # ensure defined even if loop does not run
+    # Distance matrix of flattened shapes (like dist(t(matrix(...))))
+    def _pairwise_flat_dist(arr: np.ndarray) -> np.ndarray:
+        flat = arr.reshape((n_groups, n_dimensions * n_levels))
+        return euclidean_distances(flat)
 
-    # Batched GPA loop (Step 2): align all groups in one SVD batch per iteration
-    temp1 = Xcs.copy()
-    while abs(Q) > 0.00001:
-        # Mean-of-others for all groups at once
-        if n_groups > 1:
-            sum_all = temp1.sum(axis=0, keepdims=True)  # (1, L, K)
-            M = (sum_all - temp1) / (n_groups - 1)      # (G, L, K)
-        else:
-            # Degenerate case: only one group
-            M = temp1.copy()
+    Qm1 = _pairwise_flat_dist(temp1)
+    # Sum of lower triangle (no diagonal) as in R's sum(dist(.))
+    Q_prev_sum = float(np.tril(Qm1, k=-1).sum())
+    Q_improve = Q_prev_sum  # initialize to enter loop
 
-        # Cross-covariance stacks H_g = M_g^T @ temp1_g  → shape (G, K, K)
-        H = np.einsum('glk,glj->gkj', M, temp1)
+    # Iterate until improvement is negligible
+    while abs(Q_improve) > 0.00001:
+        temp2 = np.empty_like(temp1)
+        for i in range(n_groups):
+            # Mean shape of all groups except i (mshape(temp1[,,-i]))
+            if n_groups > 1:
+                M = temp1[np.arange(n_groups) != i].mean(axis=0)
+            else:
+                M = temp1[i]
 
-        # Batched SVD and minimal Kabsch rotation with reflection correction
-        U, _, Vt = np.linalg.svd(H, full_matrices=False)
-        R = Vt.transpose(0, 2, 1) @ U.transpose(0, 2, 1)  # (G, K, K)
-        # Ensure proper rotation (determinant +1)
-        try:
-            detR = np.linalg.det(R)
-        except Exception:
-            # Fallback per-group determinant if batched det unsupported
-            detR = np.array([np.linalg.det(R[g]) for g in range(n_groups)])
-        neg = detR < 0
-        if np.any(neg):
-            Vt[neg, -1, :] *= -1
-            R = Vt.transpose(0, 2, 1) @ U.transpose(0, 2, 1)
+            # pPsup equivalent: re-center and re-scale both shapes
+            Z1 = _center_scale_unit(temp1[i])
+            Z2 = _center_scale_unit(M)
 
-        # Rotate all groups at once
-        temp1 = np.einsum('glk,gkj->glj', temp1, R)
+            # Cross-covariance and SVD
+            H = Z2.T @ Z1
+            U, S, Vt = np.linalg.svd(H, full_matrices=False)
+            V = Vt.T
 
-        # Convergence check via distance improvement
-        flat2 = temp1.reshape((n_groups, n_dimensions * n_levels))
-        Qm2 = euclidean_distances(flat2)
-        Q = np.tril(Qm1).sum() - np.tril(Qm2).sum()
-        Qm1 = Qm2
+            # R mapping to R code: U_R <- V_np; V_R <- U_np
+            # sig <- sign(det(t(Z1) %*% Z2)) == sign(det(H))
+            detH = float(np.linalg.det(H))
+            sig = -1.0 if detH < 0.0 else 1.0  # treat 0 as +1
+
+            # Flip last column of V_R (which is U here) by sig
+            U[:, -1] *= sig
+
+            # Gam <- U_R %*% t(V_R) == V @ U.T
+            Gam = V @ U.T
+
+            # beta <- sum(Delt) with last singular value signed by sig
+            if S.size == 0:
+                beta = 0.0
+            elif S.size == 1:
+                beta = float(sig * S[0])
+            else:
+                beta = float(np.sum(S[:-1]) + sig * S[-1])
+
+            # Mp1 = beta * Z1 %*% Gam
+            temp2[i] = beta * (Z1 @ Gam)
+
+        # Convergence check
+        Qm2 = _pairwise_flat_dist(temp2)
+        Q_sum = float(np.tril(Qm2, k=-1).sum())
+        Q_improve = Q_prev_sum - Q_sum
+        Q_prev_sum = Q_sum
+        temp1 = temp2
+
     return Qm2
 
 
