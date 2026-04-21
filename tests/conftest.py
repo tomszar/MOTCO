@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Iterator
 
 import pandas as pd
 import pytest
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"

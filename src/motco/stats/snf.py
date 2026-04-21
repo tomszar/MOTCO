@@ -8,7 +8,6 @@ This module implements:
 """
 
 import numpy as np
-import pandas as pd
 from scipy import stats
 from scipy.spatial.distance import cdist
 from sklearn.manifold import spectral_embedding
@@ -59,12 +58,12 @@ def SNF(Ws: list[np.ndarray], k: int = 20, t: int = 20) -> np.ndarray:
         for j in range(nw):
             # Average of all other networks
             others = [Pst0[m] for m in range(nw) if m != j]
-            M = sum(others) / (nw - 1)
+            M: np.ndarray = np.stack(others).mean(axis=0)
             Pst1[j] = Ss[j] @ M @ Ss[j].T
             Pst1[j] = _full_kernel(Pst1[j])
         Pst0 = [p.copy() for p in Pst1]
 
-    Pc = sum(Pst1) / nw
+    Pc: np.ndarray = np.stack(Pst1).mean(axis=0)
     return Pc
 
 
@@ -89,7 +88,6 @@ def get_affinity_matrix(
     Ws: list[np.ndarray]
         list of affinity matrices
     """
-    nrows = len(dats[0])
     Ws: list[np.ndarray] = []
     for dat in dats:
         arr = np.asarray(dat)
@@ -167,18 +165,6 @@ def _sparse_kernel(W: np.ndarray, k: int) -> np.ndarray:
 
     S = _full_kernel(S)
     return S
-
-
-def _euclidean_dist(dat: pd.DataFrame) -> np.ndarray:
-    """
-    Calculate the pairwise Euclidean distance between
-    all the rows of a dataframe
-    """
-    euc_dist = cdist(dat, dat, metric="euclidean")
-    euc_dist.index = dat.index
-    euc_dist.columns = dat.index
-
-    return euc_dist
 
 
 def _affinity_matrix(mat, K, eps):

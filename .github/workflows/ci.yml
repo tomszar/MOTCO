@@ -27,6 +27,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --extra test
 
+      - name: Lint with ruff
+        run: uv run ruff check src/ tests/
+
+      - name: Type check with mypy
+        run: uv run mypy src/motco/
+
       - name: Run fast tests
         env:
           MOTCO_TEST_PERMS: "99"

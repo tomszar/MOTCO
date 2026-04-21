@@ -1,10 +1,10 @@
+import multiprocessing
+import os
 from typing import Optional, Sequence, Union
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
-import multiprocessing
-import os
 
 
 class _RRPPWorker:
@@ -120,10 +120,10 @@ def get_model_matrix(
     g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
     l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
     g = pd.Categorical(X[group_col].astype(str), categories=g_levels, ordered=True)
-    l = pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True)
+    lc = pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True)
 
     G = pd.get_dummies(g, drop_first=True, dtype=int)
-    L = pd.get_dummies(l, drop_first=True, dtype=int)
+    L = pd.get_dummies(lc, drop_first=True, dtype=int)
 
     parts = []
     # Intercept
@@ -138,7 +138,7 @@ def get_model_matrix(
         inter_cols = {}
         for g_col in G.columns:
             for l_col in L.columns:
-                inter_cols[f"{g_col}:{l_col}"] = G[g_col].values * L[l_col].values
+                inter_cols[f"{g_col}:{l_col}"] = np.asarray(G[g_col]) * np.asarray(L[l_col])
         parts.append(pd.DataFrame(inter_cols, index=X.index))
 
     model_mat = pd.concat(parts, axis=1).to_numpy()
@@ -225,15 +225,19 @@ def pair_difference(
         .mean()
     )
     try:
-        y_g1 = means.loc[(groups[0], levels[0])] - means.loc[(groups[0], levels[1])]
-        y_g2 = means.loc[(groups[1], levels[0])] - means.loc[(groups[1], levels[1])]
+        y_g1 = np.asarray(means.loc[(groups[0], levels[0])], dtype=float) - np.asarray(
+            means.loc[(groups[0], levels[1])], dtype=float
+        )
+        y_g2 = np.asarray(means.loc[(groups[1], levels[0])], dtype=float) - np.asarray(
+            means.loc[(groups[1], levels[1])], dtype=float
+        )
     except KeyError as e:
         raise ValueError(
             "Missing combinations for the requested groups/levels in the data."
         ) from e
 
-    d1 = float(np.linalg.norm(y_g1.values))
-    d2 = float(np.linalg.norm(y_g2.values))
+    d1 = float(np.linalg.norm(y_g1))
+    d2 = float(np.linalg.norm(y_g2))
     delta = abs(d1 - d2)
     if d1 == 0 or d2 == 0:
         raise ValueError(
@@ -389,7 +393,7 @@ def RRPP(
         return deltas, angles, shapes
 
     # Parallel path
-    n_workers = (os.cpu_count() or 1) if n_jobs == -1 else max(1, int(n_jobs))
+    n_workers = (os.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs or 1)
     n_workers = min(n_workers, max(1, permutations))
     base = permutations // n_workers
     rem = permutations % n_workers
@@ -431,8 +435,7 @@ def estimate_betas(
     """
     # Convert inputs to arrays for linear algebra while preserving Y's metadata
     X_arr = np.asarray(X, dtype=float)
-    Y_is_df = isinstance(Y, pd.DataFrame)
-    if Y_is_df:
+    if isinstance(Y, pd.DataFrame):
         Y_arr = Y.to_numpy(dtype=float)
         y_cols = Y.columns
     else:
@@ -456,7 +459,7 @@ def estimate_betas(
             # This handles rank deficiency and ill-conditioning better.
             betas_arr, *_ = np.linalg.lstsq(X_arr, Y_arr, rcond=None)
 
-    if Y_is_df:
+    if y_cols is not None:
         # Return a DataFrame so downstream matmul with numpy yields a DataFrame
         # and index/column handling stays consistent with previous behavior.
         return pd.DataFrame(betas_arr, columns=y_cols)
@@ -505,7 +508,7 @@ def get_observed_vectors(
     if isinstance(Y, pd.DataFrame):
         cols = Y.columns
     else:
-        cols = [f"f{i}" for i in range(means.shape[1])]
+        cols = [f"f{i}" for i in range(means.shape[1])]  # type: ignore[assignment]
     return pd.DataFrame(means, index=idx, columns=cols)
 
 
@@ -781,6 +784,7 @@ def build_ls_means(
                 M[r, L_START + (li - 1)] = 1.0
             # Interactions
             if full and gi > 0 and li > 0 and (Gm1 > 0 and Lm1 > 0):
+                assert I_START is not None
                 idx = (gi - 1) * Lm1 + (li - 1)
                 M[r, I_START + idx] = 1.0
     return M

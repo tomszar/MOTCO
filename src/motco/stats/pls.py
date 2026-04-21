@@ -96,33 +96,36 @@ def plsda_doubleCV(
             yd_val = yd_rest.iloc[validation, :]
             ns = list(range(1, max_components))
             args = zip(ns, repeat(X_train), repeat(yd_train), repeat(X_val), repeat(yd_val))
+            auroc: list[float]
             if n_jobs == 1:
-                auroc = [_plsda_auroc(*a) for a in args]
+                auroc = [_plsda_auroc(*a) for a in args]  # type: ignore[misc]
             else:
                 n_workers = (
                     (multiprocessing.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs)
                 )
                 with multiprocessing.Pool(processes=n_workers) as pool:
-                    auroc = pool.starmap(_plsda_auroc, args)
+                    auroc = pool.starmap(_plsda_auroc, args)  # type: ignore[arg-type]
             nlv = auroc.index(max(auroc)) + 1
             cv1_table.iloc[row_cv1, 0] = nlv
             cv1_table.iloc[row_cv1, 1] = max(auroc)
             row_cv1 += 1
         # Obtain optimal n of components
-        n_components = int(cv1_table.iloc[cv1_table[1].idxmax(), 0])
+        best_cv1_idx = int(cv1_table[1].idxmax())
+        n_components = int(cv1_table.iloc[best_cv1_idx, 0])  # type: ignore[arg-type]
         model_score = _plsda_auroc(
             n_components, X_rest, yd_rest, X_test, yd_test, return_full=True
         )
         cv2_table.iloc[row_cv2, 0] = n_components
-        cv2_table.iloc[row_cv2, 1] = model_score["score"]
-        cv2_models.append(model_score["model"])
+        cv2_table.iloc[row_cv2, 1] = model_score["score"]  # type: ignore[index]
+        cv2_models.append(model_score["model"])  # type: ignore[index]
         row_cv2 += 1
         if row_cv2 == cv2_splits:
-            best_cv2_lv = int(cv2_table.iloc[cv2_table[1].idxmax(), 0])
-            auroc_val = cv2_table.iloc[cv2_table[1].idxmax(), 1]
+            best_cv2_idx = int(cv2_table[1].idxmax())
+            best_cv2_lv = int(cv2_table.iloc[best_cv2_idx, 0])  # type: ignore[arg-type]
+            auroc_val = cv2_table.iloc[best_cv2_idx, 1]
             model_table.iloc[row_model_table, 1] = best_cv2_lv
             model_table.iloc[row_model_table, 2] = auroc_val
-            best_models.append(cv2_models[cv2_table[1].idxmax()])
+            best_models.append(cv2_models[best_cv2_idx])
             row_model_table += 1
             cv2_table = pd.DataFrame(np.zeros((cv2_splits, 2)))
             cv2_models = []
