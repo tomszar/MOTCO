@@ -19,6 +19,7 @@ def _feature_columns(df: pd.DataFrame, group_col: str, level_col: str) -> list[s
     ]
 
 PERMS = int(os.getenv("MOTCO_TEST_PERMS", "10000"))
+N_JOBS = int(os.getenv("MOTCO_N_JOBS", "1"))
 
 
 def test_example1_expected_results_match(data_dir):
@@ -53,7 +54,7 @@ def test_example1_expected_results_match(data_dir):
 
     # RRPP distributions using configurable permutations (default 1,000)
     dist_delta, dist_angle, _ = RRPP(
-        Y, M_full, M_red, LS, contrast, permutations=PERMS, n_jobs=-1
+        Y, M_full, M_red, LS, contrast, permutations=PERMS, n_jobs=N_JOBS
     )
 
     # Load ground-truth pairs and expected metrics (include p-values)

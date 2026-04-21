@@ -27,6 +27,7 @@ def plsda_doubleCV(
     n_repeats: int = 30,
     max_components: int = 50,
     random_state: int = 1203,
+    n_jobs: int = 1,
 ) -> dict[str, Union[PLSRegression, pd.DataFrame]]:
     """
     Estimate a double cross validation on a partial least squares
@@ -48,6 +49,9 @@ def plsda_doubleCV(
         Maximum number of LV to test. Default: 50.
     random_state: int
         For reproducibility. Default: 1203.
+    n_jobs: int
+        Number of parallel workers for the inner CV loop. Use -1 for all
+        available CPUs. Default: 1 (serial).
 
     Returns
     -------
@@ -91,17 +95,15 @@ def plsda_doubleCV(
             X_val = X_rest.iloc[validation, :]
             yd_val = yd_rest.iloc[validation, :]
             ns = list(range(1, max_components))
-            with multiprocessing.Pool(processes=None) as pool:
-                auroc = pool.starmap(
-                    _plsda_auroc,
-                    zip(
-                        ns,
-                        repeat(X_train),
-                        repeat(yd_train),
-                        repeat(X_val),
-                        repeat(yd_val),
-                    ),
+            args = zip(ns, repeat(X_train), repeat(yd_train), repeat(X_val), repeat(yd_val))
+            if n_jobs == 1:
+                auroc = [_plsda_auroc(*a) for a in args]
+            else:
+                n_workers = (
+                    (multiprocessing.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs)
                 )
+                with multiprocessing.Pool(processes=n_workers) as pool:
+                    auroc = pool.starmap(_plsda_auroc, args)
             nlv = auroc.index(max(auroc)) + 1
             cv1_table.iloc[row_cv1, 0] = nlv
             cv1_table.iloc[row_cv1, 1] = max(auroc)

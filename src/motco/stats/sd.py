@@ -6,42 +6,36 @@ from sklearn.metrics.pairwise import euclidean_distances
 import multiprocessing
 import os
 
-# Global context for RRPP multiprocessing workers
-_RRPP_CTX: dict[str, object] = {}
 
+class _RRPPWorker:
+    """Picklable callable that runs a chunk of RRPP permutations."""
 
-def _rrpp_pool_init(
-    y_hat_arr: np.ndarray,
-    y_res_arr: np.ndarray,
-    model_full_obj: Union[pd.DataFrame, np.ndarray],
-    ls_means_obj: Union[pd.DataFrame, np.ndarray],
-    contrast_obj: list[list[int]],
-) -> None:
-    _RRPP_CTX["y_hat"] = y_hat_arr
-    _RRPP_CTX["y_res"] = y_res_arr
-    _RRPP_CTX["model_full"] = model_full_obj
-    _RRPP_CTX["ls_means"] = ls_means_obj
-    _RRPP_CTX["contrast"] = contrast_obj
+    def __init__(
+        self,
+        y_hat: np.ndarray,
+        y_res: np.ndarray,
+        model_full: Union[pd.DataFrame, np.ndarray],
+        ls_means: Union[pd.DataFrame, np.ndarray],
+        contrast: list[list[int]],
+    ) -> None:
+        self.y_hat = y_hat
+        self.y_res = y_res
+        self.model_full = model_full
+        self.ls_means = ls_means
+        self.contrast = contrast
 
-
-def _rrpp_pool_worker(n_iters: int, seed: int):
-    rng = np.random.default_rng(seed)
-    y_hat_arr = _RRPP_CTX["y_hat"]  # type: ignore[assignment]
-    y_res_arr = _RRPP_CTX["y_res"]  # type: ignore[assignment]
-    model_full_obj = _RRPP_CTX["model_full"]  # type: ignore[assignment]
-    ls_means_obj = _RRPP_CTX["ls_means"]  # type: ignore[assignment]
-    contrast_obj = _RRPP_CTX["contrast"]  # type: ignore[assignment]
-
-    n = int(np.asarray(y_res_arr).shape[0])
-    out_d, out_a, out_s = [], [], []
-    for _ in range(n_iters):
-        idx = rng.permutation(n)
-        y_random = y_hat_arr + y_res_arr[idx, :]
-        d, a, s = estimate_difference(y_random, model_full_obj, ls_means_obj, contrast_obj)
-        out_d.append(d)
-        out_a.append(a)
-        out_s.append(s)
-    return out_d, out_a, out_s
+    def __call__(self, n_iters: int, seed: int):
+        rng = np.random.default_rng(seed)
+        n = self.y_res.shape[0]
+        out_d, out_a, out_s = [], [], []
+        for _ in range(n_iters):
+            idx = rng.permutation(n)
+            y_random = self.y_hat + self.y_res[idx, :]
+            d, a, s = estimate_difference(y_random, self.model_full, self.ls_means, self.contrast)
+            out_d.append(d)
+            out_a.append(a)
+            out_s.append(s)
+        return out_d, out_a, out_s
 
 
 def center_matrix(
@@ -381,13 +375,12 @@ def RRPP(
     angles: list[np.ndarray] = []
     shapes: list[np.ndarray] = []
 
-    # If no parallelization requested, keep original serial behavior
+    # Serial path
     if n_jobs in (None, 1):
-        n = int(np.asarray(y_res_np).shape[0])
+        n = y_res_np.shape[0]
         rng = np.random.default_rng()
         for _ in range(permutations):
             idx = rng.permutation(n)
-            # Create randomized response
             y_random = y_hat_np + y_res_np[idx, :]
             d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
             deltas.append(d)
@@ -395,33 +388,20 @@ def RRPP(
             shapes.append(s)
         return deltas, angles, shapes
 
-    # Parallel path (process-based): perform permutations with NumPy only inside workers
-    # to reduce pandas overhead and IPC volume.
-    y_hat_np = y_hat.to_numpy()
-    y_res_np = y_res.to_numpy()
-
-    # Determine number of workers and distribute work
-    if n_jobs == -1 or n_jobs is None:
-        n_workers = os.cpu_count() or 1
-    else:
-        n_workers = max(1, int(n_jobs))
+    # Parallel path
+    n_workers = (os.cpu_count() or 1) if n_jobs == -1 else max(1, int(n_jobs))
     n_workers = min(n_workers, max(1, permutations))
     base = permutations // n_workers
     rem = permutations % n_workers
     counts = [base + (1 if i < rem else 0) for i in range(n_workers)]
 
-    # Create independent seeds per worker
     ss = np.random.SeedSequence()
     seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(n_workers)]
 
-    with multiprocessing.Pool(
-        processes=n_workers,
-        initializer=_rrpp_pool_init,
-        initargs=(y_hat_np, y_res_np, model_full, LS_means, contrast),
-    ) as pool:
-        parts = pool.starmap(_rrpp_pool_worker, zip(counts, seeds))
+    worker = _RRPPWorker(y_hat_np, y_res_np, model_full, LS_means, contrast)
+    with multiprocessing.Pool(processes=n_workers) as pool:
+        parts = pool.starmap(worker, zip(counts, seeds))
 
-    # Concatenate results preserving list-of-matrices shape
     for d_list, a_list, s_list in parts:
         deltas.extend(d_list)
         angles.extend(a_list)
