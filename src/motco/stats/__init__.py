@@ -11,8 +11,8 @@ sd
 """
 
 from .pls import plsda_doubleCV  # noqa: F401
-from .snf import SNF, get_affinity_matrix, get_spectral  # noqa: F401
 from .sd import RRPP, estimate_difference  # noqa: F401
+from .snf import SNF, get_affinity_matrix, get_spectral  # noqa: F401
 
 __all__ = [
     "plsda_doubleCV",

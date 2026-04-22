@@ -4,9 +4,9 @@ import numpy as np
 import pandas as pd
 
 from motco.stats.sd import (
+    build_ls_means,
     center_matrix,
     get_model_matrix,
-    build_ls_means,
     pair_difference,
 )
 

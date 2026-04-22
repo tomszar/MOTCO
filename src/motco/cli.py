@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 
 from motco.stats.pls import plsda_doubleCV
-from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 from motco.stats.sd import RRPP, estimate_difference
+from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 
 
 def _read_csv(path: Union[str, Path]) -> pd.DataFrame:

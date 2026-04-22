@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import os
+
 import numpy as np
 import pandas as pd
+from sklearn.decomposition import PCA
 
 from motco.stats.sd import (
-    get_model_matrix,
+    RRPP,
     build_ls_means,
     estimate_difference,
-    RRPP,
+    get_model_matrix,
 )
-from sklearn.decomposition import PCA
 
 
 def _feature_columns(df: pd.DataFrame, group_col: str, level_col: str) -> list[str]:
