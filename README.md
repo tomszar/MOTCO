@@ -13,7 +13,7 @@ This repository contains the core statistical routines in `src/motco/stats` and 
 
 ## Install (with uv)
 
-Prerequisites: Python 3.9+ and [uv](https://github.com/astral-sh/uv) installed.
+Prerequisites: Python 3.11+ and [uv](https://github.com/astral-sh/uv) installed.
 
 ```bash
 # Create and activate a virtual environment
@@ -52,7 +52,8 @@ motco plsr \
 Options:
 - Use `--data` for a single CSV containing predictors and a label column specified by `--label-col`.
 - Or provide separate matrices via `--x` and `--y` CSV files (mutually exclusive with `--data`).
-- Outputs a table with the best model per outer CV repeat (LV and AUROC). The actual trained models are kept in memory; export of models is not included in the CLI at this time.
+- If `--y` has a single column, it is treated as a label vector and will be one‑hot encoded internally; if it has multiple columns, it is treated as an already encoded class matrix.
+- Outputs a table with the best model per outer CV repeat (LV and AUROC). The actual trained models are kept in memory; export of models is not included in the CLI at this time. If `--out-table` is omitted, the table is printed to stdout.
 
 Input expectations:
 - CSV files with samples in rows, features in columns. For `--data`, include a label column with binary or multi‑class outcome; it will be one‑hot encoded internally.
@@ -70,7 +71,7 @@ motco snf \
 Notes:
 - Each `--input` CSV must contain the same samples in the same order (rows = samples).
 - `--K` and `--eps` are used when constructing per‑dataset affinity matrices; `--k` and `--t` control SNF neighborhood size and iterations.
-- The fused similarity matrix is saved to `--out-fused`. If `--out-embedding` is provided, a 10‑dimensional spectral embedding is also computed and saved.
+- The fused similarity matrix is saved to `--out-fused`. If `--out-embedding` is provided, a 10‑dimensional spectral embedding is also computed and saved. If no output paths are provided, the fused matrix is printed to stdout.
 
 ### 3) Differential Effects (group differences)
 
@@ -100,7 +101,7 @@ Where:
 - `model_matrix.csv` is a design matrix (with intercept) aligned to `Y` rows. For RRPP, provide `--model-full` and `--model-reduced` (both with intercept).
 - `ls_means.csv` contains the least‑squares means to compare (rows = groups/cohorts, columns = same dimensions as `Y`).
 - `contrast.json` is a JSON array of index lists, where each inner list enumerates the cohort indices belonging to the same group. Example: `[[0,1],[2,3]]`.
-- Output JSON will include delta (magnitude) and angle (direction) matrices; RRPP adds distributions per permutation.
+- Output JSON includes `deltas`, `angles`, and `shapes` as symmetric matrices (lists of lists). With `--rrpp-permutations > 0`, these are returned as lists of matrices per permutation: e.g., `deltas[perm_idx] -> matrix`.
 
 Important: The `sd.py` utilities are now generalized and no longer assume dataset‑specific column names. See the Python API notes below for helpers to build model matrices and LS means directly from your `group` and `level` columns.
 
@@ -148,6 +149,17 @@ angle_deg, delta_mag = pair_difference(df, group_col='group', level_col='level',
 
 # Center features within groups (optional preprocessing)
 df_centered = center_matrix(df, group_col='group', level_col='level', feature_cols=['z1','z2','z3'])
+
+# RRPP with parallelism from Python API (optional)
+# deltas_list, angles_list, shapes_list = RRPP(
+#     Y=Y.values,
+#     model_full=X,
+#     model_reduced=X[:, :3],  # example reduced model
+#     LS_means=ls,
+#     contrast=[[0,1],[2,3]],
+#     permutations=999,
+#     n_jobs=-1,  # use all CPUs
+# )
 ```
 
 See inline docstrings in the modules under `src/motco/stats/` for full details.
