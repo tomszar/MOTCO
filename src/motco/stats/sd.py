@@ -292,6 +292,33 @@ def estimate_difference(
            1143-1154.
            https://doi.org/10.1111/j.1558-5646.2009.00649.x
     """
+    # --- Input validation ---
+    _Y = np.asarray(Y, dtype=float)
+    _X = np.asarray(model_matrix, dtype=float)
+    _LS = np.asarray(LS_means, dtype=float)
+    if _Y.shape[0] != _X.shape[0]:
+        raise ValueError(
+            f"Y has {_Y.shape[0]} rows but model_matrix has {_X.shape[0]} rows — "
+            "number of rows must match."
+        )
+    if _LS.shape[1] != _X.shape[1]:
+        raise ValueError(
+            f"LS_means has {_LS.shape[1]} columns but model_matrix has {_X.shape[1]} columns — "
+            "number of columns must match."
+        )
+    _n_ls = _LS.shape[0]
+    for _gi, _group in enumerate(contrast):
+        for _idx in _group:
+            if not (0 <= _idx < _n_ls):
+                raise ValueError(
+                    f"contrast[{_gi}] contains index {_idx}, but LS_means only has {_n_ls} rows "
+                    f"(valid indices: 0–{_n_ls - 1})."
+                )
+    if not np.all(np.isfinite(_Y)):
+        raise ValueError("Y contains NaN or Inf values.")
+    if not np.all(np.isfinite(_X)):
+        raise ValueError("model_matrix contains NaN or Inf values.")
+    # --- End validation ---
     n_groups = len(contrast)
     betas = estimate_betas(model_matrix, Y)
     # Compute LS-mean vectors; keep as DataFrame to minimize behavioral drift
@@ -362,6 +389,41 @@ def RRPP(
     dist_angle: list[float]
         Distribution of angles.
     """
+    # --- Input validation ---
+    _Y = np.asarray(Y, dtype=float)
+    _Xf = np.asarray(model_full, dtype=float)
+    _Xr = np.asarray(model_reduced, dtype=float)
+    _LS = np.asarray(LS_means, dtype=float)
+    if _Y.shape[0] != _Xf.shape[0]:
+        raise ValueError(
+            f"Y has {_Y.shape[0]} rows but model_full has {_Xf.shape[0]} rows — "
+            "number of rows must match."
+        )
+    if _Y.shape[0] != _Xr.shape[0]:
+        raise ValueError(
+            f"Y has {_Y.shape[0]} rows but model_reduced has {_Xr.shape[0]} rows — "
+            "number of rows must match."
+        )
+    if _LS.shape[1] != _Xf.shape[1]:
+        raise ValueError(
+            f"LS_means has {_LS.shape[1]} columns but model_full has {_Xf.shape[1]} columns — "
+            "number of columns must match."
+        )
+    _n_ls = _LS.shape[0]
+    for _gi, _group in enumerate(contrast):
+        for _idx in _group:
+            if not (0 <= _idx < _n_ls):
+                raise ValueError(
+                    f"contrast[{_gi}] contains index {_idx}, but LS_means only has {_n_ls} rows "
+                    f"(valid indices: 0–{_n_ls - 1})."
+                )
+    if not np.all(np.isfinite(_Y)):
+        raise ValueError("Y contains NaN or Inf values.")
+    if not np.all(np.isfinite(_Xf)):
+        raise ValueError("model_full contains NaN or Inf values.")
+    if not np.all(np.isfinite(_Xr)):
+        raise ValueError("model_reduced contains NaN or Inf values.")
+    # --- End validation ---
     # Set Y to be pandas df
     Y = pd.DataFrame(Y)
     # Set-up permutation procedure
