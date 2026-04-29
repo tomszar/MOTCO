@@ -58,7 +58,7 @@ def test_estimate_difference_nan_in_Y():
 def test_estimate_difference_inf_in_model_matrix():
     Y, X, LS, contrast = _make_simple_inputs()
     X[0, 0] = np.inf
-    with pytest.raises(ValueError, match="Inf"):
+    with pytest.raises(ValueError, match=r"model_matrix contains NaN or Inf"):
         estimate_difference(Y, X, LS, contrast)
 
 
@@ -75,5 +75,5 @@ def test_rrpp_nan_in_model_reduced():
     Y, X, LS, contrast = _make_simple_inputs()
     X_red = X[:, :3].copy()
     X_red[0, 0] = np.nan
-    with pytest.raises(ValueError, match="NaN"):
+    with pytest.raises(ValueError, match=r"model_reduced contains NaN"):
         RRPP(Y, X, X_red, LS, contrast, permutations=2)
