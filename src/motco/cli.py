@@ -6,8 +6,9 @@ from typing import List, Union
 import numpy as np
 import pandas as pd
 
+from motco import __version__
 from motco.stats.pls import plsda_doubleCV
-from motco.stats.sd import RRPP, estimate_difference
+from motco.stats.sd import RRPP, estimate_betas, estimate_difference
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 
 
@@ -48,15 +49,18 @@ def cmd_plsr(args: argparse.Namespace) -> None:
         else:
             y = y_df
 
-    res = plsda_doubleCV(
-        X=X,
-        y=y,
-        cv1_splits=args.cv1_splits,
-        cv2_splits=args.cv2_splits,
-        n_repeats=args.n_repeats,
-        max_components=args.max_components,
-        random_state=args.random_state,
-    )
+    try:
+        res = plsda_doubleCV(
+            X=X,
+            y=y,
+            cv1_splits=args.cv1_splits,
+            cv2_splits=args.cv2_splits,
+            n_repeats=args.n_repeats,
+            max_components=args.max_components,
+            random_state=args.random_state,
+        )
+    except ValueError as e:
+        raise SystemExit(f"Error: {e}") from None
     table = res["table"]
     if args.out_table:
         _save_csv(table, args.out_table)
@@ -73,8 +77,11 @@ def cmd_snf(args: argparse.Namespace) -> None:
     for p in args.input:
         df = _read_csv(p)
         datasets.append(df.values)
-    Ws = get_affinity_matrix(datasets, K=args.K, eps=args.eps)
-    fused = SNF(Ws, k=args.k, t=args.t)
+    try:
+        Ws = get_affinity_matrix(datasets, K=args.K, eps=args.eps)
+        fused = SNF(Ws, k=args.k, t=args.t)
+    except ValueError as e:
+        raise SystemExit(f"Error: {e}") from None
     if args.out_fused:
         _save_csv(fused, args.out_fused)
     if args.out_embedding:
@@ -90,35 +97,46 @@ def cmd_de(args: argparse.Namespace) -> None:
     with open(args.contrast, "r", encoding="utf-8") as fh:
         contrast = json.load(fh)
 
-    if args.rrpp_permutations and args.rrpp_permutations > 0:
-        if not args.model_full or not args.model_reduced:
-            raise SystemExit("For RRPP, provide --model-full and --model-reduced CSVs.")
-        Xf = _read_csv(args.model_full).values
-        Xr = _read_csv(args.model_reduced).values
-        deltas, angles, shapes = RRPP(
-            Y=Y,
-            model_full=Xf,
-            model_reduced=Xr,
-            LS_means=LS,
-            contrast=contrast,
-            permutations=args.rrpp_permutations,
-        )
-        # RRPP returns lists per permutation; convert recursively
-        out = {
-            "deltas": [[list(np.asarray(row)) for row in np.asarray(d)] for d in deltas],
-            "angles": [[list(np.asarray(row)) for row in np.asarray(a)] for a in angles],
-            "shapes": [[list(np.asarray(row)) for row in np.asarray(s)] for s in shapes],
-        }
-    else:
-        if not args.model_matrix:
-            raise SystemExit("Provide --model-matrix CSV for estimate_difference.")
-        X = _read_csv(args.model_matrix).values
-        deltas, angles, shapes = estimate_difference(Y=Y, model_matrix=X, LS_means=LS, contrast=contrast)
-        out = {
-            "deltas": np.asarray(deltas).tolist(),
-            "angles": np.asarray(angles).tolist(),
-            "shapes": np.asarray(shapes).tolist(),
-        }
+    try:
+        if args.rrpp_permutations and args.rrpp_permutations > 0:
+            if not args.model_full or not args.model_reduced:
+                raise SystemExit("For RRPP, provide --model-full and --model-reduced CSVs.")
+            Xf = _read_csv(args.model_full).values
+            Xr = _read_csv(args.model_reduced).values
+            deltas, angles, shapes = RRPP(
+                Y=Y,
+                model_full=Xf,
+                model_reduced=Xr,
+                LS_means=LS,
+                contrast=contrast,
+                permutations=args.rrpp_permutations,
+            )
+            # RRPP returns lists per permutation; convert recursively
+            out = {
+                "deltas": [[list(np.asarray(row)) for row in np.asarray(d)] for d in deltas],
+                "angles": [[list(np.asarray(row)) for row in np.asarray(a)] for a in angles],
+                "shapes": [[list(np.asarray(row)) for row in np.asarray(s)] for s in shapes],
+            }
+            if args.out_observed:
+                betas = estimate_betas(Xf, Y)
+                observed = np.asarray(LS, dtype=float) @ np.asarray(betas, dtype=float)
+                _save_csv(observed, args.out_observed)
+        else:
+            if not args.model_matrix:
+                raise SystemExit("Provide --model-matrix CSV for estimate_difference.")
+            X = _read_csv(args.model_matrix).values
+            deltas, angles, shapes = estimate_difference(Y=Y, model_matrix=X, LS_means=LS, contrast=contrast)
+            out = {
+                "deltas": np.asarray(deltas).tolist(),
+                "angles": np.asarray(angles).tolist(),
+                "shapes": np.asarray(shapes).tolist(),
+            }
+            if args.out_observed:
+                betas = estimate_betas(X, Y)
+                observed = np.asarray(LS, dtype=float) @ np.asarray(betas, dtype=float)
+                _save_csv(observed, args.out_observed)
+    except ValueError as e:
+        raise SystemExit(f"Error: {e}") from None
 
     if args.out_json:
         _save_json(out, args.out_json)
@@ -128,6 +146,7 @@ def cmd_de(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="motco", description="MOTCO CLI: PLSR, SNF, and group differences")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = p.add_subparsers(dest="command", required=True)
 
     # PLSR
@@ -165,6 +184,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_de.add_argument("--model-reduced", type=str, help="Reduced model matrix CSV (with intercept) for RRPP")
     p_de.add_argument("--rrpp-permutations", type=int, default=0, help="Number of permutations for RRPP")
     p_de.add_argument("--out-json", type=str, help="Output JSON file")
+    p_de.add_argument("--out-observed", type=str, default=None, help="Save predicted LS-mean vectors as CSV")
     p_de.set_defaults(func=cmd_de)
 
     return p

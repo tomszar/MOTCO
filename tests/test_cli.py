@@ -172,3 +172,33 @@ def test_de_rrpp_saves_json(tmp_path: Path, de_files: dict[str, Path]) -> None:
     result = json.loads(out.read_text())
     assert {"deltas", "angles", "shapes"} <= result.keys()
     assert len(result["deltas"]) == 2  # 2 permutations
+
+
+# ── --version flag ────────────────────────────────────────────────────────────
+
+def test_version_flag_prints_version(capsys: pytest.CaptureFixture) -> None:
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    # argparse prints version to stdout
+    assert "motco" in capsys.readouterr().out
+
+
+# ── --out-observed flag ───────────────────────────────────────────────────────
+
+def test_de_out_observed_saves_csv(tmp_path: Path, de_files: dict[str, Path]) -> None:
+    out_json = tmp_path / "result.json"
+    out_obs = tmp_path / "observed.csv"
+    main([
+        "de",
+        "--Y", str(de_files["Y"]),
+        "--model-matrix", str(de_files["model"]),
+        "--ls-means", str(de_files["ls"]),
+        "--contrast", str(de_files["contrast"]),
+        "--out-json", str(out_json),
+        "--out-observed", str(out_obs),
+    ])
+    assert out_obs.exists()
+    obs = pd.read_csv(out_obs)
+    # LS has 4 rows (2 groups × 2 levels), Y has 3 features
+    assert obs.shape == (4, 3)
