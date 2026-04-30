@@ -64,6 +64,12 @@ def center_matrix(
     pd.DataFrame
         A copy of `dat` with selected feature columns centered within groups.
     """
+    if feature_cols is not None:
+        missing = [c for c in feature_cols if c not in dat.columns]
+        if missing:
+            raise ValueError(
+                f"feature_cols contains column(s) not found in dat: {missing}."
+            )
     datc = dat.copy()
     if feature_cols is None:
         feature_cols = [
@@ -116,6 +122,16 @@ def get_model_matrix(
     np.ndarray
         Model matrix with intercept.
     """
+    for col, param in [(group_col, "group_col"), (level_col, "level_col")]:
+        if col not in X.columns:
+            raise ValueError(
+                f"{param}='{col}' not found in X. Available columns: {list(X.columns)}."
+            )
+        n_unique = X[col].nunique()
+        if n_unique < 2:
+            raise ValueError(
+                f"{param}='{col}' has {n_unique} unique value(s); at least 2 are required."
+            )
     # Determine deterministic category order
     g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
     l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())

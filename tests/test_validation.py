@@ -77,3 +77,43 @@ def test_rrpp_nan_in_model_reduced():
     X_red[0, 0] = np.nan
     with pytest.raises(ValueError, match=r"model_reduced contains NaN"):
         RRPP(Y, X, X_red, LS, contrast, permutations=2)
+
+
+from motco.stats.sd import get_model_matrix, center_matrix
+
+
+# --- get_model_matrix: missing column ---
+def test_get_model_matrix_missing_group_col():
+    X = pd.DataFrame({"group": ["A", "B", "A", "B"], "level": ["t0", "t1", "t0", "t1"]})
+    with pytest.raises(ValueError, match="'missing'"):
+        get_model_matrix(X, group_col="missing", level_col="level")
+
+
+def test_get_model_matrix_missing_level_col():
+    X = pd.DataFrame({"group": ["A", "B", "A", "B"], "level": ["t0", "t1", "t0", "t1"]})
+    with pytest.raises(ValueError, match="'missing'"):
+        get_model_matrix(X, group_col="group", level_col="missing")
+
+
+# --- get_model_matrix: single unique value ---
+def test_get_model_matrix_single_group():
+    X = pd.DataFrame({"group": ["A", "A", "A"], "level": ["t0", "t1", "t0"]})
+    with pytest.raises(ValueError, match="unique"):
+        get_model_matrix(X, group_col="group", level_col="level")
+
+
+def test_get_model_matrix_single_level():
+    X = pd.DataFrame({"group": ["A", "B", "A"], "level": ["t0", "t0", "t0"]})
+    with pytest.raises(ValueError, match="unique"):
+        get_model_matrix(X, group_col="group", level_col="level")
+
+
+# --- center_matrix: missing feature column ---
+def test_center_matrix_missing_feature_col():
+    dat = pd.DataFrame({
+        "group": ["A", "A", "B", "B"],
+        "level": ["t0", "t1", "t0", "t1"],
+        "f1": [1.0, 2.0, 3.0, 4.0],
+    })
+    with pytest.raises(ValueError, match="'ghost_col'"):
+        center_matrix(dat, group_col="group", level_col="level", feature_cols=["ghost_col"])
