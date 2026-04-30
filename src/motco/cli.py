@@ -107,7 +107,7 @@ def cmd_de(args: argparse.Namespace) -> None:
         out = {
             "deltas": [[list(np.asarray(row)) for row in np.asarray(d)] for d in deltas],
             "angles": [[list(np.asarray(row)) for row in np.asarray(a)] for a in angles],
-            "shapes": [list(np.asarray(s)) for s in shapes],
+            "shapes": [[list(np.asarray(row)) for row in np.asarray(s)] for s in shapes],
         }
     else:
         if not args.model_matrix:
