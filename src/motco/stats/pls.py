@@ -3,7 +3,7 @@
 This module provides:
 - `plsda_doubleCV`: double cross-validation over number of components
   for PLS-DA classification using AUROC as criterion.
-- `_calculate_vips`: compute Variable Importance in Projection (VIP) scores
+- `calculate_vips`: compute Variable Importance in Projection (VIP) scores
   from a fitted `sklearn.cross_decomposition.PLSRegression` model.
 """
 
@@ -202,7 +202,7 @@ def _plsda_auroc(
     return auroc
 
 
-def _calculate_vips(
+def calculate_vips(
     model,
     components: Union[None, list[int]] = None,
 ) -> np.ndarray:

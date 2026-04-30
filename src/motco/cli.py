@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from motco import __version__
-from motco.stats.pls import plsda_doubleCV
+from motco.stats.pls import calculate_vips, plsda_doubleCV
 from motco.stats.sd import RRPP, estimate_betas, estimate_difference
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 
@@ -68,6 +68,13 @@ def cmd_plsr(args: argparse.Namespace) -> None:
         # Print to stdout if no output path
         pd.set_option("display.max_columns", None)
         print(table)
+
+    if args.out_vips:
+        vips_data = {}
+        for rep_idx, model in enumerate(res["models"], start=1):
+            vips_data[f"rep_{rep_idx}"] = calculate_vips(model)
+        vips_df = pd.DataFrame(vips_data)
+        _save_csv(vips_df, args.out_vips)
 
 
 def cmd_snf(args: argparse.Namespace) -> None:
@@ -161,6 +168,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_plsr.add_argument("--max-components", type=int, default=50)
     p_plsr.add_argument("--random-state", type=int, default=1203)
     p_plsr.add_argument("--out-table", type=str, help="Path to save the best models table (CSV)")
+    p_plsr.add_argument("--out-vips", type=str, default=None, help="Path to save VIP scores per feature (CSV)")
     p_plsr.set_defaults(func=cmd_plsr)
 
     # SNF

@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from motco.stats.pls import plsda_doubleCV
+from motco.stats.pls import calculate_vips, plsda_doubleCV
 
 
 def _synthetic_data(n: int = 30, p: int = 10, seed: int = 0) -> tuple[pd.DataFrame, pd.Series]:
@@ -48,3 +47,19 @@ def test_plsda_lv_values_are_positive_integers():
     lvs = result["table"].iloc[:, 1].values  # LV is second column
     assert np.all(lvs >= 1)
     assert np.all(lvs == lvs.astype(int))
+
+
+def test_calculate_vips_shape():
+    X, y = _synthetic_data()
+    result = plsda_doubleCV(X, y, cv1_splits=3, cv2_splits=3, n_repeats=2, max_components=3)
+    model = result["models"][0]
+    vips = calculate_vips(model)
+    assert vips.shape == (X.shape[1],)  # one VIP per feature
+
+
+def test_calculate_vips_non_negative():
+    X, y = _synthetic_data()
+    result = plsda_doubleCV(X, y, cv1_splits=3, cv2_splits=3, n_repeats=2, max_components=3)
+    model = result["models"][0]
+    vips = calculate_vips(model)
+    assert np.all(vips >= 0)

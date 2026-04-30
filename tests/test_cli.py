@@ -202,3 +202,20 @@ def test_de_out_observed_saves_csv(tmp_path: Path, de_files: dict[str, Path]) ->
     obs = pd.read_csv(out_obs)
     # LS has 4 rows (2 groups × 2 levels), Y has 3 features
     assert obs.shape == (4, 3)
+
+
+def test_plsr_out_vips_saves_csv(tmp_path: Path, plsr_csv: Path) -> None:
+    out_table = tmp_path / "table.csv"
+    out_vips = tmp_path / "vips.csv"
+    main([
+        "plsr", "--data", str(plsr_csv), "--label-col", "label",
+        "--cv1-splits", "3", "--cv2-splits", "3", "--n-repeats", "2",
+        "--max-components", "3",
+        "--out-table", str(out_table),
+        "--out-vips", str(out_vips),
+    ])
+    assert out_vips.exists()
+    vips_df = pd.read_csv(out_vips)
+    # 5 features (from plsr_csv fixture), 2 repeats
+    assert vips_df.shape == (5, 2)
+    assert list(vips_df.columns) == ["rep_1", "rep_2"]
