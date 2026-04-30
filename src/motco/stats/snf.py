@@ -130,7 +130,7 @@ def get_affinity_matrix(
     return Ws
 
 
-def get_spectral(aff: np.ndarray) -> np.ndarray:
+def get_spectral(aff: np.ndarray, n_components: int = 10) -> np.ndarray:
     """
     Calculate spectral embedding from an affinity/similarity matrix.
 
@@ -138,13 +138,15 @@ def get_spectral(aff: np.ndarray) -> np.ndarray:
     ----------
     aff: np.ndarray
         Affinity matrix to calculate the spectral embedding.
+    n_components: int
+        Number of spectral embedding components. Default 10.
 
     Returns
     -------
     embedding: np.ndarray
         Spectral embedding.
     """
-    embedding = spectral_embedding(aff, n_components=10, random_state=1548)
+    embedding = spectral_embedding(aff, n_components=n_components, random_state=1548)
     return embedding
 
 

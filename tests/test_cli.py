@@ -219,3 +219,19 @@ def test_plsr_out_vips_saves_csv(tmp_path: Path, plsr_csv: Path) -> None:
     # 5 features (from plsr_csv fixture), 2 repeats
     assert vips_df.shape == (5, 2)
     assert list(vips_df.columns) == ["rep_1", "rep_2"]
+
+
+def test_snf_custom_spectral_components(tmp_path: Path, snf_csvs: list[Path]) -> None:
+    out_fused = tmp_path / "fused.csv"
+    out_emb = tmp_path / "emb.csv"
+    main([
+        "snf",
+        "--input", str(snf_csvs[0]), "--input", str(snf_csvs[1]),
+        "--K", "5", "--k", "5", "--t", "3",
+        "--out-fused", str(out_fused),
+        "--out-embedding", str(out_emb),
+        "--spectral-components", "5",
+    ])
+    assert out_emb.exists()
+    emb = pd.read_csv(out_emb)
+    assert emb.shape == (15, 5)

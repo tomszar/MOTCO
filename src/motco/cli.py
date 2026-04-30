@@ -92,7 +92,7 @@ def cmd_snf(args: argparse.Namespace) -> None:
     if args.out_fused:
         _save_csv(fused, args.out_fused)
     if args.out_embedding:
-        emb = get_spectral(fused)
+        emb = get_spectral(fused, n_components=args.spectral_components)
         _save_csv(emb, args.out_embedding)
     if not (args.out_fused or args.out_embedding):
         print(pd.DataFrame(fused))
@@ -180,6 +180,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_snf.add_argument("--t", type=int, default=20, help="Number of SNF iterations")
     p_snf.add_argument("--out-fused", type=str, help="Path to save fused matrix (CSV)")
     p_snf.add_argument("--out-embedding", type=str, help="Path to save spectral embedding (CSV)")
+    p_snf.add_argument("--spectral-components", type=int, default=10,
+                       help="Number of spectral embedding components (default: 10)")
     p_snf.set_defaults(func=cmd_snf)
 
     # Differential Effects

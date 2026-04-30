@@ -61,3 +61,11 @@ def test_get_spectral_default_shape():
     fused = SNF(Ws, k=5, t=5)
     emb = get_spectral(fused)
     assert emb.shape == (20, 10)  # default 10 components
+
+
+def test_get_spectral_custom_components():
+    dats = _datasets(n=20)
+    Ws = get_affinity_matrix(dats, K=5)
+    fused = SNF(Ws, k=5, t=5)
+    emb = get_spectral(fused, n_components=5)
+    assert emb.shape == (20, 5)
