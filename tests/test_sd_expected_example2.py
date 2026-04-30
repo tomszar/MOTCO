@@ -4,6 +4,7 @@ import os
 
 import numpy as np
 import pandas as pd
+import pytest
 from sklearn.decomposition import PCA
 
 from motco.stats.sd import (
@@ -23,6 +24,7 @@ PERMS = int(os.getenv("MOTCO_TEST_PERMS", "10000"))
 N_JOBS = int(os.getenv("MOTCO_N_JOBS", "1"))
 
 
+@pytest.mark.slow
 def test_example2_expected_results_match(data_dir):
     # Fixed schema for example2
     csv_path = data_dir / "evo_649_sm_example2.csv"

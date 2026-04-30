@@ -83,3 +83,6 @@ python_files = [
   "*_test.py",
 ]
 addopts = "-ra -v -s"
+markers = [
+  "slow: marks tests as slow (deselect with -m 'not slow'; use MOTCO_TEST_PERMS=10000 for full run)",
+]
