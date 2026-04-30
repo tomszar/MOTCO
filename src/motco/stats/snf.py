@@ -38,7 +38,22 @@ def SNF(Ws: list[np.ndarray], k: int = 20, t: int = 20) -> np.ndarray:
     """
     nw = len(Ws)
     if nw < 2:
-        raise ValueError("SNF requires at least two affinity matrices")
+        raise ValueError("SNF requires at least two affinity matrices.")
+    _n = Ws[0].shape[0]
+    for _i, _W in enumerate(Ws):
+        if _W.shape[0] != _W.shape[1]:
+            raise ValueError(
+                f"Ws[{_i}] is not square: shape {_W.shape}."
+            )
+        if _W.shape[0] != _n:
+            raise ValueError(
+                f"Ws[{_i}] has shape {_W.shape} but Ws[0] has shape {Ws[0].shape} — "
+                "all matrices must have the same shape."
+            )
+    if k >= _n:
+        raise ValueError(
+            f"k={k} must be less than the number of samples ({_n})."
+        )
 
     Ps: list[np.ndarray] = []
     Ss: list[np.ndarray] = []
@@ -88,6 +103,24 @@ def get_affinity_matrix(
     Ws: list[np.ndarray]
         list of affinity matrices
     """
+    if not dats:
+        raise ValueError("dats must contain at least one dataset.")
+    _n = np.asarray(dats[0]).shape[0]
+    for _i, _dat in enumerate(dats):
+        _arr = np.asarray(_dat)
+        if _arr.shape[0] != _n:
+            raise ValueError(
+                f"dats[{_i}] has {_arr.shape[0]} rows but dats[0] has {_n} rows — "
+                "all datasets must have the same number of rows."
+            )
+        if not np.all(np.isfinite(_arr)):
+            raise ValueError(f"dats[{_i}] contains NaN or Inf values.")
+    if K >= _n:
+        raise ValueError(
+            f"K={K} must be less than the number of samples ({_n})."
+        )
+    if eps <= 0:
+        raise ValueError(f"eps={eps} must be positive.")
     Ws: list[np.ndarray] = []
     for dat in dats:
         arr = np.asarray(dat)
