@@ -35,6 +35,28 @@ source .venv/bin/activate
 pip install -e .
 ```
 
+## Quick Example
+
+See `examples/motco_example.ipynb` for an end-to-end walkthrough using the bundled dataset.
+
+The equivalent CLI commands:
+
+```bash
+# 1. Build latent space with PLS-DA
+motco plsr --data tests/data/evo_649_sm_example1.csv --label-col taxa \
+  --cv1-splits 7 --cv2-splits 8 --n-repeats 5 --max-components 2 \
+  --out-table results/plsr_table.csv
+
+# 2. Estimate group differences
+motco de \
+  --Y results/latent_space.csv \
+  --model-matrix results/model_matrix.csv \
+  --ls-means results/ls_means.csv \
+  --contrast contrast.json \
+  --out-json results/de_result.json \
+  --out-observed results/ls_mean_vectors.csv
+```
+
 ## Command Line Interface
 
 MOTCO exposes a single entry‑point `motco` with subcommands for PLSR/PLS‑DA, SNF, and Differential Effects (group differences).
@@ -163,6 +185,41 @@ df_centered = center_matrix(df, group_col='group', level_col='level', feature_co
 ```
 
 See inline docstrings in the modules under `src/motco/stats/` for full details.
+
+### Inspecting LS-mean coordinates
+
+Before running `estimate_difference`, use `get_observed_vectors` to see the predicted
+mean position of each group × level cell in Y space:
+
+```python
+from motco.stats.sd import get_observed_vectors
+
+# X_factors: DataFrame with group_col and level_col
+# Y: outcome matrix aligned to X_factors by row
+obs = get_observed_vectors(X_factors, Y, group_col='group', level_col='level', full=True)
+# Returns a DataFrame with MultiIndex (group, level) and columns matching Y
+print(obs)
+```
+
+## Interpreting Results
+
+`estimate_difference` and `RRPP` return three symmetric matrices:
+
+| Output | Meaning |
+|--------|---------|
+| `deltas` | Absolute difference in trajectory magnitude (total path length) between group pairs. Larger = one group changed more than the other. |
+| `angles` | Angle in degrees between trajectory orientations. 0° = same direction; 90° = orthogonal; 180° = exactly opposite. |
+| `shapes` | Procrustes distance between trajectory shapes after removing size and orientation differences. 0 = identical shape. |
+
+**P-values via RRPP:** Use a right-tailed test with the add-one correction:
+
+```python
+def pvalue(samples, observed, i, j):
+    vals = np.array([s[i, j] for s in samples])
+    return (np.sum(vals >= observed) + 1) / (len(vals) + 1)
+```
+
+Significance threshold is typically α = 0.05.
 
 ### Breaking changes
 

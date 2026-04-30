@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/"  # update with real URL if available
+Homepage = "https://github.com/tomszar/MOTCO"
 
 [project.scripts]
 motco = "motco.cli:main"
