@@ -63,3 +63,21 @@ def test_calculate_vips_non_negative():
     model = result["models"][0]
     vips = calculate_vips(model)
     assert np.all(vips >= 0)
+
+
+def test_stats_top_level_imports():
+    from motco.stats import (  # noqa: F401
+        RRPP,
+        SNF,
+        build_ls_means,
+        calculate_vips,
+        center_matrix,
+        estimate_betas,
+        estimate_difference,
+        get_affinity_matrix,
+        get_model_matrix,
+        get_observed_vectors,
+        get_spectral,
+        pair_difference,
+        plsda_doubleCV,
+    )
