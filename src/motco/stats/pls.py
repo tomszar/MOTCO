@@ -62,6 +62,26 @@ def plsda_doubleCV(
         number of latent variables, and AUROC. Also includes the model for
         prediction.
     """
+    _X_arr = np.asarray(X, dtype=float)
+    _y_arr = np.asarray(y)
+    _n_x = _X_arr.shape[0]
+    _n_y = _y_arr.shape[0]
+    if _n_x != _n_y:
+        raise ValueError(
+            f"X has {_n_x} rows but y has {_n_y} rows — number of rows must match."
+        )
+    _n_classes = len(np.unique(_y_arr))
+    if _n_classes < 2:
+        raise ValueError(
+            f"y has {_n_classes} unique class(es); at least 2 are required."
+        )
+    if max_components > _X_arr.shape[1]:
+        raise ValueError(
+            f"max_components={max_components} exceeds the number of features in X "
+            f"({_X_arr.shape[1]}); reduce max_components."
+        )
+    if not np.all(np.isfinite(_X_arr)):
+        raise ValueError("X contains NaN or Inf values.")
     encoder = OneHotEncoder(sparse_output=False)
     yd = pd.DataFrame(encoder.fit_transform(np.array(y).reshape(-1, 1)))
     cv2 = RepeatedStratifiedKFold(

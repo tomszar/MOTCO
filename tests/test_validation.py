@@ -117,3 +117,45 @@ def test_center_matrix_missing_feature_col():
     })
     with pytest.raises(ValueError, match="'ghost_col'"):
         center_matrix(dat, group_col="group", level_col="level", feature_cols=["ghost_col"])
+
+
+from motco.stats.pls import plsda_doubleCV
+
+
+def _small_pls_args():
+    """Minimal valid args for plsda_doubleCV (fast: 2-fold, 1 repeat, 2 components)."""
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame(rng.standard_normal((20, 5)), columns=[f"f{i}" for i in range(5)])
+    y = pd.Series(["A"] * 10 + ["B"] * 10)
+    return X, y
+
+
+# --- plsda_doubleCV: row mismatch ---
+def test_plsda_row_mismatch():
+    X, y = _small_pls_args()
+    y_bad = y.iloc[:18]  # 18 labels, X has 20 rows
+    with pytest.raises(ValueError, match="20 rows"):
+        plsda_doubleCV(X, y_bad, cv1_splits=2, cv2_splits=2, n_repeats=1, max_components=2)
+
+
+# --- plsda_doubleCV: single class ---
+def test_plsda_single_class():
+    X, _ = _small_pls_args()
+    y_one = pd.Series(["A"] * 20)
+    with pytest.raises(ValueError, match="class"):
+        plsda_doubleCV(X, y_one, cv1_splits=2, cv2_splits=2, n_repeats=1, max_components=2)
+
+
+# --- plsda_doubleCV: max_components too large ---
+def test_plsda_max_components_exceeds_features():
+    X, y = _small_pls_args()  # X has 5 features
+    with pytest.raises(ValueError, match="max_components"):
+        plsda_doubleCV(X, y, cv1_splits=2, cv2_splits=2, n_repeats=1, max_components=100)
+
+
+# --- plsda_doubleCV: NaN in X ---
+def test_plsda_nan_in_X():
+    X, y = _small_pls_args()
+    X.iloc[0, 0] = np.nan
+    with pytest.raises(ValueError, match="NaN"):
+        plsda_doubleCV(X, y, cv1_splits=2, cv2_splits=2, n_repeats=1, max_components=2)
