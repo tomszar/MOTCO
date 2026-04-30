@@ -2,9 +2,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
-from motco.stats.snf import get_affinity_matrix, SNF, get_spectral
+from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 
 
 def _datasets(n: int = 20, p: int = 5, n_datasets: int = 2, seed: int = 0) -> list[np.ndarray]:

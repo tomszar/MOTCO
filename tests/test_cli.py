@@ -11,7 +11,6 @@ import pytest
 from motco.cli import main
 from motco.stats.sd import build_ls_means, get_model_matrix
 
-
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
 @pytest.fixture()

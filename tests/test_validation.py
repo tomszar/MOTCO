@@ -5,7 +5,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from motco.stats.sd import estimate_difference, RRPP, build_ls_means
+from motco.stats.pls import plsda_doubleCV
+from motco.stats.sd import RRPP, build_ls_means, center_matrix, estimate_difference, get_model_matrix
+from motco.stats.snf import SNF, get_affinity_matrix
 
 
 def _make_simple_inputs(n_samples=10, n_features=3, n_groups=2, n_levels=2):
@@ -14,8 +16,10 @@ def _make_simple_inputs(n_samples=10, n_features=3, n_groups=2, n_levels=2):
     Y = rng.standard_normal((n_samples, n_features))
     # intercept + 1 group dummy + 1 level dummy + 1 interaction = 4 cols
     X = np.ones((n_samples, 4))
-    X[:5, 1] = 0; X[5:, 1] = 1      # group dummy
-    X[::2, 2] = 0; X[1::2, 2] = 1   # level dummy
+    X[:5, 1] = 0
+    X[5:, 1] = 1
+    X[::2, 2] = 0
+    X[1::2, 2] = 1
     X[:, 3] = X[:, 1] * X[:, 2]     # interaction
     LS = build_ls_means(["A", "B"], ["t0", "t1"], full=True)  # shape (4, 4)
     contrast = [[0, 1], [2, 3]]
@@ -79,9 +83,6 @@ def test_rrpp_nan_in_model_reduced():
         RRPP(Y, X, X_red, LS, contrast, permutations=2)
 
 
-from motco.stats.sd import get_model_matrix, center_matrix
-
-
 # --- get_model_matrix: missing column ---
 def test_get_model_matrix_missing_group_col():
     X = pd.DataFrame({"group": ["A", "B", "A", "B"], "level": ["t0", "t1", "t0", "t1"]})
@@ -117,9 +118,6 @@ def test_center_matrix_missing_feature_col():
     })
     with pytest.raises(ValueError, match="'ghost_col'"):
         center_matrix(dat, group_col="group", level_col="level", feature_cols=["ghost_col"])
-
-
-from motco.stats.pls import plsda_doubleCV
 
 
 def _small_pls_args():
@@ -159,9 +157,6 @@ def test_plsda_nan_in_X():
     X.iloc[0, 0] = np.nan
     with pytest.raises(ValueError, match="NaN"):
         plsda_doubleCV(X, y, cv1_splits=2, cv2_splits=2, n_repeats=1, max_components=2)
-
-
-from motco.stats.snf import get_affinity_matrix, SNF
 
 
 def _square_affinity(n=10):
