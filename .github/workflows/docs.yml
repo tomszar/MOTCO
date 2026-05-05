@@ -1,0 +1,31 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    name: Build and deploy docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install Python
+        run: uv python install 3.11
+
+      - name: Install docs dependencies
+        run: uv sync --extra docs
+
+      - name: Install motco (for mkdocstrings import resolution)
+        run: uv pip install -e .
+
+      - name: Deploy docs to GitHub Pages
+        run: uv run mkdocs gh-deploy --force

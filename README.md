@@ -1,5 +1,7 @@
 # MOTCO — Multi-omics Trajectory Comparison
 
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://tomszar.github.io/MOTCO/)
+
 MOTCO provides tooling to generate latent spaces from multi‑omics data and to test for group differences in multivariate trajectories within those spaces.
 
 Two approaches are implemented to build latent spaces:
