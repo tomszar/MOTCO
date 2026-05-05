@@ -1,3 +1,4 @@
+import logging
 import multiprocessing
 import os
 from typing import Optional, Sequence, Union
@@ -5,6 +6,9 @@ from typing import Optional, Sequence, Union
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 class _RRPPWorker:
@@ -373,6 +377,7 @@ def RRPP(
     contrast: list[list[int]],
     permutations: int = 999,
     n_jobs: Optional[int] = None,
+    progress: bool = True,
 ) -> tuple:
     """
     Residual Randomization in a Permutation Procedure to evaluate
@@ -461,7 +466,7 @@ def RRPP(
     if n_jobs in (None, 1):
         n = y_res_np.shape[0]
         rng = np.random.default_rng()
-        for _ in range(permutations):
+        for _ in tqdm(range(permutations), desc="RRPP", unit="perm", disable=not progress):
             idx = rng.permutation(n)
             y_random = y_hat_np + y_res_np[idx, :]
             d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
@@ -473,6 +478,7 @@ def RRPP(
     # Parallel path
     n_workers = (os.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs or 1)
     n_workers = min(n_workers, max(1, permutations))
+    logger.info("Running %d permutations across %d workers", permutations, n_workers)
     base = permutations // n_workers
     rem = permutations % n_workers
     counts = [base + (1 if i < rem else 0) for i in range(n_workers)]
@@ -529,10 +535,12 @@ def estimate_betas(
         tmp = np.linalg.solve(L, XtY)
         betas_arr = np.linalg.solve(L.T, tmp)
     except np.linalg.LinAlgError:
+        logger.warning("Cholesky decomposition failed; falling back to direct solve. Check for near-singular XtX.")
         try:
             # Fall back to a direct solve of the normal equations
             betas_arr = np.linalg.solve(XtX, XtY)
         except np.linalg.LinAlgError:
+            logger.warning("Direct solve failed; falling back to lstsq. Model matrix may be rank-deficient.")
             # Final fallback: least-squares without forming normal equations
             # This handles rank deficiency and ill-conditioning better.
             betas_arr, *_ = np.linalg.lstsq(X_arr, Y_arr, rcond=None)

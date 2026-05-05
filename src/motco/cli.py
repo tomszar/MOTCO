@@ -1,5 +1,7 @@
 import argparse
 import json
+import logging
+import sys
 from pathlib import Path
 from typing import List, Union
 
@@ -154,6 +156,7 @@ def cmd_de(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="motco", description="MOTCO CLI: PLSR, SNF, and group differences")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    p.add_argument("--verbose", action="store_true", help="Enable debug logging to stderr")
     sub = p.add_subparsers(dest="command", required=True)
 
     # PLSR
@@ -203,6 +206,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: List[str] | None = None) -> None:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
     args.func(args)
 
 

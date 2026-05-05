@@ -7,6 +7,7 @@ This module provides:
   from a fitted `sklearn.cross_decomposition.PLSRegression` model.
 """
 
+import logging
 import multiprocessing
 from itertools import repeat
 from typing import Union
@@ -17,6 +18,9 @@ from sklearn.cross_decomposition import PLSRegression
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 from sklearn.preprocessing import OneHotEncoder
+from tqdm import tqdm
+
+logger = logging.getLogger(__name__)
 
 
 def plsda_doubleCV(
@@ -28,6 +32,7 @@ def plsda_doubleCV(
     max_components: int = 50,
     random_state: int = 1203,
     n_jobs: int = 1,
+    progress: bool = True,
 ) -> dict[str, Union[PLSRegression, pd.DataFrame]]:
     """
     Estimate a double cross validation on a partial least squares
@@ -100,7 +105,8 @@ def plsda_doubleCV(
     row_model_table = 0
     cv2_models = []
     best_models = []
-    for rest, test in cv2.split(X, y):
+    cv2_iter = tqdm(cv2.split(X, y), total=cv2_splits * n_repeats, desc="PLS-DA CV2", unit="fold", disable=not progress)
+    for rest, test in cv2_iter:
         # Outer CV2 loop split into test and rest
         X_rest = X.iloc[rest, :]
         X_test = X.iloc[test, :]

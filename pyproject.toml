@@ -26,6 +26,7 @@ dependencies = [
   "scikit-learn==1.8.0",
   "pandas-stubs~=2.3.3",
   "scipy-stubs~=1.16.3",
+  "tqdm>=4.0",
 ]
 
 [project.urls]
@@ -76,7 +77,7 @@ check_untyped_defs = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["sklearn.*", "scipy.*"]
+module = ["sklearn.*", "scipy.*", "tqdm.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
