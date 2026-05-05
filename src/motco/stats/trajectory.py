@@ -1,168 +1,69 @@
+from __future__ import annotations
+
 import logging
-import multiprocessing
-import os
-from typing import Optional, Sequence, Union
+from typing import Sequence, Union
 
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import euclidean_distances
-from tqdm import tqdm
+
+from motco.stats.design import build_ls_means, get_model_matrix
 
 logger = logging.getLogger(__name__)
 
 
-class _RRPPWorker:
-    """Picklable callable that runs a chunk of RRPP permutations."""
-
-    def __init__(
-        self,
-        y_hat: np.ndarray,
-        y_res: np.ndarray,
-        model_full: Union[pd.DataFrame, np.ndarray],
-        ls_means: Union[pd.DataFrame, np.ndarray],
-        contrast: list[list[int]],
-    ) -> None:
-        self.y_hat = y_hat
-        self.y_res = y_res
-        self.model_full = model_full
-        self.ls_means = ls_means
-        self.contrast = contrast
-
-    def __call__(self, n_iters: int, seed: int):
-        rng = np.random.default_rng(seed)
-        n = self.y_res.shape[0]
-        out_d, out_a, out_s = [], [], []
-        for _ in range(n_iters):
-            idx = rng.permutation(n)
-            y_random = self.y_hat + self.y_res[idx, :]
-            d, a, s = estimate_difference(y_random, self.model_full, self.ls_means, self.contrast)
-            out_d.append(d)
-            out_a.append(a)
-            out_s.append(s)
-        return out_d, out_a, out_s
-
-
-def center_matrix(
-    dat: pd.DataFrame,
-    group_col: str,
-    level_col: str,
-    feature_cols: Sequence[str] | None = None,
-) -> pd.DataFrame:
+def estimate_betas(
+    X: Union[pd.DataFrame, np.ndarray], Y: Union[pd.DataFrame, np.ndarray]
+) -> Union[pd.DataFrame, np.ndarray]:
     """
-    Center feature columns by per-group means.
+    Estimate the beta coefficients between an outcome matrix
+    and a model matrix
 
     Parameters
     ----------
-    dat: pd.DataFrame
-        Original, non-centered dataframe.
-    group_col: str
-        Column in `dat` indicating the group (between-subject factor).
-    level_col: str
-        Column in `dat` indicating the level/state (within-group factor).
-    feature_cols: Sequence[str] | None
-        Feature columns to center. If None, all numeric columns except
-        `group_col` and `level_col` are used.
-
-    Returns
-    -------
-    pd.DataFrame
-        A copy of `dat` with selected feature columns centered within groups.
-    """
-    if feature_cols is not None:
-        missing = [c for c in feature_cols if c not in dat.columns]
-        if missing:
-            raise ValueError(
-                f"feature_cols contains column(s) not found in dat: {missing}."
-            )
-    datc = dat.copy()
-    if feature_cols is None:
-        feature_cols = [
-            c
-            for c in datc.select_dtypes(include=[np.number]).columns.tolist()
-            if c not in {group_col, level_col}
-        ]
-    if not feature_cols:
-        return datc
-    # Center within groups using group-wise means
-    datc.loc[:, feature_cols] = (
-        datc.loc[:, feature_cols]
-        - datc.groupby(group_col)[feature_cols].transform("mean")
-    )
-    return datc
-
-
-def get_model_matrix(
-    X: pd.DataFrame,
-    group_col: str,
-    level_col: str,
-    full: bool = True,
-) -> np.ndarray:
-    """
-    Build a design (model) matrix for group × level factors.
-
-    Coding scheme
-    -------------
-    - Intercept (column of ones).
-    - Group main effects: one-hot with drop-first for groups (G-1 columns).
-    - Level main effects: one-hot with drop-first for levels (L-1 columns).
-    - If `full=True`, include all interaction terms between group and level
-      dummies: (G-1) × (L-1) columns.
-
-    The category order is deterministic: sorted by string representation.
-
-    Parameters
-    ----------
-    X: pd.DataFrame
-        DataFrame containing `group_col` and `level_col`.
-    group_col: str
-        Name of the group column.
-    level_col: str
-        Name of the level/state column.
-    full: bool
-        Whether to include interaction terms.
-
-    Returns
-    -------
-    np.ndarray
+    X: Union[pd.DataFrame, np.ndarray]
         Model matrix with intercept.
+    Y: Union[pd.DataFrame, np.ndarray]
+        Outcome matrix.
+
+    Returns
+    -------
+    betas: Union[pd.DataFrame, np.ndarray]
+        Beta coefficients
     """
-    for col, param in [(group_col, "group_col"), (level_col, "level_col")]:
-        if col not in X.columns:
-            raise ValueError(
-                f"{param}='{col}' not found in X. Available columns: {list(X.columns)}."
-            )
-        n_unique = X[col].nunique()
-        if n_unique < 2:
-            raise ValueError(
-                f"{param}='{col}' has {n_unique} unique value(s); at least 2 are required."
-            )
-    # Determine deterministic category order
-    g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
-    l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
-    g = pd.Categorical(X[group_col].astype(str), categories=g_levels, ordered=True)
-    lc = pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True)
+    # Convert inputs to arrays for linear algebra while preserving Y's metadata
+    X_arr = np.asarray(X, dtype=float)
+    if isinstance(Y, pd.DataFrame):
+        Y_arr = Y.to_numpy(dtype=float)
+        y_cols = Y.columns
+    else:
+        Y_arr = np.asarray(Y, dtype=float)
+        y_cols = None
 
-    G = pd.get_dummies(g, drop_first=True, dtype=int)
-    L = pd.get_dummies(lc, drop_first=True, dtype=int)
+    # Solve normal equations using factorization with robust fallbacks
+    XtX = X_arr.T @ X_arr
+    XtY = X_arr.T @ Y_arr
+    try:
+        # Cholesky is fastest and most stable for SPD XtX
+        L = np.linalg.cholesky(XtX)
+        tmp = np.linalg.solve(L, XtY)
+        betas_arr = np.linalg.solve(L.T, tmp)
+    except np.linalg.LinAlgError:
+        logger.warning("Cholesky decomposition failed; falling back to direct solve. Check for near-singular XtX.")
+        try:
+            # Fall back to a direct solve of the normal equations
+            betas_arr = np.linalg.solve(XtX, XtY)
+        except np.linalg.LinAlgError:
+            logger.warning("Direct solve failed; falling back to lstsq. Model matrix may be rank-deficient.")
+            # Final fallback: least-squares without forming normal equations
+            # This handles rank deficiency and ill-conditioning better.
+            betas_arr, *_ = np.linalg.lstsq(X_arr, Y_arr, rcond=None)
 
-    parts = []
-    # Intercept
-    parts.append(pd.DataFrame({"Intercept": np.ones(len(X))}, index=X.index))
-    # Main effects
-    if G.shape[1] > 0:
-        parts.append(G)
-    if L.shape[1] > 0:
-        parts.append(L)
-    # Interactions
-    if full and G.shape[1] > 0 and L.shape[1] > 0:
-        inter_cols = {}
-        for g_col in G.columns:
-            for l_col in L.columns:
-                inter_cols[f"{g_col}:{l_col}"] = np.asarray(G[g_col]) * np.asarray(L[l_col])
-        parts.append(pd.DataFrame(inter_cols, index=X.index))
-
-    model_mat = pd.concat(parts, axis=1).to_numpy()
-    return model_mat
+    if y_cols is not None:
+        # Return a DataFrame so downstream matmul with numpy yields a DataFrame
+        # and index/column handling stays consistent with previous behavior.
+        return pd.DataFrame(betas_arr, columns=y_cols)
+    return betas_arr
 
 
 def pair_difference(
@@ -367,189 +268,6 @@ def estimate_difference(
             angles[comp, i] = angle
             comp += 1
     return deltas, angles, shapes
-
-
-def RRPP(
-    Y: Union[pd.DataFrame, np.ndarray],
-    model_full: Union[pd.DataFrame, np.ndarray],
-    model_reduced: Union[pd.DataFrame, np.ndarray],
-    LS_means: Union[pd.DataFrame, np.ndarray],
-    contrast: list[list[int]],
-    permutations: int = 999,
-    n_jobs: Optional[int] = None,
-    progress: bool = True,
-) -> tuple:
-    """
-    Residual Randomization in a Permutation Procedure to evaluate
-    linear models.
-
-    Parameters
-    ----------
-    Y: Union[pd.DataFrame, np.ndarray]
-        Outcome matrix.
-    model_full: Union[pd.DataFrame, np.ndarray]
-        Model matrix for full model, including intercept.
-    model_reduced: Union[pd.DataFrame, np.ndarray]
-        Model matrix for reduced model, including intercept.
-    LS_means: Union[pd.DataFrame, np.ndarray]
-        Least-squares means to estimate.
-    contrast: list[list[int]]
-        Indices indicating the groups to compare based on LS means.
-        Each list must contain the cohorts that belong to the same group.
-    permutations: int
-        Number of permutations.
-    n_jobs: Optional[int]
-        If provided and > 1, run permutations in parallel using multiple
-        worker processes. Use -1 to use all available CPUs. When None or 1,
-        runs single-threaded (backward-compatible default).
-
-    Returns
-    -------
-    dist_delta: list[float]
-        Distribution of deltas.
-    dist_angle: list[float]
-        Distribution of angles.
-    """
-    # --- Input validation ---
-    _Y = np.asarray(Y, dtype=float)
-    _Xf = np.asarray(model_full, dtype=float)
-    _Xr = np.asarray(model_reduced, dtype=float)
-    _LS = np.asarray(LS_means, dtype=float)
-    if _Y.shape[0] != _Xf.shape[0]:
-        raise ValueError(
-            f"Y has {_Y.shape[0]} rows but model_full has {_Xf.shape[0]} rows — "
-            "number of rows must match."
-        )
-    if _Y.shape[0] != _Xr.shape[0]:
-        raise ValueError(
-            f"Y has {_Y.shape[0]} rows but model_reduced has {_Xr.shape[0]} rows — "
-            "number of rows must match."
-        )
-    if _LS.shape[1] != _Xf.shape[1]:
-        raise ValueError(
-            f"LS_means has {_LS.shape[1]} columns but model_full has {_Xf.shape[1]} columns — "
-            "number of columns must match."
-        )
-    _n_ls = _LS.shape[0]
-    for _gi, _group in enumerate(contrast):
-        for _idx in _group:
-            if not (0 <= _idx < _n_ls):
-                raise ValueError(
-                    f"contrast[{_gi}] contains index {_idx}, but LS_means only has {_n_ls} rows "
-                    f"(valid indices: 0–{_n_ls - 1})."
-                )
-    if not np.all(np.isfinite(_Y)):
-        raise ValueError("Y contains NaN or Inf values.")
-    if not np.all(np.isfinite(_Xf)):
-        raise ValueError("model_full contains NaN or Inf values.")
-    if not np.all(np.isfinite(_Xr)):
-        raise ValueError("model_reduced contains NaN or Inf values.")
-    # --- End validation ---
-    # Set Y to be pandas df
-    Y = pd.DataFrame(Y)
-    # Set-up permutation procedure
-    betas_red = estimate_betas(model_reduced, Y)
-    # Predicted values from reduced model
-    y_hat = np.matmul(model_reduced, betas_red)
-    y_hat.index = Y.index
-    # Resdiuals of reduced mode (these are the permuted units)
-    y_res = Y - y_hat
-    # Prepare NumPy views to avoid pandas inside the permutation loop
-    y_hat_np = np.asarray(y_hat)
-    y_res_np = np.asarray(y_res)
-    # Prepare containers
-    deltas: list[np.ndarray] = []
-    angles: list[np.ndarray] = []
-    shapes: list[np.ndarray] = []
-
-    # Serial path
-    if n_jobs in (None, 1):
-        n = y_res_np.shape[0]
-        rng = np.random.default_rng()
-        for _ in tqdm(range(permutations), desc="RRPP", unit="perm", disable=not progress):
-            idx = rng.permutation(n)
-            y_random = y_hat_np + y_res_np[idx, :]
-            d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
-            deltas.append(d)
-            angles.append(a)
-            shapes.append(s)
-        return deltas, angles, shapes
-
-    # Parallel path
-    n_workers = (os.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs or 1)
-    n_workers = min(n_workers, max(1, permutations))
-    logger.info("Running %d permutations across %d workers", permutations, n_workers)
-    base = permutations // n_workers
-    rem = permutations % n_workers
-    counts = [base + (1 if i < rem else 0) for i in range(n_workers)]
-
-    ss = np.random.SeedSequence()
-    seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(n_workers)]
-
-    worker = _RRPPWorker(y_hat_np, y_res_np, model_full, LS_means, contrast)
-    with multiprocessing.Pool(processes=n_workers) as pool:
-        parts = pool.starmap(worker, zip(counts, seeds))
-
-    for d_list, a_list, s_list in parts:
-        deltas.extend(d_list)
-        angles.extend(a_list)
-        shapes.extend(s_list)
-
-    return deltas, angles, shapes
-
-
-def estimate_betas(
-    X: Union[pd.DataFrame, np.ndarray], Y: Union[pd.DataFrame, np.ndarray]
-) -> Union[pd.DataFrame, np.ndarray]:
-    """
-    Estimate the beta coefficients between an outcome matrix
-    and a model matrix
-
-    Parameters
-    ----------
-    X: Union[pd.DataFrame, np.ndarray]
-        Model matrix with intercept.
-    Y: Union[pd.DataFrame, np.ndarray]
-        Outcome matrix.
-
-    Returns
-    -------
-    betas: Union[pd.DataFrame, np.ndarray]
-        Beta coefficients
-    """
-    # Convert inputs to arrays for linear algebra while preserving Y's metadata
-    X_arr = np.asarray(X, dtype=float)
-    if isinstance(Y, pd.DataFrame):
-        Y_arr = Y.to_numpy(dtype=float)
-        y_cols = Y.columns
-    else:
-        Y_arr = np.asarray(Y, dtype=float)
-        y_cols = None
-
-    # Solve normal equations using factorization with robust fallbacks
-    XtX = X_arr.T @ X_arr
-    XtY = X_arr.T @ Y_arr
-    try:
-        # Cholesky is fastest and most stable for SPD XtX
-        L = np.linalg.cholesky(XtX)
-        tmp = np.linalg.solve(L, XtY)
-        betas_arr = np.linalg.solve(L.T, tmp)
-    except np.linalg.LinAlgError:
-        logger.warning("Cholesky decomposition failed; falling back to direct solve. Check for near-singular XtX.")
-        try:
-            # Fall back to a direct solve of the normal equations
-            betas_arr = np.linalg.solve(XtX, XtY)
-        except np.linalg.LinAlgError:
-            logger.warning("Direct solve failed; falling back to lstsq. Model matrix may be rank-deficient.")
-            # Final fallback: least-squares without forming normal equations
-            # This handles rank deficiency and ill-conditioning better.
-            betas_arr, *_ = np.linalg.lstsq(X_arr, Y_arr, rcond=None)
-
-    if y_cols is not None:
-        # Return a DataFrame so downstream matmul with numpy yields a DataFrame
-        # and index/column handling stays consistent with previous behavior.
-        return pd.DataFrame(betas_arr, columns=y_cols)
-    return betas_arr
 
 
 def get_observed_vectors(
@@ -809,68 +527,3 @@ def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:
     # Rotate M2
     Mp2 = M2 @ R
     return Mp2
-
-
-def build_ls_means(
-    group_levels: Sequence[str],
-    level_levels: Sequence[str],
-    full: bool = True,
-) -> np.ndarray:
-    """
-    Generate LS-mean rows for every group × level cell consistent with
-    `get_model_matrix` coding.
-
-    Parameters
-    ----------
-    group_levels: Sequence[str]
-        Sorted group labels; first is baseline.
-    level_levels: Sequence[str]
-        Sorted level labels; first is baseline.
-    full: bool
-        Whether to include interaction terms.
-
-    Returns
-    -------
-    np.ndarray
-        LS-mean design matrix with shape (G×L, 1 + (G-1) + (L-1) + I), where
-        I = (G-1)×(L-1) if `full=True` else 0. Row order is by group major,
-        then level minor.
-    """
-    g_levels = list(group_levels)
-    l_levels = list(level_levels)
-    Gm1 = max(len(g_levels) - 1, 0)
-    Lm1 = max(len(l_levels) - 1, 0)
-    n_rows = max(len(g_levels), 1) * max(len(l_levels), 1)
-    n_cols = 1 + Gm1 + Lm1 + (Gm1 * Lm1 if full else 0)
-    M = np.zeros((n_rows, n_cols), dtype=float)
-
-    def row_for(i_g: int, i_l: int) -> int:
-        return i_g * len(l_levels) + i_l
-
-    # Column indices
-    col = 0
-    INTERCEPT = col
-    col += 1
-    G_START = col
-    col += Gm1
-    L_START = col
-    col += Lm1
-    I_START = col if full else None
-
-    for gi, g_val in enumerate(g_levels):
-        for li, l_val in enumerate(l_levels):
-            r = row_for(gi, li)
-            # Intercept
-            M[r, INTERCEPT] = 1.0
-            # Group dummies (drop first)
-            if gi > 0 and Gm1 > 0:
-                M[r, G_START + (gi - 1)] = 1.0
-            # Level dummies (drop first)
-            if li > 0 and Lm1 > 0:
-                M[r, L_START + (li - 1)] = 1.0
-            # Interactions
-            if full and gi > 0 and li > 0 and (Gm1 > 0 and Lm1 > 0):
-                assert I_START is not None
-                idx = (gi - 1) * Lm1 + (li - 1)
-                M[r, I_START + idx] = 1.0
-    return M

@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 
 from motco.cli import main
-from motco.stats.sd import build_ls_means, get_model_matrix
+from motco.stats.design import build_ls_means, get_model_matrix
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
