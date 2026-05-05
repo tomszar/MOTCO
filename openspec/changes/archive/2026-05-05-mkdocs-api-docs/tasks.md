@@ -39,4 +39,4 @@
 ## 8. Close issue and update README
 
 - [x] 8.1 Add a "Documentation" badge or link to the published site in `README.md`
-- [ ] 8.2 Close GitHub issue #13 referencing the relevant commits
+- [x] 8.2 Close GitHub issue #13 referencing the relevant commits
