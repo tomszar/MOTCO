@@ -1,25 +1,25 @@
-# Trajectory Analysis (SD)
+# Trajectory Analysis
 
 Group trajectory differences: magnitude, orientation, and shape.
 
 ## Design matrix
 
-::: motco.stats.sd.get_model_matrix
+::: motco.stats.design.get_model_matrix
 
-::: motco.stats.sd.build_ls_means
+::: motco.stats.design.build_ls_means
 
-::: motco.stats.sd.center_matrix
+::: motco.stats.design.center_matrix
 
 ## Estimation
 
-::: motco.stats.sd.estimate_betas
+::: motco.stats.trajectory.estimate_betas
 
-::: motco.stats.sd.get_observed_vectors
+::: motco.stats.trajectory.get_observed_vectors
 
-::: motco.stats.sd.estimate_difference
+::: motco.stats.trajectory.estimate_difference
 
-::: motco.stats.sd.pair_difference
+::: motco.stats.trajectory.pair_difference
 
 ## Permutation test
 
-::: motco.stats.sd.RRPP
+::: motco.stats.permutation.RRPP
