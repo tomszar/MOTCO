@@ -305,7 +305,7 @@ def get_observed_vectors(
     g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
     l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
     ls_matrix = build_ls_means(g_levels, l_levels, full)
-    means = np.matmul(ls_matrix, betas)
+    means = np.matmul(ls_matrix, np.asarray(betas, dtype=float))
 
     # Build a clear index and columns
     idx = pd.MultiIndex.from_product([g_levels, l_levels], names=[group_col, level_col])
