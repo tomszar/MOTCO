@@ -4,30 +4,48 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, for example v0.4.0
+        required: true
+        type: string
+
+env:
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
 
 jobs:
   publish:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/project/motco/
     permissions:
+      contents: read
       id-token: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
       - name: Install uv
         uses: astral-sh/setup-uv@v7
-      - name: Install Python 3.13
-        run: uv python install 3.13
+      - name: Install Python 3.11
+        run: uv python install 3.11
       - name: Build
         run: uv build
       - name: Publish
-        run: uv publish
+        run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/motco/
 
 
   release:
     needs: publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Release
         uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
