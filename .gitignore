@@ -209,3 +209,8 @@ __marimo__/
 # R history files
 .Rhistory
 .claude/
+
+# Local agent/tool state
+.codex/
+.junie/
+.opencode/
