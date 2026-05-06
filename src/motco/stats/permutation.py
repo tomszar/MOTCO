@@ -54,6 +54,7 @@ def RRPP(
     permutations: int = 999,
     n_jobs: Optional[int] = None,
     progress: bool = True,
+    seed: Optional[int] = None,
 ) -> tuple:
     """
     Residual Randomization in a Permutation Procedure to evaluate
@@ -78,6 +79,8 @@ def RRPP(
         If provided and > 1, run permutations in parallel using multiple
         worker processes. Use -1 to use all available CPUs. When None or 1,
         runs single-threaded (backward-compatible default).
+    seed: Optional[int]
+        Optional seed for reproducible residual randomization.
 
     Returns
     -------
@@ -141,7 +144,7 @@ def RRPP(
     # Serial path
     if n_jobs in (None, 1):
         n = y_res_np.shape[0]
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(seed)
         for _ in tqdm(range(permutations), desc="RRPP", unit="perm", disable=not progress):
             idx = rng.permutation(n)
             y_random = y_hat_np + y_res_np[idx, :]
@@ -159,7 +162,7 @@ def RRPP(
     rem = permutations % n_workers
     counts = [base + (1 if i < rem else 0) for i in range(n_workers)]
 
-    ss = np.random.SeedSequence()
+    ss = np.random.SeedSequence(seed)
     seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(n_workers)]
 
     worker = _RRPPWorker(y_hat_np, y_res_np, model_full, LS_means, contrast)

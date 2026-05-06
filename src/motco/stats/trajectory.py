@@ -261,7 +261,8 @@ def estimate_difference(
         while comp < n_groups:
             delta = np.abs(des[i] - des[comp])
             # When using SVD, no need to divide by size
-            angle = np.arccos(np.inner(ys[i], ys[comp])) * 180 / np.pi
+            dot = np.clip(np.inner(ys[i], ys[comp]), -1.0, 1.0)
+            angle = np.arccos(dot) * 180 / np.pi
             deltas[i, comp] = delta
             deltas[comp, i] = delta
             angles[i, comp] = angle
@@ -434,6 +435,7 @@ def _estimate_shape(
         return euclidean_distances(flat)
 
     Qm1 = _pairwise_flat_dist(temp1)
+    Qm2 = Qm1
     # Sum of lower triangle (no diagonal) as in R's sum(dist(.))
     Q_prev_sum = float(np.tril(Qm1, k=-1).sum())
     Q_improve = Q_prev_sum  # initialize to enter loop
