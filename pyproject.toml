@@ -27,6 +27,7 @@ dependencies = [
   "pandas-stubs~=2.3.3",
   "scipy-stubs~=1.16.3",
   "tqdm>=4.0",
+  "matplotlib>=3.7",
 ]
 
 [project.urls]
