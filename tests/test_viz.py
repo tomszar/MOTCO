@@ -5,7 +5,6 @@ from __future__ import annotations
 import matplotlib
 import numpy as np
 import pandas as pd
-import pytest
 from matplotlib.figure import Figure
 from sklearn.decomposition import PCA
 
@@ -30,9 +29,8 @@ def _make_viz_inputs(
                 1.0 if s == "s1" else 0.0
             )
             for _ in range(n_per_cell):
-                rows.append(
-                    {"group": g, "stage": s, **{f"f{i}": float(v) for i, v in enumerate(rng.standard_normal(n_features) + offset)}}
-                )
+                features = {f"f{i}": float(v) for i, v in enumerate(rng.standard_normal(n_features) + offset)}
+                rows.append({"group": g, "stage": s, **features})
     df = pd.DataFrame(rows)
     metadata = df[["group", "stage"]]
     Y = df.drop(columns=["group", "stage"])
