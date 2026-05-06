@@ -6,6 +6,7 @@ Multi-omics Trajectory Comparison utilities:
 """
 
 __all__ = [
+    "simulations",
     "stats",
 ]
 

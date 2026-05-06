@@ -56,6 +56,9 @@ packages = [
   "src/motco",
 ]
 
+[tool.hatch.build.targets.wheel.force-include]
+"src/motco/simulations/run_intersim.R" = "motco/simulations/run_intersim.R"
+
 [tool.hatch.build.targets.sdist]
 include = [
   "src/motco",
