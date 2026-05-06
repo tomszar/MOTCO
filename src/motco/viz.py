@@ -66,7 +66,10 @@ def plot_trajectories(
     if ax is None:
         fig, ax = plt.subplots()
     else:
-        fig = ax.get_figure()
+        raw_fig = ax.get_figure()
+        if not isinstance(raw_fig, Figure):
+            raise TypeError("ax must belong to a Figure, not a SubFigure")
+        fig = raw_fig
 
     # --- Optional sample scatter ---
     if show_samples and samples is not None and sample_metadata is not None:
