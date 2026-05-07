@@ -96,3 +96,9 @@ addopts = "-ra -v -s"
 markers = [
   "slow: marks tests as slow (deselect with -m 'not slow'; use MOTCO_TEST_PERMS=10000 for full run)",
 ]
+
+[dependency-groups]
+dev = [
+    "jupyter>=1.1.1",
+    "nbconvert>=7.17.1",
+]

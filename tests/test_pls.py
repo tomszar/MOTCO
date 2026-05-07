@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from motco.stats.pls import calculate_vips, plsda_doubleCV
+from motco.stats.pls import calculate_vips, fit_plsda_transform, plsda_doubleCV
 
 
 def _synthetic_data(n: int = 30, p: int = 10, seed: int = 0) -> tuple[pd.DataFrame, pd.Series]:
@@ -65,6 +65,32 @@ def test_calculate_vips_non_negative():
     assert np.all(vips >= 0)
 
 
+def test_fit_plsda_transform_shape():
+    X, y = _synthetic_data(n=30, p=10)
+    scores = fit_plsda_transform(X, y, n_components=3)
+    assert scores.shape == (30, 3)
+
+
+def test_fit_plsda_transform_single_component():
+    X, y = _synthetic_data(n=30, p=10)
+    scores = fit_plsda_transform(X, y, n_components=1)
+    assert scores.shape == (30, 1)
+
+
+def test_fit_plsda_transform_returns_ndarray():
+    X, y = _synthetic_data(n=30, p=10)
+    scores = fit_plsda_transform(X, y, n_components=2)
+    assert isinstance(scores, np.ndarray)
+
+
+def test_fit_plsda_transform_numeric_labels():
+    rng = np.random.default_rng(0)
+    X = pd.DataFrame(rng.standard_normal((30, 8)), columns=[f"f{i}" for i in range(8)])
+    y = pd.Series([0, 1, 2] * 10)
+    scores = fit_plsda_transform(X, y, n_components=2)
+    assert scores.shape == (30, 2)
+
+
 def test_stats_top_level_imports():
     from motco.stats import (  # noqa: F401
         RRPP,
@@ -74,6 +100,7 @@ def test_stats_top_level_imports():
         center_matrix,
         estimate_betas,
         estimate_difference,
+        fit_plsda_transform,
         get_affinity_matrix,
         get_model_matrix,
         get_observed_vectors,

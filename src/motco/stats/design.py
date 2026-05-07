@@ -103,8 +103,17 @@ def get_model_matrix(
     # Determine deterministic category order
     g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
     l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
-    g = pd.Categorical(X[group_col].astype(str), categories=g_levels, ordered=True)
-    lc = pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True)
+    # Wrap in Series to preserve X.index; pd.get_dummies on a bare Categorical
+    # returns integer-indexed DataFrames, which causes pd.concat to outer-join with
+    # the string-indexed Intercept part and double the row count.
+    g = pd.Series(
+        pd.Categorical(X[group_col].astype(str), categories=g_levels, ordered=True),
+        index=X.index,
+    )
+    lc = pd.Series(
+        pd.Categorical(X[level_col].astype(str), categories=l_levels, ordered=True),
+        index=X.index,
+    )
 
     G = pd.get_dummies(g, drop_first=True, dtype=int)
     L = pd.get_dummies(lc, drop_first=True, dtype=int)

@@ -10,7 +10,7 @@ import pandas as pd
 
 from motco import __version__
 from motco.stats import RRPP, estimate_betas, estimate_difference
-from motco.stats.pls import calculate_vips, plsda_doubleCV
+from motco.stats.pls import calculate_vips, fit_plsda_transform, plsda_doubleCV
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 
 
@@ -32,24 +32,54 @@ def _save_json(obj, path: Union[str, Path]):
         json.dump(obj, fh, indent=2)
 
 
-def cmd_plsr(args: argparse.Namespace) -> None:
-    if bool(args.data) == bool(args.x):
-        raise SystemExit("Provide either --data with --label-col OR --x and --y CSV files.")
+def _standardize_and_concat(input_paths: List[str]) -> pd.DataFrame:
+    frames = []
+    for path in input_paths:
+        df = _read_csv(path)
+        values = df.to_numpy(dtype=float)
+        mean = values.mean(axis=0, keepdims=True)
+        std = values.std(axis=0, keepdims=True)
+        std[std == 0.0] = 1.0
+        values = (values - mean) / std
+        frames.append(pd.DataFrame(values, columns=df.columns))
+    return pd.concat(frames, axis=1).reset_index(drop=True)
 
-    if args.data:
-        df = _read_csv(args.data)
-        if args.label_col not in df.columns:
-            raise SystemExit(f"Label column '{args.label_col}' not found in data.")
-        y = df[args.label_col]
-        X = df.drop(columns=[args.label_col])
-    else:
-        X = _read_csv(args.x)
-        y_df = _read_csv(args.y)
-        # If y is single-column, treat it as Series
-        if y_df.shape[1] == 1:
-            y = y_df.iloc[:, 0]
+
+def cmd_plsr(args: argparse.Namespace) -> None:
+    has_input = bool(args.input)
+    has_single = bool(args.data) or bool(args.x)
+
+    if has_input and has_single:
+        raise SystemExit("--input cannot be combined with --data or --x/--y.")
+
+    if has_input:
+        if not args.metadata:
+            raise SystemExit("--input requires --metadata.")
+        if not args.label_col:
+            raise SystemExit("--input requires --label-col.")
+        X = _standardize_and_concat(args.input)
+        meta = _read_csv(args.metadata)
+        if args.label_col not in meta.columns:
+            raise SystemExit(f"Label column '{args.label_col}' not found in metadata.")
+        y = meta[args.label_col].reset_index(drop=True)
+    elif has_single:
+        if bool(args.data) == bool(args.x):
+            raise SystemExit("Provide either --data with --label-col OR --x and --y CSV files.")
+        if args.data:
+            df = _read_csv(args.data)
+            if args.label_col not in df.columns:
+                raise SystemExit(f"Label column '{args.label_col}' not found in data.")
+            y = df[args.label_col]
+            X = df.drop(columns=[args.label_col])
         else:
-            y = y_df
+            X = _read_csv(args.x)
+            y_df = _read_csv(args.y)
+            if y_df.shape[1] == 1:
+                y = y_df.iloc[:, 0]
+            else:
+                y = y_df
+    else:
+        raise SystemExit("Provide either --input files with --metadata/--label-col OR --data/--x/--y.")
 
     try:
         res = plsda_doubleCV(
@@ -63,11 +93,11 @@ def cmd_plsr(args: argparse.Namespace) -> None:
         )
     except ValueError as e:
         raise SystemExit(f"Error: {e}") from None
+
     table = res["table"]
     if args.out_table:
         _save_csv(table, args.out_table)
     else:
-        # Print to stdout if no output path
         pd.set_option("display.max_columns", None)
         print(table)
 
@@ -77,6 +107,17 @@ def cmd_plsr(args: argparse.Namespace) -> None:
             vips_data[f"rep_{rep_idx}"] = calculate_vips(model)
         vips_df = pd.DataFrame(vips_data)
         _save_csv(vips_df, args.out_vips)
+
+    if args.out_scores:
+        if args.n_components is not None:
+            n_comp = args.n_components
+        else:
+            lv_series = res["table"].iloc[:, 1]
+            n_comp = int(lv_series.mode()[0])
+        scores = fit_plsda_transform(np.asarray(X, dtype=float), y, n_comp)
+        score_cols = [f"lv_{i + 1}" for i in range(scores.shape[1])]
+        scores_df = pd.DataFrame(scores, columns=score_cols)
+        _save_csv(scores_df, args.out_scores)
 
 
 def cmd_snf(args: argparse.Namespace) -> None:
@@ -153,6 +194,67 @@ def cmd_de(args: argparse.Namespace) -> None:
         print(json.dumps(out, indent=2))
 
 
+def cmd_simulate(args: argparse.Namespace) -> None:
+    from motco.simulations.evaluation import build_simulation_trajectory_design
+    from motco.simulations.intersim import InterSIMParams, check_intersim_available
+    from motco.simulations.semisynthetic import (
+        SemiSyntheticTrajectoryParams,
+        generate_semisynthetic_trajectory_from_intersim,
+    )
+
+    availability = check_intersim_available()
+    if not availability.available:
+        raise SystemExit(
+            f"motco simulate requires R and the InterSIM package.\n"
+            f"{availability.message}\n"
+            "Install InterSIM in R with:\n"
+            '  install.packages("InterSIM", repos = c('
+            '"https://cran.r-universe.dev", "https://cloud.r-project.org"))'
+        )
+
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    intersim_params = InterSIMParams(seed=args.seed, n_sample=args.n_samples)
+    traj_params = SemiSyntheticTrajectoryParams(
+        seed=args.seed,
+        trajectory_mode=args.trajectory_mode,
+        group_effect_size=args.effect_size,
+    )
+
+    try:
+        dataset = generate_semisynthetic_trajectory_from_intersim(
+            intersim_params, traj_params
+        )
+    except ValueError as e:
+        raise SystemExit(f"Simulation error: {e}") from None
+
+    design = build_simulation_trajectory_design(
+        dataset.metadata, group_col="group", stage_col="stage"
+    )
+
+    # Omics matrices — feature columns only (row order matches metadata.csv)
+    for layer in ("methylation", "expression", "proteomics"):
+        df = getattr(dataset, layer).copy()
+        df.to_csv(out_dir / f"{layer}.csv", index=False)
+
+    # Metadata
+    dataset.metadata[["sample_id", "group", "stage", "cluster"]].to_csv(
+        out_dir / "metadata.csv", index=False
+    )
+
+    # Design matrices — numeric CSVs with auto column headers, no row index
+    pd.DataFrame(design.model_full).to_csv(out_dir / "model_full.csv", index=False)
+    pd.DataFrame(design.model_reduced).to_csv(out_dir / "model_reduced.csv", index=False)
+    pd.DataFrame(design.ls_means).to_csv(out_dir / "ls_means.csv", index=False)
+
+    # JSON outputs
+    _save_json(design.contrast, out_dir / "contrast.json")
+    _save_json(dataset.truth, out_dir / "truth.json")
+
+    print(f"Simulation complete. Files written to: {out_dir}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="motco", description="MOTCO CLI: PLSR, SNF, and group differences")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -161,8 +263,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     # PLSR
     p_plsr = sub.add_parser("plsr", help="Run PLS-DA with double cross-validation")
+    p_plsr.add_argument("--input", type=str, action="append", dest="input",
+                        help="Omics layer CSV (repeat for multiple layers; standardized and concatenated)")
+    p_plsr.add_argument("--metadata", type=str, default=None,
+                        help="Metadata CSV with label column (required when using --input)")
     p_plsr.add_argument("--data", type=str, help="CSV with predictors and label column")
-    p_plsr.add_argument("--label-col", type=str, help="Label column name when using --data")
+    p_plsr.add_argument("--label-col", type=str, help="Label column name (used with --data or --input/--metadata)")
     p_plsr.add_argument("--x", type=str, help="CSV with predictors (features)")
     p_plsr.add_argument("--y", type=str, help="CSV with labels/outcomes")
     p_plsr.add_argument("--cv1-splits", type=int, default=7)
@@ -172,6 +278,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_plsr.add_argument("--random-state", type=int, default=1203)
     p_plsr.add_argument("--out-table", type=str, help="Path to save the best models table (CSV)")
     p_plsr.add_argument("--out-vips", type=str, default=None, help="Path to save VIP scores per feature (CSV)")
+    p_plsr.add_argument("--out-scores", type=str, default=None,
+                        help="Path to save latent space scores from final model (CSV)")
+    p_plsr.add_argument("--n-components", type=int, default=None,
+                        help="Number of latent variables for final score model (default: modal LV from CV)")
     p_plsr.set_defaults(func=cmd_plsr)
 
     # SNF
@@ -186,6 +296,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_snf.add_argument("--spectral-components", type=int, default=10,
                        help="Number of spectral embedding components (default: 10)")
     p_snf.set_defaults(func=cmd_snf)
+
+    # Simulate
+    p_sim = sub.add_parser("simulate", help="Generate a semi-synthetic multi-omics toy dataset (requires R + InterSIM)")
+    p_sim.add_argument("--seed", type=int, required=True, help="Random seed for reproducibility")
+    p_sim.add_argument("--out-dir", type=str, required=True, help="Directory to write output files")
+    p_sim.add_argument("--n-samples", type=int, default=90, help="Total number of samples (default: 90)")
+    p_sim.add_argument("--trajectory-mode", type=str, default="orientation",
+                       choices=["none", "translation", "magnitude", "orientation", "shape"],
+                       help="Group trajectory difference mode (default: orientation)")
+    p_sim.add_argument("--effect-size", type=float, default=2.0,
+                       help="Group effect size injected into the simulation (default: 2.0)")
+    p_sim.set_defaults(func=cmd_simulate)
 
     # Differential Effects
     p_de = sub.add_parser("de", help="Group differences on trajectories (estimate or RRPP)")

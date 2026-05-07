@@ -208,6 +208,34 @@ def _plsda_auroc(
     return auroc
 
 
+def fit_plsda_transform(
+    X: Union[np.ndarray, "pd.DataFrame"],
+    y: Union["pd.Series", np.ndarray],
+    n_components: int,
+) -> np.ndarray:
+    """Fit a PLS model on the full dataset and return the X score matrix.
+
+    Parameters
+    ----------
+    X:
+        Feature matrix of shape (n_samples, n_features).
+    y:
+        Class labels of shape (n_samples,). String or numeric; one-hot encoded
+        internally to match the behaviour of ``plsda_doubleCV``.
+    n_components:
+        Number of latent variables.
+
+    Returns
+    -------
+    scores : np.ndarray of shape (n_samples, n_components)
+    """
+    X_arr = np.asarray(X, dtype=float)
+    encoder = OneHotEncoder(sparse_output=False)
+    y_enc = encoder.fit_transform(np.asarray(y).reshape(-1, 1))
+    pls = PLSRegression(n_components=n_components, scale=True, max_iter=1000).fit(X_arr, y_enc)
+    return np.asarray(pls.x_scores_)
+
+
 def calculate_vips(
     model,
     components: Union[None, list[int]] = None,

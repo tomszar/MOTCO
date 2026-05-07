@@ -13,6 +13,52 @@ Once a latent space is constructed, MOTCO includes statistics to estimate differ
 
 This repository contains the core statistical routines in `src/motco/stats`, simulation helpers in `src/motco/simulations`, and a command‑line interface for common analysis tasks.
 
+## Quick start
+
+The bundled toy dataset at `examples/data/toy/` lets you run the full pipeline immediately without R:
+
+```bash
+# 1. Build a PLS-DA latent space supervised by disease stage
+motco plsr \
+  --input examples/data/toy/methylation.csv \
+  --input examples/data/toy/expression.csv \
+  --input examples/data/toy/proteomics.csv \
+  --metadata examples/data/toy/metadata.csv \
+  --label-col stage \
+  --out-scores results/latent_pls.csv
+
+# 2. (Alternative) Build an SNF latent space
+motco snf \
+  --input examples/data/toy/methylation.csv \
+  --input examples/data/toy/expression.csv \
+  --input examples/data/toy/proteomics.csv \
+  --K 10 --k 10 --t 20 \
+  --out-embedding results/latent_snf.csv
+
+# 3. Run differential trajectory analysis with RRPP
+motco de \
+  --Y results/latent_pls.csv \
+  --model-full examples/data/toy/model_full.csv \
+  --model-reduced examples/data/toy/model_reduced.csv \
+  --ls-means examples/data/toy/ls_means.csv \
+  --contrast examples/data/toy/contrast.json \
+  --rrpp-permutations 999 \
+  --out-json results/de_result.json
+
+# 4. (Optional) Regenerate the toy data — requires R + InterSIM
+motco simulate \
+  --seed 42 --n-samples 90 \
+  --trajectory-mode orientation --effect-size 2.0 \
+  --out-dir examples/data/toy/
+```
+
+To install InterSIM in R (one-time):
+```r
+install.packages("InterSIM", repos = c("https://cran.r-universe.dev", "https://cloud.r-project.org"))
+```
+
+See `examples/motco_example.ipynb` for a full end-to-end walkthrough in Python.
+
 ## Install (with uv)
 
 Prerequisites: Python 3.11+ and [uv](https://github.com/astral-sh/uv) installed.
