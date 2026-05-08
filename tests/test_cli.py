@@ -460,6 +460,69 @@ def test_simulate_wires_prop_affected_features(tmp_path: Path) -> None:
     assert traj_params.prop_affected_features == 0.25
 
 
+def test_simulate_cluster_mean_shift_fans_out_to_all_omics(tmp_path: Path) -> None:
+    fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
+    available = InterSIMAvailability(available=True, message="mocked", rscript_path="/usr/bin/Rscript")
+    with patch("motco.simulations.intersim.check_intersim_available", return_value=available), \
+         patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory_from_intersim",
+               return_value=fake_dataset) as generate_mock:
+        main([
+            "simulate",
+            "--seed", "0",
+            "--out-dir", str(tmp_path),
+            "--cluster-mean-shift", "0.7",
+        ])
+    intersim_params, _ = generate_mock.call_args.args
+    assert intersim_params.delta_methyl == 0.7
+    assert intersim_params.delta_expr == 0.7
+    assert intersim_params.delta_protein == 0.7
+
+
+def test_simulate_per_omic_delta_overrides_cluster_mean_shift(tmp_path: Path) -> None:
+    fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
+    available = InterSIMAvailability(available=True, message="mocked", rscript_path="/usr/bin/Rscript")
+    with patch("motco.simulations.intersim.check_intersim_available", return_value=available), \
+         patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory_from_intersim",
+               return_value=fake_dataset) as generate_mock:
+        main([
+            "simulate",
+            "--seed", "0",
+            "--out-dir", str(tmp_path),
+            "--cluster-mean-shift", "0.7",
+            "--delta-expr", "1.2",
+        ])
+    intersim_params, _ = generate_mock.call_args.args
+    assert intersim_params.delta_methyl == 0.7
+    assert intersim_params.delta_expr == 1.2
+    assert intersim_params.delta_protein == 0.7
+
+
+def test_simulate_without_delta_flags_preserves_intersim_defaults(tmp_path: Path) -> None:
+    fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
+    available = InterSIMAvailability(available=True, message="mocked", rscript_path="/usr/bin/Rscript")
+    with patch("motco.simulations.intersim.check_intersim_available", return_value=available), \
+         patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory_from_intersim",
+               return_value=fake_dataset) as generate_mock:
+        main(["simulate", "--seed", "0", "--out-dir", str(tmp_path)])
+    intersim_params, _ = generate_mock.call_args.args
+    assert intersim_params.delta_methyl is None
+    assert intersim_params.delta_expr is None
+    assert intersim_params.delta_protein is None
+
+
+def test_simulate_negative_delta_exits_before_r(tmp_path: Path) -> None:
+    with patch("motco.simulations.intersim.check_intersim_available") as check_mock:
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "simulate",
+                "--seed", "0",
+                "--out-dir", str(tmp_path),
+                "--delta-methyl", "-0.1",
+            ])
+    assert "-0.1" in str(exc.value)
+    check_mock.assert_not_called()
+
+
 def test_simulate_design_files_compatible_with_de(
     tmp_path: Path, mock_simulate_env: SemiSyntheticTrajectoryDataset
 ) -> None:

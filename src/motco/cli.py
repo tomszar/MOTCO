@@ -207,6 +207,14 @@ def cmd_simulate(args: argparse.Namespace) -> None:
             "Error: --prop-affected-features must be between 0 and 1 "
             f"(got {args.prop_affected_features})."
         )
+    for flag_name, value in (
+        ("--delta-methyl", args.delta_methyl),
+        ("--delta-expr", args.delta_expr),
+        ("--delta-protein", args.delta_protein),
+        ("--cluster-mean-shift", args.cluster_mean_shift),
+    ):
+        if value is not None and value < 0:
+            raise SystemExit(f"Error: {flag_name} must be non-negative (got {value}).")
     availability = check_intersim_available()
     if not availability.available:
         raise SystemExit(
@@ -220,7 +228,16 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    intersim_params = InterSIMParams(seed=args.seed, n_sample=args.n_samples)
+    delta_methyl = args.delta_methyl if args.delta_methyl is not None else args.cluster_mean_shift
+    delta_expr = args.delta_expr if args.delta_expr is not None else args.cluster_mean_shift
+    delta_protein = args.delta_protein if args.delta_protein is not None else args.cluster_mean_shift
+    intersim_params = InterSIMParams(
+        seed=args.seed,
+        n_sample=args.n_samples,
+        delta_methyl=delta_methyl,
+        delta_expr=delta_expr,
+        delta_protein=delta_protein,
+    )
     traj_params = SemiSyntheticTrajectoryParams(
         seed=args.seed,
         trajectory_mode=args.trajectory_mode,
@@ -315,6 +332,14 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Group effect size injected into the simulation (default: 1.0)")
     p_sim.add_argument("--prop-affected-features", type=float, default=0.1,
                        help="Proportion of features per omic layer carrying the injected group effect (default: 0.1)")
+    p_sim.add_argument("--cluster-mean-shift", type=float, default=None,
+                       help="InterSIM cluster mean shift applied to unspecified per-omic delta flags")
+    p_sim.add_argument("--delta-methyl", type=float, default=None,
+                       help="InterSIM methylation cluster mean shift; overrides --cluster-mean-shift for methylation")
+    p_sim.add_argument("--delta-expr", type=float, default=None,
+                       help="InterSIM expression cluster mean shift; overrides --cluster-mean-shift for expression")
+    p_sim.add_argument("--delta-protein", type=float, default=None,
+                       help="InterSIM proteomics cluster mean shift; overrides --cluster-mean-shift for proteomics")
     p_sim.set_defaults(func=cmd_simulate)
 
     # Differential Effects
