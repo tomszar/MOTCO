@@ -1,8 +1,5 @@
-# toy-dataset Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the canonical pre-generated toy dataset included in the repository for examples and tutorials.
-## Requirements
 ### Requirement: Pre-generated toy dataset in repository
 The repository SHALL include a pre-generated toy dataset at `examples/data/toy/` containing all files produced by `motco simulate` with the seed and parameters recorded in `truth.json`. The retuned canonical regeneration command is:
 
@@ -45,4 +42,3 @@ This dataset SHALL be usable for tutorial purposes without R or InterSIM install
 #### Scenario: truth.json reflects the retuned defaults
 - **WHEN** `examples/data/toy/truth.json` is parsed after this change lands
 - **THEN** `group_effect_size == 1.0`, the `affected_features` list lengths reflect a `prop_affected_features` of approximately `0.1` (each list length within +/-1 of `round(n_features_in_layer * 0.1)`), and the InterSIM metadata records a cluster mean shift of approximately `0.10` for methylation, expression, and proteomics
-

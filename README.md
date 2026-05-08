@@ -25,6 +25,10 @@ motco plsr \
   --input examples/data/toy/proteomics.csv \
   --metadata examples/data/toy/metadata.csv \
   --label-col stage \
+  --cv1-splits 3 \
+  --cv2-splits 3 \
+  --n-repeats 3 \
+  --max-components 5 \
   --out-scores results/latent_pls.csv
 
 # 2. (Alternative) Build an SNF latent space
@@ -50,8 +54,11 @@ motco simulate \
   --seed 42 --n-samples 90 \
   --trajectory-mode orientation --effect-size 1.0 \
   --prop-affected-features 0.1 \
+  --cluster-mean-shift 0.10 \
   --out-dir examples/data/toy/
 ```
+
+The bundled toy data uses moderate InterSIM cluster separation, so `y = stage` classification should be informative but not perfect. The small CV settings above keep the quick start fast; increase them for analysis-grade model selection.
 
 To install InterSIM in R (one-time):
 ```r

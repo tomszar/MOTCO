@@ -169,6 +169,9 @@
   "intersim_metadata": {
     "seed": 42,
     "n_sample": 90,
+    "delta_methyl": 0.1,
+    "delta_expr": 0.1,
+    "delta_protein": 0.1,
     "n_samples": 90,
     "n_features": {
       "methylation": 367,
