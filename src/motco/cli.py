@@ -202,6 +202,11 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         generate_semisynthetic_trajectory_from_intersim,
     )
 
+    if not 0 <= args.prop_affected_features <= 1:
+        raise SystemExit(
+            "Error: --prop-affected-features must be between 0 and 1 "
+            f"(got {args.prop_affected_features})."
+        )
     availability = check_intersim_available()
     if not availability.available:
         raise SystemExit(
@@ -220,6 +225,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         seed=args.seed,
         trajectory_mode=args.trajectory_mode,
         group_effect_size=args.effect_size,
+        prop_affected_features=args.prop_affected_features,
     )
 
     try:
@@ -305,8 +311,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_sim.add_argument("--trajectory-mode", type=str, default="orientation",
                        choices=["none", "translation", "magnitude", "orientation", "shape"],
                        help="Group trajectory difference mode (default: orientation)")
-    p_sim.add_argument("--effect-size", type=float, default=2.0,
-                       help="Group effect size injected into the simulation (default: 2.0)")
+    p_sim.add_argument("--effect-size", type=float, default=1.0,
+                       help="Group effect size injected into the simulation (default: 1.0)")
+    p_sim.add_argument("--prop-affected-features", type=float, default=0.1,
+                       help="Proportion of features per omic layer carrying the injected group effect (default: 0.1)")
     p_sim.set_defaults(func=cmd_simulate)
 
     # Differential Effects

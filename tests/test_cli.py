@@ -377,7 +377,7 @@ def _make_fake_simulate_dataset(n: int = 30, seed: int = 0) -> SemiSyntheticTraj
     )
     truth = {
         "trajectory_mode": "orientation",
-        "group_effect_size": 2.0,
+        "group_effect_size": 1.0,
         "group_labels": ["A", "B"],
         "group_ratio": 0.5,
         "seed": seed,
@@ -429,6 +429,35 @@ def test_simulate_missing_intersim_exits(tmp_path: Path) -> None:
         with pytest.raises(SystemExit) as exc:
             main(["simulate", "--seed", "0", "--out-dir", str(tmp_path)])
     assert "InterSIM" in str(exc.value)
+
+
+def test_simulate_prop_affected_features_is_validated_before_r(tmp_path: Path) -> None:
+    with patch("motco.simulations.intersim.check_intersim_available") as check_mock:
+        with pytest.raises(SystemExit) as exc:
+            main([
+                "simulate",
+                "--seed", "0",
+                "--out-dir", str(tmp_path),
+                "--prop-affected-features", "1.5",
+            ])
+    assert "1.5" in str(exc.value)
+    check_mock.assert_not_called()
+
+
+def test_simulate_wires_prop_affected_features(tmp_path: Path) -> None:
+    fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
+    available = InterSIMAvailability(available=True, message="mocked", rscript_path="/usr/bin/Rscript")
+    with patch("motco.simulations.intersim.check_intersim_available", return_value=available), \
+         patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory_from_intersim",
+               return_value=fake_dataset) as generate_mock:
+        main([
+            "simulate",
+            "--seed", "0",
+            "--out-dir", str(tmp_path),
+            "--prop-affected-features", "0.25",
+        ])
+    _, traj_params = generate_mock.call_args.args
+    assert traj_params.prop_affected_features == 0.25
 
 
 def test_simulate_design_files_compatible_with_de(

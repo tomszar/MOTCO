@@ -1,6 +1,6 @@
 {
   "trajectory_mode": "orientation",
-  "group_effect_size": 2.0,
+  "group_effect_size": 1.0,
   "group_labels": [
     "A",
     "B"

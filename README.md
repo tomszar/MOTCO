@@ -48,7 +48,8 @@ motco de \
 # 4. (Optional) Regenerate the toy data — requires R + InterSIM
 motco simulate \
   --seed 42 --n-samples 90 \
-  --trajectory-mode orientation --effect-size 2.0 \
+  --trajectory-mode orientation --effect-size 1.0 \
+  --prop-affected-features 0.1 \
   --out-dir examples/data/toy/
 ```
 
@@ -123,7 +124,7 @@ Options:
 - Use `--data` for a single CSV containing predictors and a label column specified by `--label-col`.
 - Or provide separate matrices via `--x` and `--y` CSV files (mutually exclusive with `--data`).
 - If `--y` has a single column, it is treated as a label vector and will be one‑hot encoded internally; if it has multiple columns, it is treated as an already encoded class matrix.
-- Outputs a table with the best model per outer CV repeat (LV and AUROC). The actual trained models are kept in memory; export of models is not included in the CLI at this time. If `--out-table` is omitted, the table is printed to stdout.
+- Outputs a table with one row per outer CV repeat: `rep`, `LV` (modal n_LV across K outer folds), `AUROC` (mean across K outer folds), and `AUROC_std` (sample std across K outer folds). The actual trained models are kept in memory; export of models is not included in the CLI at this time. If `--out-table` is omitted, the table is printed to stdout.
 
 Input expectations:
 - CSV files with samples in rows, features in columns. For `--data`, include a label column with binary or multi‑class outcome; it will be one‑hot encoded internally.
