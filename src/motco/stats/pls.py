@@ -10,7 +10,7 @@ This module provides:
 import logging
 import multiprocessing
 from itertools import repeat
-from typing import Union
+from typing import TypedDict, Union
 
 import numpy as np
 import pandas as pd
@@ -23,6 +23,11 @@ from tqdm import tqdm
 logger = logging.getLogger(__name__)
 
 
+class PLSDAResult(TypedDict):
+    table: pd.DataFrame
+    models: list[PLSRegression]
+
+
 def plsda_doubleCV(
     X: pd.DataFrame,
     y: Union[pd.DataFrame, pd.Series],
@@ -33,39 +38,49 @@ def plsda_doubleCV(
     random_state: int = 1203,
     n_jobs: int = 1,
     progress: bool = True,
-) -> dict[str, Union[PLSRegression, pd.DataFrame]]:
+) -> PLSDAResult:
     """
-    Estimate a double cross validation on a partial least squares
-    regression - discriminant analysis.
+    Run canonical double-nested cross-validation for PLS-DA.
+
+    For each outer fold, the inner CV averages AUROC across its V folds and
+    selects the n_LV with the highest mean. The outer fold's selected n_LV is
+    then evaluated on its held-out test set. Per repeat, the K outer-fold test
+    AUROCs are aggregated by mean (and sample std), and the per-fold n_LV
+    choices are aggregated by mode (parsimony tie-break). One final model is
+    refit per repeat on the full input using the modal n_LV.
 
     Parameters
     ----------
     X: pd.DataFrame
         The predictor variables.
     y: Union[pd.DataFrame, pd.Series]
-        The outcome varibale.
+        The outcome variable.
     cv1_splits: int
-        Number of folds in the CV1 loop. Default: 7.
+        Number of folds in the CV1 (inner) loop. Default: 7.
     cv2_splits: int
-        Number of folds in the CV2 loop. Default: 8.
+        Number of folds in the CV2 (outer) loop. Default: 8.
     n_repeats: int
-        Number of repeats to the cv2 procedure. Default: 30.
+        Number of repeats of the K-fold outer CV. Default: 30.
     max_components: int
-        Maximum number of LV to test. Default: 50.
+        Maximum number of LV to test (candidates are 1..max_components-1). Default: 50.
     random_state: int
         For reproducibility. Default: 1203.
     n_jobs: int
         Number of parallel workers for the inner CV loop. Use -1 for all
         available CPUs. Default: 1 (serial).
+    progress: bool
+        Whether to display a tqdm progress bar over outer folds. Default: True.
 
     Returns
     -------
-    models_table: dict[str,
-                       Union[PLSRegression,
-                             pd.DataFrame]
-        Dictionary with the table of the best models, including repetition,
-        number of latent variables, and AUROC. Also includes the model for
-        prediction.
+    dict with keys:
+      - "table": pd.DataFrame with one row per repeat and four columns
+            "rep" (int), "LV" (int, modal across K outer folds with parsimony
+            tie-break), "AUROC" (float, mean across K outer folds),
+            "AUROC_std" (float, sample std across K outer folds; NaN if K < 2).
+      - "models": list of length n_repeats. Each entry is a PLSRegression
+            refit on the full input (X, one-hot(y)) with the corresponding
+            row's modal n_LV.
     """
     _X_arr = np.asarray(X, dtype=float)
     _y_arr = np.asarray(y)
@@ -88,76 +103,121 @@ def plsda_doubleCV(
     if not np.all(np.isfinite(_X_arr)):
         raise ValueError("X contains NaN or Inf values.")
     encoder = OneHotEncoder(sparse_output=False)
-    yd = pd.DataFrame(encoder.fit_transform(np.array(y).reshape(-1, 1)))
+    yd_arr = encoder.fit_transform(np.array(y).reshape(-1, 1))
+    yd = pd.DataFrame(yd_arr)
     cv2 = RepeatedStratifiedKFold(
         n_splits=cv2_splits, n_repeats=n_repeats, random_state=random_state
     )
     cv1 = StratifiedKFold(n_splits=cv1_splits)
-    cv2_table = pd.DataFrame(np.zeros((cv2_splits, 2)))
-    cv1_table = pd.DataFrame(np.zeros((cv1_splits, 2)))
-    for_table = {
-        "rep": list(range(1, n_repeats + 1)),
-        "LV": list(range(1, n_repeats + 1)),
-        "AUROC": [0.1] * n_repeats,
-    }
-    model_table = pd.DataFrame(for_table)
-    row_cv2 = 0
-    row_model_table = 0
-    cv2_models = []
-    best_models = []
-    cv2_iter = tqdm(cv2.split(X, y), total=cv2_splits * n_repeats, desc="PLS-DA CV2", unit="fold", disable=not progress)
+
+    n_lv_candidates = list(range(1, max_components))
+    n_candidates = len(n_lv_candidates)
+
+    rep_means: list[float] = []
+    rep_stds: list[float] = []
+    rep_lvs: list[int] = []
+
+    outer_aurocs: list[float] = []
+    outer_n_lv: list[int] = []
+    fold_in_repeat = 0
+
+    cv2_iter = tqdm(
+        cv2.split(X, y),
+        total=cv2_splits * n_repeats,
+        desc="PLS-DA CV2",
+        unit="fold",
+        disable=not progress,
+    )
     for rest, test in cv2_iter:
-        # Outer CV2 loop split into test and rest
         X_rest = X.iloc[rest, :]
         X_test = X.iloc[test, :]
         y_rest = y.iloc[rest]
         yd_rest = yd.iloc[rest, :]
         yd_test = yd.iloc[test, :]
-        row_cv1 = 0
-        for train, validation in cv1.split(X_rest, y_rest):
-            # Inner CV validates optimal number of LVs
+
+        # Inner CV: average AUROC across V folds for each candidate n_LV.
+        inner_aurocs = np.zeros((cv1_splits, n_candidates))
+        for v_idx, (train, validation) in enumerate(cv1.split(X_rest, y_rest)):
             X_train = X_rest.iloc[train, :]
             yd_train = yd_rest.iloc[train, :]
             X_val = X_rest.iloc[validation, :]
             yd_val = yd_rest.iloc[validation, :]
-            ns = list(range(1, max_components))
-            args = zip(ns, repeat(X_train), repeat(yd_train), repeat(X_val), repeat(yd_val))
-            auroc: list[float]
+            args = zip(
+                n_lv_candidates,
+                repeat(X_train),
+                repeat(yd_train),
+                repeat(X_val),
+                repeat(yd_val),
+            )
+            fold_aurocs: list[float]
             if n_jobs == 1:
-                auroc = [_plsda_auroc(*a) for a in args]  # type: ignore[misc]
+                fold_aurocs = [_plsda_auroc(*a) for a in args]  # type: ignore[misc]
             else:
                 n_workers = (
                     (multiprocessing.cpu_count() or 1) if n_jobs == -1 else max(1, n_jobs)
                 )
                 with multiprocessing.Pool(processes=n_workers) as pool:
-                    auroc = pool.starmap(_plsda_auroc, args)  # type: ignore[arg-type]
-            nlv = auroc.index(max(auroc)) + 1
-            cv1_table.iloc[row_cv1, 0] = nlv
-            cv1_table.iloc[row_cv1, 1] = max(auroc)
-            row_cv1 += 1
-        # Obtain optimal n of components
-        best_cv1_idx = int(cv1_table[1].idxmax())
-        n_components = int(cv1_table.iloc[best_cv1_idx, 0])  # type: ignore[arg-type]
-        model_score = _plsda_auroc(
-            n_components, X_rest, yd_rest, X_test, yd_test, return_full=True
+                    fold_aurocs = pool.starmap(_plsda_auroc, args)  # type: ignore[arg-type]
+            inner_aurocs[v_idx, :] = fold_aurocs
+
+        mean_per_n_lv = inner_aurocs.mean(axis=0)
+        # np.argmax returns the first occurrence on ties → parsimony.
+        n_lv_star = int(np.argmax(mean_per_n_lv)) + 1
+
+        outer_score = float(
+            _plsda_auroc(n_lv_star, X_rest, yd_rest, X_test, yd_test)  # type: ignore[arg-type]
         )
-        cv2_table.iloc[row_cv2, 0] = n_components
-        cv2_table.iloc[row_cv2, 1] = model_score["score"]  # type: ignore[index]
-        cv2_models.append(model_score["model"])  # type: ignore[index]
-        row_cv2 += 1
-        if row_cv2 == cv2_splits:
-            best_cv2_idx = int(cv2_table[1].idxmax())
-            best_cv2_lv = int(cv2_table.iloc[best_cv2_idx, 0])  # type: ignore[arg-type]
-            auroc_val = cv2_table.iloc[best_cv2_idx, 1]
-            model_table.iloc[row_model_table, 1] = best_cv2_lv
-            model_table.iloc[row_model_table, 2] = auroc_val
-            best_models.append(cv2_models[best_cv2_idx])
-            row_model_table += 1
-            cv2_table = pd.DataFrame(np.zeros((cv2_splits, 2)))
-            cv2_models = []
-            row_cv2 = 0
-    models_table = {"models": best_models, "table": model_table}
-    return models_table
+        outer_aurocs.append(outer_score)
+        outer_n_lv.append(n_lv_star)
+
+        fold_in_repeat += 1
+        if fold_in_repeat == cv2_splits:
+            mean_auroc = float(np.mean(outer_aurocs))
+            std_auroc = (
+                float(np.std(outer_aurocs, ddof=1))
+                if len(outer_aurocs) > 1
+                else float("nan")
+            )
+            mode_lv = _modal_int_with_parsimony(outer_n_lv)
+            rep_means.append(mean_auroc)
+            rep_stds.append(std_auroc)
+            rep_lvs.append(mode_lv)
+            outer_aurocs = []
+            outer_n_lv = []
+            fold_in_repeat = 0
+
+    model_table = pd.DataFrame(
+        {
+            "rep": list(range(1, n_repeats + 1)),
+            "LV": rep_lvs,
+            "AUROC": rep_means,
+            "AUROC_std": rep_stds,
+        }
+    )
+    model_table["rep"] = model_table["rep"].astype(int)
+    model_table["LV"] = model_table["LV"].astype(int)
+    model_table["AUROC"] = model_table["AUROC"].astype(float)
+    model_table["AUROC_std"] = model_table["AUROC_std"].astype(float)
+
+    best_models: list[PLSRegression] = []
+    for lv in rep_lvs:
+        model = PLSRegression(
+            n_components=lv, scale=True, max_iter=1000
+        ).fit(_X_arr, yd_arr)
+        best_models.append(model)
+
+    return {"models": best_models, "table": model_table}
+
+
+def _modal_int_with_parsimony(values: list[int]) -> int:
+    """Return the most frequent integer; ties broken by smaller value."""
+    if not values:
+        raise ValueError("values must be non-empty")
+    counts: dict[int, int] = {}
+    for v in values:
+        counts[v] = counts.get(v, 0) + 1
+    max_count = max(counts.values())
+    return min(v for v, c in counts.items() if c == max_count)
 
 
 def _plsda_auroc(
