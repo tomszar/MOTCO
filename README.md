@@ -353,6 +353,35 @@ records = run_simulation_grid(
 summaries = summarize_rejection_rates(records, alpha=0.05)
 ```
 
+## Trajectory power study
+
+For a full, declarative, sharded study that produces the per-statistic
+specificity matrix, Type I tables, and power curves (the deliverables of the
+methods paper), use the `motco.simulations.study` package and the helper
+scripts under `scripts/`.
+
+End-to-end workflow:
+
+```bash
+# (1) Run shards locally (or via SLURM array; see scripts/motco_study_array.sbatch)
+python scripts/run_study_shard.py \
+    --config examples/trajectory_power_study/smoke.json \
+    --out-dir results/ \
+    --shard-index 0 --n-shards 4 --error-policy record
+
+# (2) Merge per-shard JSONL into a single deduplicated result set
+python scripts/motco_study.py merge --out-dir results/
+
+# (3) Build per-statistic + combined-rule summaries, the specificity matrix,
+#     power curves, Type I tables, figures, and an acceptance-target report
+python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/smoke.json \
+    --out-dir results/
+```
+
+See `examples/trajectory_power_study/README.md` for the config schema, the
+SLURM array submission flow, and resubmission of failed array tasks.
+
 ## License
 
 This project is licensed under the terms of the LICENSE file included in this repository.
