@@ -155,6 +155,68 @@ def test_replicate_seed_derivation_is_deterministic() -> None:
         derive_replicate_seed(cell, 2)
 
 
+def test_replicate_seed_always_fits_r_signed_int32() -> None:
+    R_MAX = 2**31 - 1
+
+    seeds: list[int] = []
+    for base_seed in (0, 1, 42, 100, 2_797_983_684, -1):
+        for cell_index in range(8):
+            cell = make_simulation_cell(
+                cell_id=f"probe-{cell_index}",
+                phase="power_primary",
+                intersim_params=baseline_intersim(),
+                generator_params=baseline_generator(),
+                n_replicates=16,
+                base_seed=base_seed,
+            )
+            for replicate_index in range(cell.n_replicates):
+                seeds.append(derive_replicate_seed(cell, replicate_index))
+
+    assert all(0 <= s <= R_MAX for s in seeds)
+    # Sanity: at least some draws land in the previously-overflowing high half
+    # under the *unmasked* 32-bit derivation, so the test actually exercises
+    # the mask rather than coincidentally staying small.
+    assert max(seeds) > 2**30
+
+
+def test_replicate_seed_masks_known_pre_fix_value() -> None:
+    # Smoke-run failure surfaced an unmasked seed of 2_797_983_684 (high bit set,
+    # = 0xa6b8f084). Clearing the high bit gives 0x26b8f084 = 650_500_036,
+    # which fits R's signed-32-bit range.
+    unmasked = 2_797_983_684
+    assert unmasked & 0x7FFFFFFF == 650_500_036
+    assert 650_500_036 <= 2**31 - 1
+
+
+def test_parameter_signature_includes_seed_derivation_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    import motco.simulations.grid as grid_module
+
+    cell = make_simulation_cell(
+        phase="type_i_baseline",
+        intersim_params=baseline_intersim(),
+        generator_params=baseline_generator(),
+        n_replicates=2,
+        base_seed=77,
+    )
+    current_signature = parameter_signature(cell)
+
+    # Reproduce the signature is stable across calls at the current version.
+    assert parameter_signature(cell) == current_signature
+
+    # Strip the derivation-version field from the payload before digesting;
+    # the resulting "legacy" signature must differ from the current one. This
+    # is the property the resume guard relies on to invalidate pre-fix shards.
+    original_stable_digest = grid_module._stable_digest
+
+    def stable_digest_without_version(payload: object, *, length: int | None = None) -> str:
+        if isinstance(payload, dict) and "seed_derivation_version" in payload:
+            payload = {k: v for k, v in payload.items() if k != "seed_derivation_version"}
+        return original_stable_digest(payload, length=length)
+
+    monkeypatch.setattr(grid_module, "_stable_digest", stable_digest_without_version)
+    assert parameter_signature(cell) != current_signature
+
+
 def test_run_replicate_uses_injectable_evaluator_and_records_seeds() -> None:
     cell = make_simulation_cell(
         phase="type_i_baseline",

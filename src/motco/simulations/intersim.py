@@ -163,7 +163,16 @@ def run_intersim(
         return _load_result(output_dir, params=params)
 
 
+_R_INT_MIN = -(2**31)
+_R_INT_MAX = 2**31 - 1
+
+
 def _build_rscript_command(params: InterSIMParams, *, output_dir: Path, rscript: str = "Rscript") -> list[str]:
+    if not (_R_INT_MIN <= params.seed <= _R_INT_MAX):
+        raise InterSIMError(
+            f"InterSIM seed {params.seed} is outside R's signed-32-bit range "
+            f"[{_R_INT_MIN}, {_R_INT_MAX}]; R's set.seed would coerce it to NA."
+        )
     helper = resources.files("motco.simulations").joinpath("run_intersim.R")
     cmd = [
         rscript,

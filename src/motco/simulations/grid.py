@@ -278,14 +278,18 @@ def enumerate_power_grid(
 
 
 def derive_replicate_seed(cell: SimulationCell, replicate_index: int) -> int:
-    """Derive a deterministic 32-bit seed from cell identity and replicate index."""
+    """Derive a deterministic 31-bit unsigned seed from cell identity and replicate index.
+
+    The result is masked into ``[0, 2**31 - 1]`` so it fits R's signed
+    ``set.seed`` argument as well as numpy and other downstream RNGs.
+    """
 
     if replicate_index < 0 or replicate_index >= cell.n_replicates:
         raise SimulationGridError(
             f"replicate_index must be in [0, {cell.n_replicates - 1}], got {replicate_index}."
         )
     payload = {"base_seed": cell.base_seed, "cell_id": cell.cell_id, "replicate_index": replicate_index}
-    return int(_stable_digest(payload, length=8), 16)
+    return int(_stable_digest(payload, length=8), 16) & 0x7FFFFFFF
 
 
 def parameter_signature(cell: SimulationCell) -> str:
@@ -299,6 +303,7 @@ def parameter_signature(cell: SimulationCell) -> str:
         "n_replicates": cell.n_replicates,
         "base_seed": cell.base_seed,
         "metadata": _to_jsonable(cell.metadata),
+        "seed_derivation_version": 2,
     }
     return _stable_digest(payload)
 

@@ -8,6 +8,7 @@ import pytest
 
 from motco.simulations import (
     InterSIMDependencyError,
+    InterSIMError,
     InterSIMMalformedOutputError,
     InterSIMParams,
     check_intersim_available,
@@ -61,6 +62,18 @@ def test_build_rscript_command_translates_python_params(tmp_path: Path) -> None:
     assert "--sigma-methyl" in cmd
     assert "--cor-methyl-expr" in cmd
     assert "--p-deg" not in cmd
+
+
+@pytest.mark.parametrize("seed", [2**31 - 1, 0, -(2**31)])
+def test_build_rscript_command_accepts_in_range_seeds(seed: int, tmp_path: Path) -> None:
+    cmd = intersim._build_rscript_command(InterSIMParams(seed=seed), output_dir=tmp_path)
+    assert str(seed) in cmd
+
+
+@pytest.mark.parametrize("seed", [2**31, -(2**31) - 1, 2_797_983_684])
+def test_build_rscript_command_rejects_out_of_range_seeds(seed: int, tmp_path: Path) -> None:
+    with pytest.raises(InterSIMError, match=r"signed-32-bit range"):
+        intersim._build_rscript_command(InterSIMParams(seed=seed), output_dir=tmp_path)
 
 
 def test_load_result_normalizes_outputs(tmp_path: Path) -> None:

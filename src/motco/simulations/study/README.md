@@ -355,3 +355,9 @@ records = run_shard(grid, shard_index=0, n_shards=4,
 - **Reports disagree with what you expect on a null cell** — check
   that `effect_sizes` starts at `0.0` and that `none` survived
   enumeration; both are required for the Type I view.
+- **Re-running an old shard skips everything / produces no new
+  records** — the parameter signature includes a seed-derivation
+  version. After fixes that change derivation logic (e.g. the
+  `2025-06` R-compatibility fix), all shard files from before the
+  fix have a stale signature and are re-executed automatically on
+  the next `run_shard`. No manual deletion needed.
