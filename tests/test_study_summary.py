@@ -21,7 +21,6 @@ def _record(
         phase=phase,
         replicate_index=replicate_index,
         replicate_seed=replicate_index,
-        intersim_seed=replicate_index,
         generator_seed=replicate_index,
         evaluation_seed=replicate_index,
         parameter_signature="sig",

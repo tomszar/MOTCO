@@ -3,7 +3,8 @@
 This package (`motco.simulations.study`) is the engine behind the
 reproducible Type I error / power study for the MOTCO trajectory test
 (`delta`, `angle`, `shape`). It enumerates a grid of semi-synthetic
-InterSIM datasets, runs the full MOTCO pipeline on each replicate, and
+datasets from the numpy generator (cached InterSIM reference data, no R
+at runtime), runs the full MOTCO pipeline on each replicate, and
 produces summary tables, figures, and an acceptance-target report.
 
 This README is the operational handbook: enough for anyone
@@ -17,8 +18,9 @@ a SLURM cluster.
 For each cell in the grid × replicate, the runner:
 
 1. Generates aligned methylation, expression, and proteomics matrices
-   via InterSIM (R, called through `rpy2`).
-2. Applies a trajectory perturbation in one of the modes below.
+   via the numpy generator and cached InterSIM reference data (no R).
+2. Injects a group trajectory difference as feature-set surgery on the
+   per-stage differential indicators, in one of the modes below.
 3. Runs the MOTCO trajectory pipeline (integration → design →
    `estimate_difference` → RRPP).
 4. Records per-statistic p-values (`delta`, `angle`, `shape`) plus a
@@ -28,11 +30,11 @@ For each cell in the grid × replicate, the runner:
 
 | Mode          | Role                                                                  |
 |---------------|-----------------------------------------------------------------------|
-| `none`        | Type I baseline (no group effect). Always added by the enumerator.    |
-| `translation` | Negative control — group shift orthogonal to trajectory shape.        |
-| `magnitude`   | Power probe for `delta`.                                              |
-| `orientation` | Power probe for `angle`.                                              |
-| `shape`       | Power probe for `shape`.                                              |
+| `none`        | Type I baseline (identical groups). Always added by the enumerator.   |
+| `translation` | Negative control — constant location offset (no geometry change).     |
+| `magnitude`   | Power probe for `delta` (uniformly scales every step).                |
+| `orientation` | Power probe for `angle` (global feature permutation = rotation).      |
+| `shape`       | Power probe for `shape` (perturbs interior-stage overlaps).           |
 
 Reports cover three views:
 
@@ -103,12 +105,11 @@ schema lives in `config.py` (`StudyConfig`). Required top-level keys:
 
 | Field              | Purpose                                                                |
 |--------------------|------------------------------------------------------------------------|
-| `intersim`         | Baseline InterSIM params (R generator). `seed` is required.            |
-| `generator`        | Baseline semi-synthetic perturbation params. `seed` is required.       |
+| `generator`        | Baseline numpy-generator params (sizing, `n_stages`, `p_dmp`, per-omic `delta_*`, perturbation). `seed` is required. |
 | `evaluation`       | Integration method, RRPP permutations, `n_jobs`, eval seed.            |
 | `trajectory_modes` | Modes enumerated in the power grid. `none` is always added.            |
 | `effect_sizes`     | Non-negative effect-size sweep (per mode).                             |
-| `axes`             | Optional OFAT axes. Keys must be namespaced `intersim.*`, `generator.*`, or `evaluation.*`. |
+| `axes`             | Optional OFAT axes. Keys must be namespaced `generator.*` or `evaluation.*`. |
 | `n_replicates`     | Replicates per cell.                                                   |
 | `base_seed`        | Deterministic seed root for replicates.                                |
 | `alpha`            | Significance level for rejection rates.                                |
@@ -119,7 +120,7 @@ Validation enforces:
 
 - `trajectory_modes` ⊆ `{none, translation, magnitude, orientation, shape}`.
 - `effect_sizes` are non-negative.
-- `axes` keys use a known namespace prefix.
+- `axes` keys use a known namespace prefix (`generator.*` or `evaluation.*`).
 - `0 < alpha < 1`.
 
 See `examples/trajectory_power_study/smoke.json` for a complete,
@@ -132,7 +133,7 @@ typically want:
 
 | Field                       | Smoke | Paper-grade (typical) |
 |-----------------------------|-------|-----------------------|
-| `intersim.n_sample`         | 30    | 100–300               |
+| `generator.n_samples`       | 60    | 200–600               |
 | `evaluation.permutations`   | 49    | 999 or 4999           |
 | `n_replicates`              | 8     | 500–1000              |
 | `effect_sizes`              | 4 pts | 5–8 pts incl. `0.0`   |
@@ -176,7 +177,8 @@ Outputs (under `/tmp/motco-smoke/report/`):
 - `acceptance_report.csv` / `.json`
 
 Run the smoke first on any new environment — it doubles as a sanity
-check that R, InterSIM, and `rpy2` are all wired up correctly.
+check that the package (and its cached reference data) is wired up
+correctly. No R is required at runtime.
 
 ---
 
@@ -186,15 +188,17 @@ check that R, InterSIM, and `rpy2` are all wired up correctly.
 
 - Python (matching `pyproject.toml`) and `uv` (or `pip`) available on
   the compute nodes.
-- R available on `PATH` with the **InterSIM** package installed in
-  `R_LIBS_USER` (or a path that `rpy2` can discover).
+- **No R needed.** Generation runs on the numpy generator and the
+  cached reference data (`src/motco/simulations/data/intersim_reference.npz`),
+  which ships in the repo. R is only ever needed to *regenerate* that
+  cache (see `export_reference.R`), not to run the study.
 - The repo cloned and the virtualenv built once on a login node:
   `uv venv && uv sync --extra test`. The sbatch template activates
   `.venv/bin/activate` from the project root.
 
 If your cluster uses `module load`/conda, add the appropriate `module
-load python R` (and any `conda activate`) lines before the `source
-.venv/bin/activate` step in the sbatch script.
+load python` (and any `conda activate`) lines before the `source
+.venv/bin/activate` step in the sbatch script. No R module is required.
 
 ### 6.2 Choose `N_SHARDS`
 
@@ -340,12 +344,12 @@ records = run_shard(grid, shard_index=0, n_shards=4,
 
 ## 10. Troubleshooting
 
-- **`rpy2` import errors / `R_HOME` missing** — load the cluster's R
-  module *before* activating the venv, or set `R_HOME` explicitly in
-  the sbatch script.
-- **InterSIM not found** — install it once on a login node into
-  `R_LIBS_USER` (which must be on `PATH` for the compute nodes too).
-  The smoke run will surface this immediately.
+- **Reference cache missing** (`ReferenceCacheMissingError`) — the
+  committed `data/intersim_reference.npz` is absent from the install.
+  Reinstall the package, or regenerate it once in an R environment with
+  InterSIM: `Rscript src/motco/simulations/export_reference.R
+  --output-dir <dir>` then `build_cache_from_export(<dir>)`. No R is
+  needed for normal runs.
 - **Shard wallclock spills past `#SBATCH --time`** — the shard is
   resumable: just resubmit the failed array task ids. Then either
   lower the per-shard load (raise `N_SHARDS`) or raise `--time`.
@@ -357,7 +361,7 @@ records = run_shard(grid, shard_index=0, n_shards=4,
   enumeration; both are required for the Type I view.
 - **Re-running an old shard skips everything / produces no new
   records** — the parameter signature includes a seed-derivation
-  version. After fixes that change derivation logic (e.g. the
-  `2025-06` R-compatibility fix), all shard files from before the
-  fix have a stale signature and are re-executed automatically on
-  the next `run_shard`. No manual deletion needed.
+  version. After changes to derivation logic or the generator surface
+  (e.g. the move to the numpy generator), shard files produced before
+  the change have a stale signature and are re-executed automatically
+  on the next `run_shard`. No manual deletion needed.

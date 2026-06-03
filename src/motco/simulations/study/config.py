@@ -10,11 +10,10 @@ from pathlib import Path
 from typing import Any
 
 from motco.simulations.evaluation import SimulationEvaluationParams
-from motco.simulations.intersim import InterSIMParams
 from motco.simulations.semisynthetic import SemiSyntheticTrajectoryParams
 
 _TRAJECTORY_MODES = {"none", "translation", "magnitude", "orientation", "shape"}
-_AXIS_NAMESPACES = {"intersim", "generator", "evaluation"}
+_AXIS_NAMESPACES = {"generator", "evaluation"}
 _TARGET_KINDS = {"type_i_control", "power_monotonicity", "specificity"}
 
 
@@ -68,7 +67,6 @@ class AcceptanceTargets:
 class StudyConfig:
     """Declarative study definition."""
 
-    intersim: InterSIMParams
     generator: SemiSyntheticTrajectoryParams
     evaluation: SimulationEvaluationParams
     trajectory_modes: tuple[str, ...]
@@ -143,12 +141,11 @@ def _parse_text(text: str, suffix: str) -> Any:
 
 
 def _build_config(data: Mapping[str, Any]) -> StudyConfig:
-    required = {"intersim", "generator", "evaluation", "trajectory_modes", "effect_sizes"}
+    required = {"generator", "evaluation", "trajectory_modes", "effect_sizes"}
     missing = sorted(required - set(data))
     if missing:
         raise StudyConfigError(f"Study configuration is missing required field(s): {missing}.")
 
-    intersim = _build_intersim(data["intersim"])
     generator = _build_generator(data["generator"])
     evaluation = _build_evaluation(data.get("evaluation") or {})
     trajectory_modes = tuple(str(mode) for mode in data["trajectory_modes"])
@@ -160,7 +157,6 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
     acceptance = _build_acceptance(data.get("acceptance") or {})
     metadata = dict(data.get("metadata") or {})
     return StudyConfig(
-        intersim=intersim,
         generator=generator,
         evaluation=evaluation,
         trajectory_modes=trajectory_modes,
@@ -172,24 +168,6 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
         acceptance=acceptance,
         metadata=metadata,
     )
-
-
-def _build_intersim(raw: Mapping[str, Any]) -> InterSIMParams:
-    if "seed" not in raw:
-        raise StudyConfigError("intersim.seed is required.")
-    field_names = {f.name for f in dataclasses.fields(InterSIMParams)}
-    unknown = sorted(set(raw) - field_names)
-    if unknown:
-        raise StudyConfigError(f"intersim has unknown field(s): {unknown}.")
-    kwargs: dict[str, Any] = {}
-    for f in dataclasses.fields(InterSIMParams):
-        if f.name not in raw:
-            continue
-        value = raw[f.name]
-        if f.name == "cluster_sample_prop" and value is not None:
-            value = tuple(float(v) for v in value)
-        kwargs[f.name] = value
-    return InterSIMParams(**kwargs)
 
 
 def _build_generator(raw: Mapping[str, Any]) -> SemiSyntheticTrajectoryParams:
@@ -206,6 +184,8 @@ def _build_generator(raw: Mapping[str, Any]) -> SemiSyntheticTrajectoryParams:
         value = raw[f.name]
         if f.name == "group_labels" and value is not None:
             value = tuple(str(v) for v in value)
+        if f.name == "stage_sample_prop" and value is not None:
+            value = tuple(float(v) for v in value)
         kwargs[f.name] = value
     return SemiSyntheticTrajectoryParams(**kwargs)
 
@@ -289,7 +269,7 @@ def _build_specificity_target(raw: Mapping[str, Any]) -> SpecificityTarget:
 def _validate_axis_namespace(axis: str) -> None:
     if "." not in axis:
         raise StudyConfigError(
-            f"axis {axis!r} must use a namespace prefix: 'intersim.', 'generator.', or 'evaluation.'."
+            f"axis {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
         )
     namespace, _, field_name = axis.partition(".")
     if namespace not in _AXIS_NAMESPACES:
@@ -300,7 +280,6 @@ def _validate_axis_namespace(axis: str) -> None:
 
 def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
     return {
-        "intersim": _dataclass_dict(config.intersim),
         "generator": _dataclass_dict(config.generator),
         "evaluation": _dataclass_dict(config.evaluation),
         "trajectory_modes": list(config.trajectory_modes),

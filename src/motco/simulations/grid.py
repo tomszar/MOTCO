@@ -14,10 +14,9 @@ from time import perf_counter
 from typing import Any, Literal
 
 from motco.simulations.evaluation import SimulationEvaluationParams, SimulationEvaluationResult
-from motco.simulations.intersim import InterSIMParams
 from motco.simulations.semisynthetic import (
     SemiSyntheticTrajectoryParams,
-    generate_semisynthetic_trajectory_from_intersim,
+    generate_semisynthetic_trajectory,
 )
 
 SimulationPhase = Literal[
@@ -40,7 +39,6 @@ class SimulationCell:
 
     cell_id: str
     phase: str
-    intersim_params: InterSIMParams
     generator_params: SemiSyntheticTrajectoryParams
     evaluation_params: SimulationEvaluationParams
     n_replicates: int = 1
@@ -78,7 +76,6 @@ class SimulationReplicateResult:
     phase: str
     replicate_index: int
     replicate_seed: int
-    intersim_seed: int
     generator_seed: int
     evaluation_seed: int | None
     parameter_signature: str
@@ -120,7 +117,7 @@ class SimulationRunConfig:
 
 
 Evaluator = Callable[
-    [InterSIMParams, SemiSyntheticTrajectoryParams, SimulationEvaluationParams],
+    [SemiSyntheticTrajectoryParams, SimulationEvaluationParams],
     SimulationEvaluationResult,
 ]
 
@@ -128,7 +125,6 @@ Evaluator = Callable[
 def make_simulation_cell(
     *,
     phase: str,
-    intersim_params: InterSIMParams,
     generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams | None = None,
     n_replicates: int = 1,
@@ -141,7 +137,6 @@ def make_simulation_cell(
     evaluation_params = evaluation_params or SimulationEvaluationParams()
     payload = {
         "phase": phase,
-        "intersim_params": _to_jsonable(intersim_params),
         "generator_params": _to_jsonable(generator_params),
         "evaluation_params": _to_jsonable(evaluation_params),
         "n_replicates": n_replicates,
@@ -152,7 +147,6 @@ def make_simulation_cell(
     return SimulationCell(
         cell_id=resolved_id,
         phase=phase,
-        intersim_params=intersim_params,
         generator_params=generator_params,
         evaluation_params=evaluation_params,
         n_replicates=n_replicates,
@@ -163,7 +157,6 @@ def make_simulation_cell(
 
 def enumerate_type_i_grid(
     *,
-    baseline_intersim_params: InterSIMParams,
     baseline_generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams | None = None,
     axes: Mapping[str, Sequence[Any]] | None = None,
@@ -176,7 +169,6 @@ def enumerate_type_i_grid(
     cells = [
         make_simulation_cell(
             phase="type_i_baseline",
-            intersim_params=baseline_intersim_params,
             generator_params=null_generator,
             evaluation_params=evaluation_params,
             n_replicates=n_replicates,
@@ -185,12 +177,11 @@ def enumerate_type_i_grid(
         )
     ]
     for axis, values in (axes or {}).items():
-        baseline_value = _get_axis_value(baseline_intersim_params, null_generator, evaluation_params, axis)
+        baseline_value = _get_axis_value(null_generator, evaluation_params, axis)
         for value in values:
             if _to_jsonable(value) == _to_jsonable(baseline_value):
                 continue
-            intersim_params, generator_params, eval_params = _apply_axis_value(
-                baseline_intersim_params,
+            generator_params, eval_params = _apply_axis_value(
                 null_generator,
                 evaluation_params or SimulationEvaluationParams(),
                 axis,
@@ -199,7 +190,6 @@ def enumerate_type_i_grid(
             cells.append(
                 make_simulation_cell(
                     phase="type_i_ofat",
-                    intersim_params=intersim_params,
                     generator_params=generator_params,
                     evaluation_params=eval_params,
                     n_replicates=n_replicates,
@@ -212,7 +202,6 @@ def enumerate_type_i_grid(
 
 def enumerate_power_grid(
     *,
-    baseline_intersim_params: InterSIMParams,
     baseline_generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams | None = None,
     trajectory_modes: Sequence[str],
@@ -238,7 +227,6 @@ def enumerate_power_grid(
         cells.append(
             make_simulation_cell(
                 phase="power_primary",
-                intersim_params=baseline_intersim_params,
                 generator_params=generator,
                 evaluation_params=eval_params,
                 n_replicates=n_replicates,
@@ -247,12 +235,11 @@ def enumerate_power_grid(
             )
         )
         for axis, values in (axes or {}).items():
-            baseline_value = _get_axis_value(baseline_intersim_params, generator, eval_params, axis)
+            baseline_value = _get_axis_value(generator, eval_params, axis)
             for value in values:
                 if _to_jsonable(value) == _to_jsonable(baseline_value):
                     continue
-                intersim_params, generator_params, axis_eval_params = _apply_axis_value(
-                    baseline_intersim_params,
+                generator_params, axis_eval_params = _apply_axis_value(
                     generator,
                     eval_params,
                     axis,
@@ -261,7 +248,6 @@ def enumerate_power_grid(
                 cells.append(
                     make_simulation_cell(
                         phase="power_ofat",
-                        intersim_params=intersim_params,
                         generator_params=generator_params,
                         evaluation_params=axis_eval_params,
                         n_replicates=n_replicates,
@@ -280,8 +266,8 @@ def enumerate_power_grid(
 def derive_replicate_seed(cell: SimulationCell, replicate_index: int) -> int:
     """Derive a deterministic 31-bit unsigned seed from cell identity and replicate index.
 
-    The result is masked into ``[0, 2**31 - 1]`` so it fits R's signed
-    ``set.seed`` argument as well as numpy and other downstream RNGs.
+    The result is masked into ``[0, 2**31 - 1]`` so it seeds numpy's default RNG
+    (and any other downstream RNG) reproducibly.
     """
 
     if replicate_index < 0 or replicate_index >= cell.n_replicates:
@@ -297,13 +283,12 @@ def parameter_signature(cell: SimulationCell) -> str:
 
     payload = {
         "phase": cell.phase,
-        "intersim_params": _to_jsonable(cell.intersim_params),
         "generator_params": _to_jsonable(cell.generator_params),
         "evaluation_params": _to_jsonable(cell.evaluation_params),
         "n_replicates": cell.n_replicates,
         "base_seed": cell.base_seed,
         "metadata": _to_jsonable(cell.metadata),
-        "seed_derivation_version": 2,
+        "seed_derivation_version": 3,
     }
     return _stable_digest(payload)
 
@@ -319,14 +304,13 @@ def run_simulation_replicate(
 
     _validate_error_policy(error_policy)
     replicate_seed = derive_replicate_seed(cell, replicate_index)
-    intersim_params = replace(cell.intersim_params, seed=replicate_seed)
     generator_params = replace(cell.generator_params, seed=replicate_seed)
     evaluation_seed = cell.evaluation_params.seed if cell.evaluation_params.seed is not None else replicate_seed
     evaluation_params = replace(cell.evaluation_params, seed=evaluation_seed)
     evaluator = evaluator or _default_evaluator
     start = perf_counter()
     try:
-        result = evaluator(intersim_params, generator_params, evaluation_params)
+        result = evaluator(generator_params, evaluation_params)
     except Exception as exc:
         if error_policy == "raise":
             raise
@@ -335,7 +319,6 @@ def run_simulation_replicate(
             phase=cell.phase,
             replicate_index=replicate_index,
             replicate_seed=replicate_seed,
-            intersim_seed=intersim_params.seed,
             generator_seed=generator_params.seed,
             evaluation_seed=evaluation_params.seed,
             parameter_signature=parameter_signature(cell),
@@ -351,7 +334,6 @@ def run_simulation_replicate(
         phase=cell.phase,
         replicate_index=replicate_index,
         replicate_seed=replicate_seed,
-        intersim_seed=intersim_params.seed,
         generator_seed=generator_params.seed,
         evaluation_seed=evaluation_params.seed,
         parameter_signature=parameter_signature(cell),
@@ -482,42 +464,35 @@ def rejection_indicator(p_value: float | None, *, alpha: float = 0.05) -> bool |
 
 
 def _default_evaluator(
-    intersim_params: InterSIMParams,
     generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams,
 ) -> SimulationEvaluationResult:
     from motco.simulations.evaluation import evaluate_semisynthetic_trajectory
 
-    dataset = generate_semisynthetic_trajectory_from_intersim(intersim_params, generator_params)
+    dataset = generate_semisynthetic_trajectory(generator_params)
     return evaluate_semisynthetic_trajectory(dataset, evaluation_params)
 
 
 def _apply_axis_value(
-    intersim_params: InterSIMParams,
     generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams,
     axis: str,
     value: Any,
-) -> tuple[InterSIMParams, SemiSyntheticTrajectoryParams, SimulationEvaluationParams]:
+) -> tuple[SemiSyntheticTrajectoryParams, SimulationEvaluationParams]:
     namespace, field_name = _split_axis(axis)
-    if namespace == "intersim":
-        return replace(intersim_params, **{field_name: value}), generator_params, evaluation_params
     if namespace == "generator":
-        return intersim_params, replace(generator_params, **{field_name: value}), evaluation_params
+        return replace(generator_params, **{field_name: value}), evaluation_params
     if namespace == "evaluation":
-        return intersim_params, generator_params, replace(evaluation_params, **{field_name: value})
+        return generator_params, replace(evaluation_params, **{field_name: value})
     raise SimulationGridError(f"Unsupported axis namespace: {namespace!r}.")
 
 
 def _get_axis_value(
-    intersim_params: InterSIMParams,
     generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams | None,
     axis: str,
 ) -> Any:
     namespace, field_name = _split_axis(axis)
-    if namespace == "intersim":
-        return getattr(intersim_params, field_name)
     if namespace == "generator":
         return getattr(generator_params, field_name)
     if namespace == "evaluation":
@@ -528,12 +503,12 @@ def _get_axis_value(
 def _split_axis(axis: str) -> tuple[str, str]:
     if "." not in axis:
         raise SimulationGridError(
-            f"Axis {axis!r} must use a namespace prefix: 'intersim.', 'generator.', or 'evaluation.'."
+            f"Axis {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
         )
     namespace, field_name = axis.split(".", 1)
     if not field_name:
         raise SimulationGridError(f"Axis {axis!r} is missing a field name.")
-    if namespace not in {"intersim", "generator", "evaluation"}:
+    if namespace not in {"generator", "evaluation"}:
         raise SimulationGridError(f"Unsupported axis namespace: {namespace!r}.")
     return namespace, field_name
 
@@ -554,7 +529,6 @@ def _replicate_result_from_dict(data: Mapping[str, Any]) -> SimulationReplicateR
         phase=str(data["phase"]),
         replicate_index=int(data["replicate_index"]),
         replicate_seed=int(data["replicate_seed"]),
-        intersim_seed=int(data["intersim_seed"]),
         generator_seed=int(data["generator_seed"]),
         evaluation_seed=None if data.get("evaluation_seed") is None else int(data["evaluation_seed"]),
         parameter_signature=str(data["parameter_signature"]),

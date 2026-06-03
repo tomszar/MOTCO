@@ -1,221 +1,167 @@
 from __future__ import annotations
 
-import pandas as pd
+import numpy as np
 import pytest
 
 from motco.simulations import (
-    InterSIMDependencyError,
-    InterSIMParams,
-    InterSIMResult,
     SemiSyntheticTrajectoryError,
     SemiSyntheticTrajectoryParams,
     generate_semisynthetic_trajectory,
-    generate_semisynthetic_trajectory_from_intersim,
-    semisynthetic,
+    load_reference,
 )
 
 
-def make_intersim_result(*, clusters: list[int | str] | None = None) -> InterSIMResult:
-    if clusters is None:
-        clusters = [2, 2, 2, 2, 1, 1, 1, 1, 3, 3, 3, 3]
-    sample_ids = pd.Index([f"s{i}" for i in range(len(clusters))])
-    methylation = pd.DataFrame(0.0, index=sample_ids, columns=["m0", "m1", "m2", "m3"])
-    expression = pd.DataFrame(0.0, index=sample_ids, columns=["g0", "g1", "g2", "g3"])
-    proteomics = pd.DataFrame(0.0, index=sample_ids, columns=["p0", "p1", "p2", "p3"])
-    cluster_series = pd.Series(clusters, index=sample_ids, name="cluster")
-    return InterSIMResult(
-        methylation=methylation,
-        expression=expression,
-        proteomics=proteomics,
-        sample_ids=sample_ids,
-        clusters=cluster_series,
-        metadata={"source": "fixture"},
-    )
+@pytest.fixture(scope="module")
+def reference():
+    return load_reference()
 
 
-def explicit_params(
-    mode: str = "none",
-    *,
-    effect_size: float = 1.0,
-    seed: int = 7,
-) -> SemiSyntheticTrajectoryParams:
-    return SemiSyntheticTrajectoryParams(
-        seed=seed,
-        trajectory_mode=mode,  # type: ignore[arg-type]
-        group_effect_size=effect_size,
+def make_params(mode: str = "none", **overrides) -> SemiSyntheticTrajectoryParams:
+    base = dict(
+        seed=7,
+        trajectory_mode=mode,
+        n_samples=240,
+        n_stages=3,
+        group_effect_size=0.6,
         group_ratio=0.5,
-        prop_affected_features=0.0,
-        affected_features={
-            "methylation": ["m0", "m1"],
-            "expression": ["g0"],
-            "proteomics": ["p0"],
-        },
     )
+    base.update(overrides)
+    return SemiSyntheticTrajectoryParams(**base)  # type: ignore[arg-type]
 
 
-def test_clusters_as_stages_and_original_clusters_preserved() -> None:
-    dataset = generate_semisynthetic_trajectory(make_intersim_result(), explicit_params("none"))
+def test_dataset_structure_and_feature_counts(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("orientation"), reference=reference)
 
-    assert dataset.metadata["sample_id"].tolist() == [f"s{i}" for i in range(12)]
-    assert dataset.metadata["cluster"].tolist() == [2, 2, 2, 2, 1, 1, 1, 1, 3, 3, 3, 3]
-    assert dataset.metadata["stage"].tolist() == [1, 1, 1, 1, 0, 0, 0, 0, 2, 2, 2, 2]
-    assert dataset.truth["stage_mapping"] == {"1": 0, "2": 1, "3": 2}
-    assert dataset.truth["stage_assumption"] == "clusters-as-stages"
+    assert dataset.methylation.shape == (240, 367)
+    assert dataset.expression.shape == (240, 131)
+    assert dataset.proteomics.shape == (240, 160)
+    assert list(dataset.metadata.columns) == ["sample_id", "group", "stage", "cluster"]
+    assert sorted(dataset.metadata["group"].unique()) == ["A", "B"]
+    assert sorted(dataset.metadata["stage"].unique()) == [0, 1, 2]
+    # methylation is bounded in (0, 1)
+    assert dataset.methylation.to_numpy().min() > 0
+    assert dataset.methylation.to_numpy().max() < 1
 
 
-def test_group_assignment_is_deterministic_within_stages() -> None:
-    result = make_intersim_result()
-    first = generate_semisynthetic_trajectory(result, explicit_params("none", seed=99))
-    second = generate_semisynthetic_trajectory(result, explicit_params("none", seed=99))
+def test_generation_is_reproducible(reference) -> None:
+    first = generate_semisynthetic_trajectory(make_params("shape"), reference=reference)
+    second = generate_semisynthetic_trajectory(make_params("shape"), reference=reference)
 
+    np.testing.assert_array_equal(first.methylation.to_numpy(), second.methylation.to_numpy())
+    np.testing.assert_array_equal(first.expression.to_numpy(), second.expression.to_numpy())
     assert first.metadata["group"].tolist() == second.metadata["group"].tolist()
-    for stage, frame in first.metadata.groupby("stage"):
-        assert set(frame["group"]) == {"A", "B"}, stage
-        assert frame["group"].value_counts().to_dict() == {"A": 2, "B": 2}
 
 
-def test_insufficient_stage_size_is_rejected() -> None:
-    result = make_intersim_result(clusters=[1, 2, 2, 3, 3])
-
-    with pytest.raises(SemiSyntheticTrajectoryError, match="at least 2"):
-        generate_semisynthetic_trajectory(result, explicit_params("none"))
-
-
-def test_shape_mode_requires_at_least_three_stages() -> None:
-    result = make_intersim_result(clusters=[1, 1, 1, 1, 2, 2, 2, 2])
-
-    with pytest.raises(SemiSyntheticTrajectoryError, match="requires at least three stages"):
-        generate_semisynthetic_trajectory(result, explicit_params("shape"))
+def test_group_assignment_is_balanced_within_stages(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("none"), reference=reference)
+    for _, frame in dataset.metadata.groupby("stage"):
+        assert set(frame["group"]) == {"A", "B"}
 
 
-def test_explicit_affected_features_are_honored() -> None:
-    dataset = generate_semisynthetic_trajectory(make_intersim_result(), explicit_params("translation"))
+def test_truth_records_mode_deltas_and_indicators(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("magnitude"), reference=reference)
+    truth = dataset.truth
 
-    assert dataset.truth["affected_features"] == {
-        "methylation": ["m0", "m1"],
-        "expression": ["g0"],
-        "proteomics": ["p0"],
-    }
-
-
-def test_proportion_based_affected_features_are_reproducible() -> None:
-    params = SemiSyntheticTrajectoryParams(seed=12, prop_affected_features=0.5)
-    first = generate_semisynthetic_trajectory(make_intersim_result(), params)
-    second = generate_semisynthetic_trajectory(make_intersim_result(), params)
-
-    assert first.truth["affected_features"] == second.truth["affected_features"]
-    assert len(first.truth["affected_features"]["methylation"]) == 2
-    assert len(first.truth["affected_features"]["expression"]) == 2
-    assert len(first.truth["affected_features"]["proteomics"]) == 2
+    assert truth["trajectory_mode"] == "magnitude"
+    assert truth["group_effect_size"] == 0.6
+    assert truth["n_stages"] == 3
+    assert set(truth["indicator_counts"]) == {"A", "B"}
+    assert set(truth["indicators"]["A"]) == {"methylation", "expression", "proteomics"}
+    # indicator arrays are (n_feat, n_stages)
+    assert truth["indicators"]["A"]["methylation"].shape == (367, 3)
 
 
-def test_unknown_explicit_affected_feature_is_rejected() -> None:
-    params = SemiSyntheticTrajectoryParams(
-        seed=1,
-        affected_features={"methylation": ["not_a_feature"]},
+def test_none_mode_uses_identical_group_indicators(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("none"), reference=reference)
+    ind = dataset.truth["indicators"]
+    np.testing.assert_array_equal(ind["A"]["methylation"], ind["B"]["methylation"])
+    np.testing.assert_array_equal(ind["A"]["expression"], ind["B"]["expression"])
+    assert dataset.truth["deltas"]["A"] == dataset.truth["deltas"]["B"]
+
+
+def test_magnitude_scales_only_methylation_delta_and_keeps_indicators(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("magnitude", group_effect_size=1.0), reference=reference
     )
-
-    with pytest.raises(SemiSyntheticTrajectoryError, match="unknown features"):
-        generate_semisynthetic_trajectory(make_intersim_result(), params)
-
-
-def test_invalid_affected_feature_proportion_is_rejected() -> None:
-    params = SemiSyntheticTrajectoryParams(seed=1, prop_affected_features={"methylation": 1.5})
-
-    with pytest.raises(SemiSyntheticTrajectoryError, match="between 0 and 1"):
-        generate_semisynthetic_trajectory(make_intersim_result(), params)
+    ind = dataset.truth["indicators"]
+    np.testing.assert_array_equal(ind["A"]["methylation"], ind["B"]["methylation"])
+    deltas = dataset.truth["deltas"]
+    # only methylation delta scales: delta_methyl_B = (1 + e) * delta_methyl, e = 1.0
+    assert deltas["B"][0] == 2 * deltas["A"][0]
+    assert deltas["B"][1:] == deltas["A"][1:]
 
 
-def test_none_mode_preserves_omics_values() -> None:
-    result = make_intersim_result()
-    dataset = generate_semisynthetic_trajectory(result, explicit_params("none"))
+def test_orientation_preserves_methylation_cardinality_per_stage(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("orientation", group_effect_size=1.0), reference=reference
+    )
+    counts = dataset.truth["indicator_counts"]
+    # relocation preserves per-stage methylation cardinality (same number of sites)
+    assert counts["A"]["methylation"] == counts["B"]["methylation"]
+    # but the sites moved, so the actual indicators differ
+    ind = dataset.truth["indicators"]
+    assert not np.array_equal(ind["A"]["methylation"], ind["B"]["methylation"])
+    assert dataset.truth["transform"]["orientation_relocated"] > 0
 
-    pd.testing.assert_frame_equal(dataset.methylation, result.methylation)
-    pd.testing.assert_frame_equal(dataset.expression, result.expression)
-    pd.testing.assert_frame_equal(dataset.proteomics, result.proteomics)
+
+def test_shape_fixes_endpoints_and_perturbs_interior(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("shape", n_stages=4, group_effect_size=1.0), reference=reference
+    )
+    ind = dataset.truth["indicators"]
+    a_m, b_m = ind["A"]["methylation"], ind["B"]["methylation"]
+    # endpoints (first and last stage) are unchanged
+    np.testing.assert_array_equal(a_m[:, 0], b_m[:, 0])
+    np.testing.assert_array_equal(a_m[:, -1], b_m[:, -1])
+    # at least one interior stage is changed
+    assert not np.array_equal(a_m[:, 1:-1], b_m[:, 1:-1])
 
 
-def test_zero_effect_preserves_omics_values() -> None:
-    result = make_intersim_result()
-    dataset = generate_semisynthetic_trajectory(result, explicit_params("magnitude", effect_size=0.0))
+def test_translation_adds_disjoint_constant_set(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("translation"), reference=reference)
+    ind = dataset.truth["indicators"]
+    a_m, b_m = ind["A"]["methylation"], ind["B"]["methylation"]
+    # group B keeps A's stage sites and adds an extra constant set U at every stage
+    n_extra = dataset.truth["transform"]["translation_set_size"]
+    assert n_extra > 0
+    # the extra set is present in every B stage and absent from every A stage
+    extra_rows = (b_m.sum(1) > 0) & (a_m.sum(1) == 0)
+    assert int(extra_rows.sum()) == n_extra
+    assert np.all(b_m[extra_rows].sum(1) == dataset.truth["n_stages"])  # on at every stage
+    # A's stage-changing sites are unchanged in B
+    stage_rows = a_m.sum(1) > 0
+    np.testing.assert_array_equal(a_m[stage_rows], b_m[stage_rows])
 
-    pd.testing.assert_frame_equal(dataset.methylation, result.methylation)
-    pd.testing.assert_frame_equal(dataset.expression, result.expression)
-    pd.testing.assert_frame_equal(dataset.proteomics, result.proteomics)
+
+def test_none_mode_has_empty_transform(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(make_params("none"), reference=reference)
+    assert dataset.truth["transform"] == {}
 
 
 @pytest.mark.parametrize(
-    ("mode", "coefficients"),
+    ("overrides", "match"),
     [
-        ("translation", [1.0, 1.0, 1.0]),
-        ("magnitude", [0.0, 1.0, 2.0]),
-        ("orientation", [0.0, 1.0, 2.0]),
-        ("shape", [0.0, 1.0, 0.0]),
+        ({"trajectory_mode": "bogus"}, "Unknown trajectory_mode"),
+        ({"group_labels": ("A", "A")}, "two distinct labels"),
+        ({"group_ratio": 1.5}, "group_ratio"),
+        ({"group_effect_size": -1.0}, "non-negative"),
+        ({"p_dmp": 2.0}, "p_dmp"),
+        ({"n_stages": 1}, "n_stages"),
+        ({"delta_expr": -1.0}, "delta_expr"),
     ],
 )
-def test_non_null_modes_shift_target_group_by_stage(mode: str, coefficients: list[float]) -> None:
-    dataset = generate_semisynthetic_trajectory(make_intersim_result(), explicit_params(mode, effect_size=2.0))
-    target = dataset.metadata["group"] == "B"
-
-    assert (dataset.methylation.loc[~target, ["m0", "m1"]] == 0).all().all()
-    assert (dataset.expression.loc[~target, ["g0"]] == 0).all().all()
-    assert (dataset.proteomics.loc[~target, ["p0"]] == 0).all().all()
-    assert (dataset.methylation[["m2", "m3"]] == 0).all().all()
-    assert (dataset.expression[["g1", "g2", "g3"]] == 0).all().all()
-    assert (dataset.proteomics[["p1", "p2", "p3"]] == 0).all().all()
-
-    for stage, coefficient in enumerate(coefficients):
-        stage_target = target & (dataset.metadata["stage"] == stage)
-        expected = 2.0 * coefficient
-        assert (dataset.expression.loc[stage_target, "g0"] == expected).all()
-        assert (dataset.proteomics.loc[stage_target, "p0"] == expected).all()
-        if mode in {"orientation", "shape"}:
-            assert (dataset.methylation.loc[stage_target, "m0"] == expected).all()
-            assert (dataset.methylation.loc[stage_target, "m1"] == -expected).all()
-        else:
-            assert (dataset.methylation.loc[stage_target, "m0"] == expected).all()
-            assert (dataset.methylation.loc[stage_target, "m1"] == expected).all()
-
-    assert dataset.truth["effect_coefficients"] == coefficients
+def test_invalid_params_are_rejected(reference, overrides, match) -> None:
+    with pytest.raises(SemiSyntheticTrajectoryError, match=match):
+        generate_semisynthetic_trajectory(make_params("none", **overrides), reference=reference)
 
 
-def test_convenience_generation_calls_run_intersim(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_run_intersim(
-        params: InterSIMParams,
-        *,
-        rscript: str = "Rscript",
-        check_dependency: bool = True,
-    ) -> InterSIMResult:
-        assert params.seed == 123
-        assert rscript == "custom-rscript"
-        assert not check_dependency
-        return make_intersim_result()
-
-    monkeypatch.setattr(semisynthetic, "run_intersim", fake_run_intersim)
-
-    dataset = generate_semisynthetic_trajectory_from_intersim(
-        InterSIMParams(seed=123),
-        explicit_params("none"),
-        rscript="custom-rscript",
-        check_dependency=False,
-    )
-
-    assert dataset.metadata.shape[0] == 12
+def test_shape_mode_requires_three_stages(reference) -> None:
+    with pytest.raises(SemiSyntheticTrajectoryError, match="at least three stages"):
+        generate_semisynthetic_trajectory(make_params("shape", n_stages=2), reference=reference)
 
 
-def test_convenience_generation_propagates_intersim_errors(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_run_intersim(
-        params: InterSIMParams,
-        *,
-        rscript: str = "Rscript",
-        check_dependency: bool = True,
-    ) -> InterSIMResult:
-        raise InterSIMDependencyError("missing InterSIM")
-
-    monkeypatch.setattr(semisynthetic, "run_intersim", fake_run_intersim)
-
-    with pytest.raises(InterSIMDependencyError, match="missing InterSIM"):
-        generate_semisynthetic_trajectory_from_intersim(
-            InterSIMParams(seed=123),
-            explicit_params("none"),
+def test_stage_sample_prop_must_match_n_stages(reference) -> None:
+    with pytest.raises(SemiSyntheticTrajectoryError, match="one entry per stage"):
+        generate_semisynthetic_trajectory(
+            make_params("none", stage_sample_prop=(0.5, 0.5)), reference=reference
         )

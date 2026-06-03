@@ -10,6 +10,13 @@ from .evaluation import (
     evaluate_semisynthetic_trajectory,
     integrate_semisynthetic_dataset,
 )
+from .generator import (
+    GeneratedOmics,
+    GeneratorError,
+    bernoulli_indicators,
+    derive_coupled_indicators,
+    generate_omics,
+)
 from .grid import (
     SimulationCell,
     SimulationGrid,
@@ -40,12 +47,25 @@ from .intersim import (
     check_intersim_available,
     run_intersim,
 )
+from .reference import (
+    IntersimReference,
+    ReferenceCacheError,
+    ReferenceCacheMissingError,
+    build_cache_from_export,
+    load_reference,
+)
 from .semisynthetic import (
     SemiSyntheticTrajectoryDataset,
     SemiSyntheticTrajectoryError,
     SemiSyntheticTrajectoryParams,
     generate_semisynthetic_trajectory,
-    generate_semisynthetic_trajectory_from_intersim,
+)
+from .showcase import (
+    TRAJECTORY_SHOWCASE_MODES,
+    TrajectoryShowcaseError,
+    build_showcase_figure,
+    generate_showcase_datasets,
+    run_trajectory_showcase,
 )
 
 __all__ = [
@@ -56,7 +76,12 @@ __all__ = [
     "InterSIMParams",
     "InterSIMResult",
     "InterSIMRuntimeError",
+    "GeneratedOmics",
+    "GeneratorError",
+    "IntersimReference",
     "LatentIntegrationResult",
+    "ReferenceCacheError",
+    "ReferenceCacheMissingError",
     "SemiSyntheticTrajectoryDataset",
     "SemiSyntheticTrajectoryError",
     "SemiSyntheticTrajectoryParams",
@@ -70,16 +95,24 @@ __all__ = [
     "SimulationRunConfig",
     "SimulationSummaryResult",
     "SimulationTrajectoryDesign",
+    "TRAJECTORY_SHOWCASE_MODES",
+    "TrajectoryShowcaseError",
     "append_replicate_results",
+    "bernoulli_indicators",
+    "build_cache_from_export",
+    "build_showcase_figure",
     "build_simulation_trajectory_design",
     "check_intersim_available",
+    "derive_coupled_indicators",
     "derive_replicate_seed",
     "enumerate_power_grid",
     "enumerate_type_i_grid",
     "evaluate_semisynthetic_trajectory",
+    "generate_omics",
     "generate_semisynthetic_trajectory",
-    "generate_semisynthetic_trajectory_from_intersim",
+    "generate_showcase_datasets",
     "integrate_semisynthetic_dataset",
+    "load_reference",
     "make_simulation_cell",
     "parameter_signature",
     "read_replicate_results",
@@ -87,5 +120,6 @@ __all__ = [
     "run_intersim",
     "run_simulation_grid",
     "run_simulation_replicate",
+    "run_trajectory_showcase",
     "summarize_rejection_rates",
 ]

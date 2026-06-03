@@ -173,3 +173,28 @@ def test_shape_pair_statistic_is_unavailable_for_two_stages() -> None:
     assert np.isnan(result.pair_statistics["shape"])
     assert "shape" not in result.p_values
     assert not result.runtime_metadata["shape_available"]
+
+
+def test_truth_metadata_is_json_serializable_without_indicator_arrays() -> None:
+    """The persisted truth_metadata must be JSON-safe (no raw numpy indicator arrays)."""
+
+    import json
+
+    dataset = make_dataset()
+    # mimic the real generator's truth: JSON-able summary plus raw ndarray indicators
+    dataset = SemiSyntheticTrajectoryDataset(
+        methylation=dataset.methylation,
+        expression=dataset.expression,
+        proteomics=dataset.proteomics,
+        metadata=dataset.metadata,
+        truth={
+            "trajectory_mode": "orientation",
+            "indicator_counts": {"A": {"methylation": [1, 2, 1]}},
+            "indicators": {"A": {"methylation": np.zeros((4, 3))}},
+        },
+    )
+    result = evaluate_semisynthetic_trajectory(dataset, SimulationEvaluationParams(permutations=0))
+    assert "indicators" not in result.truth_metadata
+    assert result.truth_metadata["indicator_counts"] == {"A": {"methylation": [1, 2, 1]}}
+    # round-trips through JSON (this is what the study's JSONL persistence does)
+    json.dumps(result.truth_metadata)

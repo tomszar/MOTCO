@@ -1,15 +1,12 @@
 {
-  "intersim": {
-    "seed": 1,
-    "n_sample": 30,
-    "cluster_sample_prop": [0.5, 0.5]
-  },
   "generator": {
     "seed": 2,
     "trajectory_mode": "magnitude",
+    "n_samples": 120,
+    "n_stages": 4,
     "group_effect_size": 0.0,
     "group_ratio": 0.5,
-    "prop_affected_features": 0.1
+    "p_dmp": 0.2
   },
   "evaluation": {
     "integration_method": "concat",

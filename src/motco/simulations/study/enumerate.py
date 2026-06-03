@@ -20,7 +20,6 @@ def enumerate_study(config: StudyConfig) -> SimulationGrid:
     """Build the combined Type I + power grid for a study."""
 
     type_i = enumerate_type_i_grid(
-        baseline_intersim_params=config.intersim,
         baseline_generator_params=config.generator,
         evaluation_params=config.evaluation,
         axes=config.axes,
@@ -28,7 +27,6 @@ def enumerate_study(config: StudyConfig) -> SimulationGrid:
         base_seed=config.base_seed,
     )
     power = enumerate_power_grid(
-        baseline_intersim_params=config.intersim,
         baseline_generator_params=config.generator,
         evaluation_params=config.evaluation,
         trajectory_modes=config.trajectory_modes,
@@ -69,7 +67,6 @@ def _negative_control_cells(config: StudyConfig) -> list:
         cells.append(
             make_simulation_cell(
                 phase="type_i_baseline",
-                intersim_params=config.intersim,
                 generator_params=generator,
                 evaluation_params=config.evaluation,
                 n_replicates=config.n_replicates,

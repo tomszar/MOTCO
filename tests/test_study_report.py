@@ -39,7 +39,6 @@ def _record(
         phase=phase,
         replicate_index=0,
         replicate_seed=0,
-        intersim_seed=0,
         generator_seed=0,
         evaluation_seed=0,
         parameter_signature="sig",
@@ -71,7 +70,7 @@ def _build_synthetic_summaries() -> tuple[list[SimulationSummaryResult], list[Si
         _record("magn-0.1", "power_primary", mode="magnitude", effect_size=0.1),
         _record("magn-0.5", "power_primary", mode="magnitude", effect_size=0.5),
         _record("orient-0.5", "power_primary", mode="orientation", effect_size=0.5),
-        _record("ofat-magn", "power_ofat", mode="magnitude", effect_size=0.5, varied_axis="intersim.n_sample"),
+        _record("ofat-magn", "power_ofat", mode="magnitude", effect_size=0.5, varied_axis="generator.n_samples"),
     ]
     summaries: list[SimulationSummaryResult] = []
     for stat in ("delta", "angle", "shape"):

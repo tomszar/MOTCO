@@ -4,7 +4,6 @@ import numpy as np
 import pytest
 
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     SimulationEvaluationResult,
@@ -26,14 +25,11 @@ from motco.simulations import (
 )
 
 
-def baseline_intersim() -> InterSIMParams:
-    return InterSIMParams(seed=1, n_sample=20, cluster_sample_prop=(0.5, 0.5))
-
-
 def baseline_generator() -> SemiSyntheticTrajectoryParams:
     return SemiSyntheticTrajectoryParams(
         seed=2,
         trajectory_mode="magnitude",
+        n_samples=60,
         group_effect_size=0.2,
         group_ratio=0.5,
     )
@@ -67,12 +63,11 @@ def fake_result(
 
 def test_type_i_grid_enumeration_is_stable_and_null() -> None:
     axes = {
-        "intersim.n_sample": [20, 40],
+        "generator.n_samples": [60, 120],
         "generator.group_ratio": [0.5, 0.7],
         "evaluation.permutations": [0, 2],
     }
     first = enumerate_type_i_grid(
-        baseline_intersim_params=baseline_intersim(),
         baseline_generator_params=baseline_generator(),
         evaluation_params=baseline_evaluation(),
         axes=axes,
@@ -80,7 +75,6 @@ def test_type_i_grid_enumeration_is_stable_and_null() -> None:
         base_seed=101,
     )
     second = enumerate_type_i_grid(
-        baseline_intersim_params=baseline_intersim(),
         baseline_generator_params=baseline_generator(),
         evaluation_params=baseline_evaluation(),
         axes=axes,
@@ -94,7 +88,7 @@ def test_type_i_grid_enumeration_is_stable_and_null() -> None:
     assert all(cell.generator_params.trajectory_mode == "none" for cell in first.cells)
     assert all(cell.generator_params.group_effect_size == 0.0 for cell in first.cells)
     assert {cell.metadata["varied_axis"] for cell in first.cells[1:]} == {
-        "intersim.n_sample",
+        "generator.n_samples",
         "generator.group_ratio",
         "evaluation.permutations",
     }
@@ -102,12 +96,11 @@ def test_type_i_grid_enumeration_is_stable_and_null() -> None:
 
 def test_power_grid_enumeration_includes_modes_effects_and_axes() -> None:
     grid = enumerate_power_grid(
-        baseline_intersim_params=baseline_intersim(),
         baseline_generator_params=baseline_generator(),
         evaluation_params=baseline_evaluation(),
         trajectory_modes=["magnitude", "orientation"],
         effect_sizes=[0.1, 0.2],
-        axes={"intersim.n_sample": [20, 40]},
+        axes={"generator.n_samples": [60, 120]},
     )
 
     assert len(grid.cells) == 8
@@ -127,23 +120,20 @@ def test_invalid_grid_inputs_are_rejected() -> None:
     with pytest.raises(SimulationGridError, match="n_replicates"):
         make_simulation_cell(
             phase="type_i_baseline",
-            intersim_params=baseline_intersim(),
             generator_params=baseline_generator(),
             n_replicates=0,
         )
 
     with pytest.raises(SimulationGridError, match="namespace prefix"):
         enumerate_type_i_grid(
-            baseline_intersim_params=baseline_intersim(),
             baseline_generator_params=baseline_generator(),
-            axes={"n_sample": [20, 40]},
+            axes={"n_samples": [60, 120]},
         )
 
 
 def test_replicate_seed_derivation_is_deterministic() -> None:
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
         n_replicates=2,
         base_seed=99,
@@ -155,8 +145,8 @@ def test_replicate_seed_derivation_is_deterministic() -> None:
         derive_replicate_seed(cell, 2)
 
 
-def test_replicate_seed_always_fits_r_signed_int32() -> None:
-    R_MAX = 2**31 - 1
+def test_replicate_seed_always_fits_unsigned_int31() -> None:
+    SEED_MAX = 2**31 - 1
 
     seeds: list[int] = []
     for base_seed in (0, 1, 42, 100, 2_797_983_684, -1):
@@ -164,7 +154,6 @@ def test_replicate_seed_always_fits_r_signed_int32() -> None:
             cell = make_simulation_cell(
                 cell_id=f"probe-{cell_index}",
                 phase="power_primary",
-                intersim_params=baseline_intersim(),
                 generator_params=baseline_generator(),
                 n_replicates=16,
                 base_seed=base_seed,
@@ -172,17 +161,14 @@ def test_replicate_seed_always_fits_r_signed_int32() -> None:
             for replicate_index in range(cell.n_replicates):
                 seeds.append(derive_replicate_seed(cell, replicate_index))
 
-    assert all(0 <= s <= R_MAX for s in seeds)
-    # Sanity: at least some draws land in the previously-overflowing high half
-    # under the *unmasked* 32-bit derivation, so the test actually exercises
-    # the mask rather than coincidentally staying small.
+    assert all(0 <= s <= SEED_MAX for s in seeds)
+    # Sanity: at least some draws land in the high half, exercising the mask.
     assert max(seeds) > 2**30
 
 
-def test_replicate_seed_masks_known_pre_fix_value() -> None:
-    # Smoke-run failure surfaced an unmasked seed of 2_797_983_684 (high bit set,
-    # = 0xa6b8f084). Clearing the high bit gives 0x26b8f084 = 650_500_036,
-    # which fits R's signed-32-bit range.
+def test_replicate_seed_masks_known_high_bit_value() -> None:
+    # An unmasked 32-bit derivation produced 2_797_983_684 (high bit set,
+    # = 0xa6b8f084). Clearing the high bit gives 0x26b8f084 = 650_500_036.
     unmasked = 2_797_983_684
     assert unmasked & 0x7FFFFFFF == 650_500_036
     assert 650_500_036 <= 2**31 - 1
@@ -193,19 +179,14 @@ def test_parameter_signature_includes_seed_derivation_version(monkeypatch: pytes
 
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
         n_replicates=2,
         base_seed=77,
     )
     current_signature = parameter_signature(cell)
 
-    # Reproduce the signature is stable across calls at the current version.
     assert parameter_signature(cell) == current_signature
 
-    # Strip the derivation-version field from the payload before digesting;
-    # the resulting "legacy" signature must differ from the current one. This
-    # is the property the resume guard relies on to invalidate pre-fix shards.
     original_stable_digest = grid_module._stable_digest
 
     def stable_digest_without_version(payload: object, *, length: int | None = None) -> str:
@@ -220,24 +201,21 @@ def test_parameter_signature_includes_seed_derivation_version(monkeypatch: pytes
 def test_run_replicate_uses_injectable_evaluator_and_records_seeds() -> None:
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
         evaluation_params=baseline_evaluation(),
     )
 
     def evaluator(
-        intersim_params: InterSIMParams,
         generator_params: SemiSyntheticTrajectoryParams,
         evaluation_params: SimulationEvaluationParams,
     ) -> SimulationEvaluationResult:
-        assert intersim_params.seed == generator_params.seed
         assert evaluation_params.seed == 3
         return fake_result(truth_seed=generator_params.seed)
 
     record = run_simulation_replicate(cell, 0, evaluator=evaluator)
 
     assert record.status == "completed"
-    assert record.intersim_seed == record.generator_seed
+    assert record.generator_seed == record.replicate_seed
     assert record.evaluation_seed == 3
     assert record.truth_metadata["seed"] == record.replicate_seed
     assert record.parameter_signature == parameter_signature(cell)
@@ -246,12 +224,10 @@ def test_run_replicate_uses_injectable_evaluator_and_records_seeds() -> None:
 def test_run_replicate_error_policy_records_failures() -> None:
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
     )
 
     def evaluator(
-        intersim_params: InterSIMParams,
         generator_params: SemiSyntheticTrajectoryParams,
         evaluation_params: SimulationEvaluationParams,
     ) -> SimulationEvaluationResult:
@@ -268,7 +244,6 @@ def test_jsonl_persistence_read_and_resume(tmp_path) -> None:
     path = tmp_path / "results.jsonl"
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
         n_replicates=2,
     )
@@ -276,7 +251,6 @@ def test_jsonl_persistence_read_and_resume(tmp_path) -> None:
     calls = 0
 
     def evaluator(
-        intersim_params: InterSIMParams,
         generator_params: SemiSyntheticTrajectoryParams,
         evaluation_params: SimulationEvaluationParams,
     ) -> SimulationEvaluationResult:
@@ -299,7 +273,6 @@ def test_resume_detects_parameter_mismatch(tmp_path) -> None:
     path = tmp_path / "results.jsonl"
     cell = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
         generator_params=baseline_generator(),
         cell_id="shared",
     )
@@ -309,14 +282,13 @@ def test_resume_detects_parameter_mismatch(tmp_path) -> None:
             run_simulation_replicate(
                 cell,
                 0,
-                evaluator=lambda intersim, generator, evaluation: fake_result(),
+                evaluator=lambda generator, evaluation: fake_result(),
             )
         ],
     )
     changed = make_simulation_cell(
         phase="type_i_baseline",
-        intersim_params=baseline_intersim(),
-        generator_params=SemiSyntheticTrajectoryParams(seed=2, group_ratio=0.7),
+        generator_params=SemiSyntheticTrajectoryParams(seed=2, n_samples=60, group_ratio=0.7),
         cell_id="shared",
     )
 
@@ -331,7 +303,6 @@ def test_rejection_summaries_handle_available_and_missing_statistics() -> None:
             phase="type_i_baseline",
             replicate_index=0,
             replicate_seed=1,
-            intersim_seed=1,
             generator_seed=1,
             evaluation_seed=1,
             parameter_signature="sig",
@@ -343,7 +314,6 @@ def test_rejection_summaries_handle_available_and_missing_statistics() -> None:
             phase="type_i_baseline",
             replicate_index=1,
             replicate_seed=2,
-            intersim_seed=2,
             generator_seed=2,
             evaluation_seed=2,
             parameter_signature="sig",

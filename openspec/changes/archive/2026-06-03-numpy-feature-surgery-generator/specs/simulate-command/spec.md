@@ -1,8 +1,5 @@
-# simulate-command Specification
+## MODIFIED Requirements
 
-## Purpose
-Define the `motco simulate` CLI contract for generating tutorial-ready multi-omics toy datasets and trajectory design files.
-## Requirements
 ### Requirement: motco simulate subcommand
 `motco simulate` SHALL be a CLI subcommand that generates a complete multi-omics toy dataset and trajectory design in a single invocation, using the numpy generator (no R at runtime). It SHALL accept at least the following arguments:
 - `--seed` (int, required): random seed for generation and group assignment.
@@ -30,22 +27,12 @@ Effect-size and mean-shift values SHALL be validated (`>= 0`) and out-of-range v
 - **WHEN** a negative effect size or mean-shift is provided
 - **THEN** the command exits with a non-zero status and a message identifying the out-of-range value, before doing generation work
 
-### Requirement: Output file formats
-The command SHALL write outputs in the following formats:
+## REMOVED Requirements
 
-- `methylation.csv`, `expression.csv`, `proteomics.csv`: samples as rows (feature columns only, no sample_id; row order matches `metadata.csv`).
-- `metadata.csv`: columns `sample_id`, `group`, `stage`, `cluster` (one row per sample, same order as omics files).
-- `model_full.csv`, `model_reduced.csv`, `ls_means.csv`: numeric matrices written without index, column names omitted (pure numeric CSV), compatible with `motco de --model-full` / `--model-reduced` / `--ls-means`.
-- `contrast.json`: JSON array of arrays (list of index lists), compatible with `motco de --contrast`.
-- `truth.json`: JSON object recording the exact parameters used and the injected effect vectors.
+### Requirement: Graceful failure when InterSIM is unavailable
+**Reason**: `motco simulate` no longer invokes R/InterSIM; the unavailable-dependency path is replaced by the missing-reference-cache handling in the new no-R requirement below.
 
-#### Scenario: Omics files are sample-aligned
-- **WHEN** the command completes successfully
-- **THEN** `methylation.csv`, `expression.csv`, `proteomics.csv`, and `metadata.csv` all have the same number of rows in the same sample order
-
-#### Scenario: Design files are compatible with motco de
-- **WHEN** `motco de --Y latent.csv --model-full out/model_full.csv --model-reduced out/model_reduced.csv --ls-means out/ls_means.csv --contrast out/contrast.json` is run after simulate
-- **THEN** `motco de` runs without error
+## ADDED Requirements
 
 ### Requirement: simulate runs without an R dependency
 Because generation uses the numpy generator and cached reference data, `motco simulate` SHALL run without `Rscript` or the R `InterSIM` package on the host.
@@ -57,4 +44,3 @@ Because generation uses the numpy generator and cached reference data, `motco si
 #### Scenario: Missing reference cache is reported clearly
 - **WHEN** the cached reference data artifact is absent
 - **THEN** the command exits with a non-zero status and a message naming the missing artifact and how to regenerate it
-

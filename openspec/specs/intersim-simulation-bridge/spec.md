@@ -1,9 +1,7 @@
 ## Purpose
 
 Provide a Python-facing bridge that invokes the R InterSIM package and returns aligned semi-synthetic methylation, gene expression, protein expression, clustering, sample ID, and metadata outputs for downstream MOTCO simulation studies.
-
 ## Requirements
-
 ### Requirement: InterSIM availability can be checked from Python
 MOTCO SHALL provide a Python API that checks whether `Rscript` is available and whether the R `InterSIM` package can be loaded.
 
@@ -90,3 +88,19 @@ error before launching the R subprocess when it is not.
   `[-2³¹, 2³¹ − 1]`
 - **THEN** the bridge launches the R subprocess and the seed reaches
   `set.seed` unchanged
+
+### Requirement: Bridge can export InterSIM reference data for the numpy generator
+The InterSIM bridge SHALL provide a one-time export path that captures InterSIM's reference means, covariances, and cross-omic maps into a cached artifact consumed by the numpy generator, so that R is needed only to produce the cache and not for runtime generation.
+
+#### Scenario: Reference export captures the required objects
+- **WHEN** the export path is run with InterSIM available
+- **THEN** it writes the reference means, covariances, cross-omic maps, and correlation constants needed to reproduce InterSIM's generative model
+
+#### Scenario: Export records provenance
+- **WHEN** the export completes
+- **THEN** the cached artifact records the InterSIM version and export date
+
+#### Scenario: Runtime generation does not invoke the bridge
+- **WHEN** datasets are generated for evaluation, the grid, the study, or the showcase
+- **THEN** generation uses the numpy generator and the cached reference data, without invoking the InterSIM bridge or R
+

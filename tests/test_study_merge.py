@@ -12,7 +12,6 @@ def _record(cell_id: str, replicate_index: int, signature: str, status: str = "c
         phase="type_i_baseline",
         replicate_index=replicate_index,
         replicate_seed=replicate_index,
-        intersim_seed=replicate_index,
         generator_seed=replicate_index,
         evaluation_seed=replicate_index,
         parameter_signature=signature,

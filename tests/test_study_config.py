@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from motco.simulations import InterSIMParams, SemiSyntheticTrajectoryParams, SimulationEvaluationParams
+from motco.simulations import SemiSyntheticTrajectoryParams, SimulationEvaluationParams
 from motco.simulations.study import (
     AcceptanceTargets,
     PowerMonotonicityTarget,
@@ -21,12 +21,11 @@ from motco.simulations.study.enumerate import NEGATIVE_CONTROL_MODES
 
 def _baseline_config(**overrides) -> StudyConfig:
     defaults: dict = {
-        "intersim": InterSIMParams(seed=1, n_sample=20),
-        "generator": SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude"),
+        "generator": SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", n_samples=60),
         "evaluation": SimulationEvaluationParams(integration_method="concat", permutations=0, seed=3),
         "trajectory_modes": ("magnitude", "orientation", "shape"),
         "effect_sizes": (0.1, 0.5),
-        "axes": {"intersim.n_sample": (20, 40)},
+        "axes": {"generator.n_samples": (60, 120)},
         "n_replicates": 2,
         "base_seed": 100,
         "alpha": 0.05,
@@ -61,7 +60,7 @@ def test_enumerate_study_unique_cell_ids() -> None:
 
 def test_invalid_axes_namespace_is_rejected() -> None:
     with pytest.raises(StudyConfigError, match="namespace"):
-        _baseline_config(axes={"n_sample": (20, 40)})
+        _baseline_config(axes={"intersim.n_sample": (20, 40)})
 
 
 def test_unknown_trajectory_mode_is_rejected() -> None:
@@ -91,12 +90,11 @@ def test_alpha_out_of_range_is_rejected() -> None:
 def test_load_study_config_json(tmp_path: Path) -> None:
     path = tmp_path / "study.json"
     payload = {
-        "intersim": {"seed": 1, "n_sample": 20, "cluster_sample_prop": [0.5, 0.5]},
-        "generator": {"seed": 2, "trajectory_mode": "magnitude", "group_ratio": 0.5},
+        "generator": {"seed": 2, "trajectory_mode": "magnitude", "group_ratio": 0.5, "n_samples": 60},
         "evaluation": {"integration_method": "concat", "permutations": 0, "seed": 3},
         "trajectory_modes": ["magnitude", "translation"],
         "effect_sizes": [0.1, 0.5],
-        "axes": {"intersim.n_sample": [20, 40]},
+        "axes": {"generator.n_samples": [60, 120]},
         "n_replicates": 2,
         "base_seed": 1,
         "alpha": 0.05,
@@ -109,12 +107,11 @@ def test_load_study_config_json(tmp_path: Path) -> None:
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
     config = load_study_config(path)
-    assert config.intersim.seed == 1
-    assert config.intersim.cluster_sample_prop == (0.5, 0.5)
+    assert config.generator.seed == 2
     assert config.generator.trajectory_mode == "magnitude"
     assert config.trajectory_modes == ("magnitude", "translation")
     assert config.effect_sizes == (0.1, 0.5)
-    assert config.axes["intersim.n_sample"] == (20, 40)
+    assert config.axes["generator.n_samples"] == (60, 120)
     assert len(config.acceptance.type_i) == 1
     assert config.acceptance.power[0].trajectory_mode == "magnitude"
     assert config.metadata["study"] == "smoke"
@@ -127,11 +124,10 @@ def test_load_study_config_missing_required_field(tmp_path: Path) -> None:
         load_study_config(path)
 
 
-def test_load_study_config_unknown_intersim_field(tmp_path: Path) -> None:
+def test_load_study_config_unknown_generator_field(tmp_path: Path) -> None:
     path = tmp_path / "study.json"
     payload = {
-        "intersim": {"seed": 1, "not_a_field": 7},
-        "generator": {"seed": 2},
+        "generator": {"seed": 2, "not_a_field": 7},
         "evaluation": {},
         "trajectory_modes": ["magnitude"],
         "effect_sizes": [0.1],

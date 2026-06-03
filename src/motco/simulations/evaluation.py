@@ -154,7 +154,10 @@ def evaluate_semisynthetic_trajectory(
         pair_statistics=pair_statistics,
         p_values=p_values,
         latent_matrix_metadata=latent.metadata,
-        truth_metadata=dict(dataset.truth),
+        # Drop the raw indicator arrays — they are not JSON-serializable for the
+        # study's JSONL persistence; the per-stage/group counts and transform
+        # notes (which are) are retained for downstream characterization.
+        truth_metadata={k: v for k, v in dataset.truth.items() if k != "indicators"},
         runtime_metadata=runtime_metadata,
         evaluation_params=params,
         group_levels=design.group_levels,

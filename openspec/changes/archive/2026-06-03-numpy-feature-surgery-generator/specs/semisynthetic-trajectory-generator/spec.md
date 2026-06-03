@@ -1,7 +1,5 @@
-## Purpose
+## MODIFIED Requirements
 
-Generate MOTCO-ready semi-synthetic trajectory datasets from InterSIM outputs using the clusters-as-stages assumption, reproducible group assignment, trajectory effect injection, and explicit truth metadata.
-## Requirements
 ### Requirement: Groups are assigned reproducibly within stages
 The generator SHALL assign comparison group labels reproducibly within each stage according to configured group balance.
 
@@ -16,6 +14,25 @@ The generator SHALL assign comparison group labels reproducibly within each stag
 #### Scenario: Insufficient stage size is rejected
 - **WHEN** any stage has too few samples to assign both comparison groups
 - **THEN** the generator raises a clear validation error
+
+## REMOVED Requirements
+
+### Requirement: Generator creates MOTCO-ready trajectory datasets from InterSIM outputs
+**Reason**: Generation no longer consumes an `InterSIMResult` or an R subprocess; it is replaced by the numpy-generator path below.
+
+### Requirement: InterSIM clusters are mapped to ordered trajectory stages
+**Reason**: Stages are produced directly by the numpy generator's per-stage indicators; there is no InterSIM cluster-to-stage mapping step.
+
+### Requirement: Generator supports initial trajectory truth modes
+**Reason**: The trajectory modes are redefined as methylation-only feature-set surgery (see the new requirement below), superseding the random-direction truth modes.
+
+### Requirement: Affected features are selected deterministically
+**Reason**: Group effects are no longer injected along randomly selected feature sets; they are deterministic transforms of the per-stage methylation indicators.
+
+### Requirement: Generator can invoke InterSIM as a convenience path
+**Reason**: The convenience path no longer invokes InterSIM/R; it is replaced by the numpy-generator convenience requirement below.
+
+## ADDED Requirements
 
 ### Requirement: Generator creates MOTCO-ready trajectory datasets from the numpy generator
 MOTCO SHALL provide a semi-synthetic trajectory generator that builds datasets on top of the numpy omics generator and returns aligned omics matrices, sample metadata, and truth metadata, without an `InterSIMResult` or an R subprocess at runtime.
@@ -87,4 +104,3 @@ The generator SHALL expose the differential-feature indicators for each stage an
 #### Scenario: Indicator truth is consumable downstream
 - **WHEN** a dataset is generated
 - **THEN** the per-stage/group indicators are available in the dataset's truth structure for the showcase and study to characterize mode-to-statistic response (a descriptive specificity matrix, not a pass/fail gate)
-

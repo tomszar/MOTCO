@@ -196,17 +196,17 @@ def cmd_de(args: argparse.Namespace) -> None:
 
 def cmd_simulate(args: argparse.Namespace) -> None:
     from motco.simulations.evaluation import build_simulation_trajectory_design
-    from motco.simulations.intersim import InterSIMParams, check_intersim_available
+    from motco.simulations.reference import (
+        ReferenceCacheMissingError,
+        load_reference,
+    )
     from motco.simulations.semisynthetic import (
         SemiSyntheticTrajectoryParams,
-        generate_semisynthetic_trajectory_from_intersim,
+        generate_semisynthetic_trajectory,
     )
 
-    if not 0 <= args.prop_affected_features <= 1:
-        raise SystemExit(
-            "Error: --prop-affected-features must be between 0 and 1 "
-            f"(got {args.prop_affected_features})."
-        )
+    if args.effect_size < 0:
+        raise SystemExit(f"Error: --effect-size must be non-negative (got {args.effect_size}).")
     for flag_name, value in (
         ("--delta-methyl", args.delta_methyl),
         ("--delta-expr", args.delta_expr),
@@ -215,40 +215,35 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     ):
         if value is not None and value < 0:
             raise SystemExit(f"Error: {flag_name} must be non-negative (got {value}).")
-    availability = check_intersim_available()
-    if not availability.available:
-        raise SystemExit(
-            f"motco simulate requires R and the InterSIM package.\n"
-            f"{availability.message}\n"
-            "Install InterSIM in R with:\n"
-            '  install.packages("InterSIM", repos = c('
-            '"https://cran.r-universe.dev", "https://cloud.r-project.org"))'
-        )
+
+    # Load cached reference data (no R at runtime); report clearly if missing.
+    try:
+        reference = load_reference()
+    except ReferenceCacheMissingError as e:
+        raise SystemExit(f"Error: {e}") from None
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    delta_methyl = args.delta_methyl if args.delta_methyl is not None else args.cluster_mean_shift
-    delta_expr = args.delta_expr if args.delta_expr is not None else args.cluster_mean_shift
-    delta_protein = args.delta_protein if args.delta_protein is not None else args.cluster_mean_shift
-    intersim_params = InterSIMParams(
+    fan_out = args.cluster_mean_shift if args.cluster_mean_shift is not None else 2.0
+    delta_methyl = args.delta_methyl if args.delta_methyl is not None else fan_out
+    delta_expr = args.delta_expr if args.delta_expr is not None else fan_out
+    delta_protein = args.delta_protein if args.delta_protein is not None else fan_out
+    traj_params = SemiSyntheticTrajectoryParams(
         seed=args.seed,
-        n_sample=args.n_samples,
+        trajectory_mode=args.trajectory_mode,
+        n_samples=args.n_samples,
+        n_stages=args.n_stages,
+        group_effect_size=args.effect_size,
+        p_dmp=args.p_dmp,
+        shape_kind=args.shape_kind,
         delta_methyl=delta_methyl,
         delta_expr=delta_expr,
         delta_protein=delta_protein,
     )
-    traj_params = SemiSyntheticTrajectoryParams(
-        seed=args.seed,
-        trajectory_mode=args.trajectory_mode,
-        group_effect_size=args.effect_size,
-        prop_affected_features=args.prop_affected_features,
-    )
 
     try:
-        dataset = generate_semisynthetic_trajectory_from_intersim(
-            intersim_params, traj_params
-        )
+        dataset = generate_semisynthetic_trajectory(traj_params, reference=reference)
     except ValueError as e:
         raise SystemExit(f"Simulation error: {e}") from None
 
@@ -271,9 +266,10 @@ def cmd_simulate(args: argparse.Namespace) -> None:
     pd.DataFrame(design.model_reduced).to_csv(out_dir / "model_reduced.csv", index=False)
     pd.DataFrame(design.ls_means).to_csv(out_dir / "ls_means.csv", index=False)
 
-    # JSON outputs
+    # JSON outputs (drop the raw indicator arrays; keep JSON-able counts)
     _save_json(design.contrast, out_dir / "contrast.json")
-    _save_json(dataset.truth, out_dir / "truth.json")
+    json_truth = {k: v for k, v in dataset.truth.items() if k != "indicators"}
+    _save_json(json_truth, out_dir / "truth.json")
 
     print(f"Simulation complete. Files written to: {out_dir}")
 
@@ -321,25 +317,28 @@ def build_parser() -> argparse.ArgumentParser:
     p_snf.set_defaults(func=cmd_snf)
 
     # Simulate
-    p_sim = sub.add_parser("simulate", help="Generate a semi-synthetic multi-omics toy dataset (requires R + InterSIM)")
+    p_sim = sub.add_parser("simulate", help="Generate a semi-synthetic multi-omics toy dataset (numpy generator, no R)")
     p_sim.add_argument("--seed", type=int, required=True, help="Random seed for reproducibility")
     p_sim.add_argument("--out-dir", type=str, required=True, help="Directory to write output files")
-    p_sim.add_argument("--n-samples", type=int, default=90, help="Total number of samples (default: 90)")
+    p_sim.add_argument("--n-samples", type=int, default=600, help="Total number of samples (default: 600)")
+    p_sim.add_argument("--n-stages", type=int, default=3, help="Number of trajectory stages (default: 3)")
     p_sim.add_argument("--trajectory-mode", type=str, default="orientation",
                        choices=["none", "translation", "magnitude", "orientation", "shape"],
                        help="Group trajectory difference mode (default: orientation)")
     p_sim.add_argument("--effect-size", type=float, default=1.0,
-                       help="Group effect size injected into the simulation (default: 1.0)")
-    p_sim.add_argument("--prop-affected-features", type=float, default=0.1,
-                       help="Proportion of features per omic layer carrying the injected group effect (default: 0.1)")
+                       help="Group effect size: magnitude scale, extra-set size, or relocated fraction (default: 1.0)")
+    p_sim.add_argument("--shape-kind", type=str, default="relocate", choices=["relocate", "magnitude"],
+                       help="Shape-mode single-stage perturbation: relocate sites or scale effect (default: relocate)")
+    p_sim.add_argument("--p-dmp", type=float, default=0.2,
+                       help="Per-stage probability a methylation feature is differential (default: 0.2)")
     p_sim.add_argument("--cluster-mean-shift", type=float, default=None,
-                       help="InterSIM cluster mean shift applied to unspecified per-omic delta flags")
+                       help="Per-omic mean shift (delta) applied to unspecified per-omic delta flags (default: 2.0)")
     p_sim.add_argument("--delta-methyl", type=float, default=None,
-                       help="InterSIM methylation cluster mean shift; overrides --cluster-mean-shift for methylation")
+                       help="Methylation cluster mean shift; overrides --cluster-mean-shift for methylation")
     p_sim.add_argument("--delta-expr", type=float, default=None,
-                       help="InterSIM expression cluster mean shift; overrides --cluster-mean-shift for expression")
+                       help="Expression cluster mean shift; overrides --cluster-mean-shift for expression")
     p_sim.add_argument("--delta-protein", type=float, default=None,
-                       help="InterSIM proteomics cluster mean shift; overrides --cluster-mean-shift for proteomics")
+                       help="Proteomics cluster mean shift; overrides --cluster-mean-shift for proteomics")
     p_sim.set_defaults(func=cmd_simulate)
 
     # Differential Effects

@@ -6,7 +6,6 @@ import numpy as np
 import pytest
 
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     SimulationEvaluationResult,
@@ -29,7 +28,6 @@ def _make_grid(n_cells: int, n_replicates: int) -> SimulationGrid:
         cells.append(
             make_simulation_cell(
                 phase="type_i_baseline",
-                intersim_params=InterSIMParams(seed=i, n_sample=20),
                 generator_params=SemiSyntheticTrajectoryParams(seed=i),
                 evaluation_params=SimulationEvaluationParams(integration_method="concat", permutations=0, seed=i),
                 n_replicates=n_replicates,
@@ -80,7 +78,7 @@ def test_run_shard_executes_only_assigned_units(tmp_path) -> None:
     n_shards = 3
     calls = 0
 
-    def evaluator(intersim_params, generator_params, evaluation_params) -> SimulationEvaluationResult:
+    def evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
         nonlocal calls
         calls += 1
         return _fake_result()
@@ -113,7 +111,7 @@ def test_run_shard_executes_only_assigned_units(tmp_path) -> None:
 def test_run_shard_resumes_without_duplicating(tmp_path) -> None:
     grid = _make_grid(n_cells=4, n_replicates=2)
 
-    def evaluator(intersim_params, generator_params, evaluation_params) -> SimulationEvaluationResult:
+    def evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
         return _fake_result()
 
     first = run_shard(grid, shard_index=0, n_shards=2, out_dir=tmp_path, evaluator=evaluator)
@@ -128,7 +126,7 @@ def test_run_shard_resumes_without_duplicating(tmp_path) -> None:
 def test_run_shard_records_failures_with_policy(tmp_path) -> None:
     grid = _make_grid(n_cells=1, n_replicates=1)
 
-    def evaluator(intersim_params, generator_params, evaluation_params) -> SimulationEvaluationResult:
+    def evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
         raise RuntimeError("boom")
 
     shard_index = partition_unit(grid.cells[0].cell_id, 0, n_shards=1)

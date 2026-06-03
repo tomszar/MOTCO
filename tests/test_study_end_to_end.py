@@ -18,7 +18,6 @@ import pandas as pd
 matplotlib.use("Agg")
 
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     SimulationEvaluationResult,
@@ -49,7 +48,6 @@ from motco.simulations.study.targets import evaluate_targets, write_target_repor
 
 def _smoke_config() -> StudyConfig:
     return StudyConfig(
-        intersim=InterSIMParams(seed=1, n_sample=20),
         generator=SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", group_effect_size=0.1),
         evaluation=SimulationEvaluationParams(integration_method="concat", permutations=0, seed=3),
         trajectory_modes=("magnitude",),
@@ -64,7 +62,7 @@ def _smoke_config() -> StudyConfig:
     )
 
 
-def _mock_evaluator(intersim_params, generator_params, evaluation_params) -> SimulationEvaluationResult:
+def _mock_evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
     """A mock evaluator: nulls reject ~alpha, power cells reject more as effect grows."""
 
     rng = np.random.default_rng(generator_params.seed)
