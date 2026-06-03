@@ -9,8 +9,10 @@ import numpy as np
 import pandas as pd
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from sklearn.cross_decomposition import PLSRegression
 from sklearn.decomposition import PCA
 
+from motco.stats.pls import fit_plsda_model
 from motco.stats.trajectory import get_observed_vectors
 
 
@@ -24,6 +26,7 @@ def plot_trajectories(
     group_col: str = "group",
     level_col: str = "level",
     palette: dict[str, Any] | None = None,
+    component_label: str = "PC",
 ) -> tuple[Figure, Axes]:
     """Plot trajectory geometry from pre-computed LS-mean vectors.
 
@@ -51,6 +54,9 @@ def plot_trajectories(
     palette:
         Mapping from group label to matplotlib color. Falls back to the
         default matplotlib color cycle when not provided.
+    component_label:
+        Prefix for the projected-axis labels (e.g. ``"PC"`` for PCA, ``"PLS"``
+        for a PLS projector). Defaults to ``"PC"``.
 
     Returns
     -------
@@ -129,13 +135,13 @@ def plot_trajectories(
         )
 
     # --- Axis labels with explained variance ---
-    xlabel = "PC1"
-    ylabel = "PC2"
+    xlabel = f"{component_label}1"
+    ylabel = f"{component_label}2"
     if hasattr(projector, "explained_variance_ratio_"):
         evr = projector.explained_variance_ratio_
         if len(evr) >= 2:
-            xlabel = f"PC1 ({evr[0] * 100:.1f}%)"
-            ylabel = f"PC2 ({evr[1] * 100:.1f}%)"
+            xlabel = f"{component_label}1 ({evr[0] * 100:.1f}%)"
+            ylabel = f"{component_label}2 ({evr[1] * 100:.1f}%)"
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.legend(title=group_col)
@@ -212,3 +218,77 @@ def plot_trajectory_from_data(
     )
 
     return fig, ax, pca
+
+
+def plot_trajectory_from_plsr(
+    Y: pd.DataFrame,
+    metadata: pd.DataFrame,
+    group_col: str,
+    level_col: str,
+    full: bool = True,
+    n_components: int = 2,
+    ax: Axes | None = None,
+    show_samples: bool = True,
+    palette: dict[str, Any] | None = None,
+) -> tuple[Figure, Axes, PLSRegression]:
+    """Fit a 2-component PLS-DA on ``Y`` and plot trajectory geometry.
+
+    PLS analog of :func:`plot_trajectory_from_data`. The projector is a
+    supervised PLS-DA fit with the stage/level factor as the response (one-hot
+    encoded), so the latent axes are oriented to separate stages rather than to
+    maximize total variance. No cross-validation is performed — the model is fit
+    once with a fixed ``n_components``. The fitted PLS estimator is returned so
+    callers can reuse the same coordinate system for additional figures.
+
+    Parameters
+    ----------
+    Y:
+        Outcome matrix (n_samples × n_features).
+    metadata:
+        Sample metadata DataFrame with at least ``group_col`` and ``level_col``
+        columns, row-aligned with ``Y``.
+    group_col:
+        Column name for the group factor.
+    level_col:
+        Column name for the stage/level factor. Also used as the PLS response.
+    full:
+        Whether to include group × level interactions in the model matrix
+        passed to ``get_observed_vectors``.
+    n_components:
+        Number of PLS latent variables to fit. Must be at least 2.
+    ax:
+        Existing axes to draw on. Created if not provided.
+    show_samples:
+        If True, overlay individual sample scatter behind the trajectories.
+    palette:
+        Mapping from group label to matplotlib color.
+
+    Returns
+    -------
+    tuple[Figure, Axes, PLSRegression]
+        The figure, axes, and fitted PLS estimator.
+    """
+    observed_vectors = get_observed_vectors(
+        metadata[[group_col, level_col]],
+        Y,
+        group_col=group_col,
+        level_col=level_col,
+        full=full,
+    )
+
+    pls = fit_plsda_model(Y, metadata[level_col], n_components=n_components)
+
+    fig, ax = plot_trajectories(
+        observed_vectors=observed_vectors,
+        projector=pls,
+        ax=ax,
+        show_samples=show_samples,
+        samples=Y if show_samples else None,
+        sample_metadata=metadata if show_samples else None,
+        group_col=group_col,
+        level_col=level_col,
+        palette=palette,
+        component_label="PLS",
+    )
+
+    return fig, ax, pls

@@ -96,6 +96,30 @@ def test_plot_trajectory_from_data_smoke():
     plt.close(fig)
 
 
+# ── 5.5 PLS projector: plot_trajectory_from_plsr ──────────────────────────────
+
+def test_plot_trajectory_from_plsr_smoke():
+    from sklearn.cross_decomposition import PLSRegression
+
+    from motco import plot_trajectory_from_plsr
+
+    Y, metadata = _make_viz_inputs()
+    fig, ax, pls = plot_trajectory_from_plsr(
+        Y=Y,
+        metadata=metadata,
+        group_col="group",
+        level_col="stage",
+    )
+
+    assert isinstance(fig, Figure)
+    assert isinstance(pls, PLSRegression)
+    # PLS projector relabels axes away from the PCA default.
+    assert ax.get_xlabel().startswith("PLS1")
+
+    import matplotlib.pyplot as plt
+    plt.close(fig)
+
+
 # ── 5.3 show_samples=True path ────────────────────────────────────────────────
 
 def test_plot_trajectories_show_samples():

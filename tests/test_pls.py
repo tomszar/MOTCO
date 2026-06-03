@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from motco.stats.pls import calculate_vips, fit_plsda_transform, plsda_doubleCV
+from motco.stats.pls import calculate_vips, fit_plsda_model, fit_plsda_transform, plsda_doubleCV
 
 
 def _synthetic_data(n: int = 30, p: int = 10, seed: int = 0) -> tuple[pd.DataFrame, pd.Series]:
@@ -145,6 +145,19 @@ def test_fit_plsda_transform_numeric_labels():
     assert scores.shape == (30, 2)
 
 
+def test_fit_plsda_model_returns_fitted_projector():
+    from sklearn.cross_decomposition import PLSRegression
+
+    X, y = _synthetic_data(n=30, p=10)
+    model = fit_plsda_model(X, y, n_components=2)
+    assert isinstance(model, PLSRegression)
+    # The projector transforms new feature vectors into the 2-D latent space.
+    projected = model.transform(X.to_numpy())
+    assert projected.shape == (30, 2)
+    # fit_plsda_transform is a thin wrapper returning the training scores.
+    np.testing.assert_allclose(projected, fit_plsda_transform(X, y, n_components=2))
+
+
 def test_stats_top_level_imports():
     from motco.stats import (  # noqa: F401
         RRPP,
@@ -154,6 +167,7 @@ def test_stats_top_level_imports():
         center_matrix,
         estimate_betas,
         estimate_difference,
+        fit_plsda_model,
         fit_plsda_transform,
         get_affinity_matrix,
         get_model_matrix,

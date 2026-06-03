@@ -16,7 +16,7 @@ permutation
 
 from .design import build_ls_means, center_matrix, get_model_matrix  # noqa: F401
 from .permutation import RRPP  # noqa: F401
-from .pls import calculate_vips, fit_plsda_transform, plsda_doubleCV  # noqa: F401
+from .pls import calculate_vips, fit_plsda_model, fit_plsda_transform, plsda_doubleCV  # noqa: F401
 from .snf import SNF, get_affinity_matrix, get_spectral  # noqa: F401
 from .trajectory import estimate_betas, estimate_difference, get_observed_vectors, pair_difference  # noqa: F401
 
@@ -24,6 +24,7 @@ __all__ = [
     # pls
     "plsda_doubleCV",
     "calculate_vips",
+    "fit_plsda_model",
     "fit_plsda_transform",
     # design
     "build_ls_means",

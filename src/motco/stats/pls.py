@@ -268,6 +268,39 @@ def _plsda_auroc(
     return auroc
 
 
+def fit_plsda_model(
+    X: Union[np.ndarray, "pd.DataFrame"],
+    y: Union["pd.Series", np.ndarray],
+    n_components: int,
+) -> PLSRegression:
+    """Fit a PLS-DA model on the full dataset and return the fitted estimator.
+
+    No cross-validation: the model is fit once on all rows with a fixed number
+    of components. Use this when you need the projector itself (e.g. to call
+    ``.transform()`` on new vectors), rather than just the training scores.
+
+    Parameters
+    ----------
+    X:
+        Feature matrix of shape (n_samples, n_features).
+    y:
+        Class labels of shape (n_samples,). String or numeric; one-hot encoded
+        internally to match the behaviour of ``plsda_doubleCV``.
+    n_components:
+        Number of latent variables.
+
+    Returns
+    -------
+    PLSRegression
+        Fitted estimator whose ``.transform()`` projects feature vectors onto
+        the ``n_components`` latent axes.
+    """
+    X_arr = np.asarray(X, dtype=float)
+    encoder = OneHotEncoder(sparse_output=False)
+    y_enc = encoder.fit_transform(np.asarray(y).reshape(-1, 1))
+    return PLSRegression(n_components=n_components, scale=True, max_iter=1000).fit(X_arr, y_enc)
+
+
 def fit_plsda_transform(
     X: Union[np.ndarray, "pd.DataFrame"],
     y: Union["pd.Series", np.ndarray],
@@ -289,11 +322,7 @@ def fit_plsda_transform(
     -------
     scores : np.ndarray of shape (n_samples, n_components)
     """
-    X_arr = np.asarray(X, dtype=float)
-    encoder = OneHotEncoder(sparse_output=False)
-    y_enc = encoder.fit_transform(np.asarray(y).reshape(-1, 1))
-    pls = PLSRegression(n_components=n_components, scale=True, max_iter=1000).fit(X_arr, y_enc)
-    return np.asarray(pls.x_scores_)
+    return np.asarray(fit_plsda_model(X, y, n_components).x_scores_)
 
 
 def calculate_vips(
