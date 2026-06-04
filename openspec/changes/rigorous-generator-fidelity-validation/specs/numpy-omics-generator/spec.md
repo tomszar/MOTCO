@@ -22,3 +22,8 @@ The generator's output distributions SHALL be validated to match InterSIM's acro
 #### Scenario: A reproducible supplementary artifact is produced
 - **WHEN** the supplementary artifact generator is run against the committed fixtures
 - **THEN** it produces a paper-ready table and figure summarizing numpy-vs-InterSIM fidelity across the grid
+
+#### Scenario: A qualitative visual supplement is produced
+- **WHEN** the visual-supplement generator is run against regenerated InterSIM raw data (produced with InterSIM via the dev flake) with the numpy side generated live
+- **THEN** it renders side-by-side InterSIM-vs-numpy figures — per-omic marginal densities, per-modality clustermap heatmaps (with sample/feature dendrograms and a cluster colour bar), per-modality PCA, per-feature mean/variance agreement scatter, and a cross-omic coupling correlation block
+- **AND** the InterSIM raw matrices are not committed to the repository; the rendering code is exercised R-free in CI via a synthetic stand-in fixture

@@ -29,6 +29,13 @@ rigorous, swept across parameters, replicate-based, and reproducible.
   script and provenance (InterSIM version, date, seeds, parameter grid).
 - Produce a **reproducible supplementary artifact** (table + figure) suitable for
   a paper's supplementary material, generated from the committed fixtures.
+- Add a **qualitative visual supplement** rendering side-by-side InterSIM-vs-numpy
+  figures (per-omic marginal densities; per-modality clustermap heatmaps with
+  sample/feature dendrograms and a cluster colour bar; per-modality PCA;
+  per-feature mean/variance agreement scatter; and a cross-omic coupling
+  correlation block). The numpy side is generated live; the InterSIM raw matrices
+  are **not committed** (large, supplement-only) and are regenerated with InterSIM
+  via `flake.nix`.
 - Strengthen the existing realism requirement from the `δ=0` fixture to this
   swept, replicate-based validation.
 
@@ -52,8 +59,13 @@ rigorous, swept across parameters, replicate-based, and reproducible.
   numpy-within-InterSIM-distribution checks.
 - New: committed InterSIM summary fixtures (`.npz`/CSV) + the R generation script
   + provenance; a supplementary table/figure generator.
+- New: a qualitative visual-supplement module (`fidelity_visual.py`) + its R raw
+  data generator (`fidelity_visual_intersim.R`) + a thin CLI
+  (`scripts/fidelity_visual.py`); the InterSIM raw matrices are regenerated
+  locally (gitignored `build/`), not committed.
 - New/updated tests: an R-free CI test asserting numpy statistics fall within the
-  committed InterSIM intervals across the parameter grid (slow-marked as needed).
+  committed InterSIM intervals across the parameter grid (slow-marked as needed),
+  plus R-free smoke tests for the visual supplement (synthetic stand-in fixture).
 - R is used only to (re)generate the fixtures, never in CI — consistent with the
   generator's no-R-at-runtime contract.
 - No change to the generator's behavior; this is validation + evidence only.
