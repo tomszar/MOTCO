@@ -60,6 +60,16 @@ version compares the numpy statistic against InterSIM's *sampling distribution*.
   `generate_omics` + `bernoulli_indicators` + `derive_coupled_indicators` so the
   validated object is exactly the generator used by the study, not a parallel
   reimplementation.
+- **Qualitative visual supplement, raw data not committed.** Alongside the
+  quantitative check, render side-by-side InterSIM-vs-numpy figures (densities,
+  clustermap heatmaps with free sample/feature dendrograms + a cluster colour
+  bar, PCA, per-feature moment scatter, cross-omic coupling). Unlike the summary
+  fixtures, the InterSIM *raw matrices* are large and only needed to render the
+  supplement, so they are **not committed**: they are regenerated locally with
+  InterSIM via `flake.nix` into gitignored `build/`, while the numpy side is
+  generated live. CI exercises the rendering code R-free with a small synthetic
+  stand-in fixture. The clustermap is built in-house (scipy + matplotlib, no new
+  dependency); clustering is free and per-panel so it is fair to both tools.
 
 ## Risks / Trade-offs
 
