@@ -4,9 +4,13 @@ import pytest
 
 from motco.simulations.reference import load_reference
 from motco.simulations.specificity import (
+    SHAPE_FREE_MODES,
     STATISTICS,
     ModeSpecificity,
+    ShapeNullDiagnostic,
+    characterize_two_stage,
     evaluate_mode_specificity,
+    evaluate_shape_null,
     target_leads,
 )
 
@@ -36,6 +40,11 @@ def test_target_leads_requires_target_statistic_to_lead():
     assert not target_leads(_report("orientation", 0.1, 0.3, 0.1))
 
 
+def test_shape_free_modes_excludes_shape():
+    assert "shape" not in SHAPE_FREE_MODES
+    assert set(SHAPE_FREE_MODES) == {"none", "translation", "magnitude", "orientation"}
+
+
 @pytest.mark.slow
 def test_evaluate_mode_specificity_runs_and_returns_valid_structure():
     report = evaluate_mode_specificity(
@@ -54,3 +63,49 @@ def test_evaluate_mode_specificity_runs_and_returns_valid_structure():
     assert all(0.0 <= r <= 1.0 for r in report.rejection_rates.values())
     assert 0.0 <= report.group_in_stage_fraction <= 1.0
     assert report.n_replicates == 2
+
+
+@pytest.mark.slow
+def test_characterize_two_stage_runs_shape_free_modes():
+    reports = characterize_two_stage(
+        modes=("none", "magnitude"),
+        n_replicates=2,
+        n_samples=120,
+        effect_size=1.0,
+        permutations=19,
+        n_jobs=1,
+        base_seed=0,
+        reference=load_reference(),
+    )
+    assert set(reports) == {"none", "magnitude"}
+    for report in reports.values():
+        # shape is degenerate at n_stages=2 -> never rejects (nan rate)
+        assert report.rejection_rates["shape"] != report.rejection_rates["shape"]  # nan
+        assert 0.0 <= report.rejection_rates["delta"] <= 1.0
+        assert 0.0 <= report.rejection_rates["angle"] <= 1.0
+
+
+@pytest.mark.slow
+def test_evaluate_shape_null_returns_observed_and_null_summaries():
+    diag = evaluate_shape_null(
+        "magnitude",
+        integration_method="concat",
+        standardize=True,
+        n_replicates=2,
+        n_samples=120,
+        n_stages=4,
+        effect_size=1.0,
+        permutations=19,
+        n_jobs=1,
+        base_seed=0,
+        reference=load_reference(),
+    )
+    assert isinstance(diag, ShapeNullDiagnostic)
+    assert diag.mode == "magnitude"
+    assert diag.integration_method == "concat"
+    assert diag.standardize is True
+    # observed Procrustes distance and the null quantiles are ordered and finite
+    assert diag.null_q025_mean <= diag.null_median_mean <= diag.null_q975_mean
+    assert diag.null_spread_mean >= 0.0
+    assert 0.0 <= diag.rejection_rate <= 1.0
+    assert diag.n_replicates == 2

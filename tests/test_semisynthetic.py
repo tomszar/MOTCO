@@ -91,6 +91,33 @@ def test_magnitude_scales_only_methylation_delta_and_keeps_indicators(reference)
     assert deltas["B"][1:] == deltas["A"][1:]
 
 
+def test_magnitude_kind_defaults_to_all_and_records_truth(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("magnitude", group_effect_size=1.0), reference=reference
+    )
+    # Default is the all-stages variant; truth records it both top-level and in transform.
+    assert dataset.truth["magnitude_kind"] == "all"
+    assert dataset.truth["transform"]["magnitude_kind"] == "all"
+    assert dataset.truth["transform"]["delta_methyl_scale"] == 2.0
+
+
+def test_magnitude_extremes_scales_only_endpoint_indicators(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("magnitude", n_stages=4, group_effect_size=1.0, magnitude_kind="extremes"),
+        reference=reference,
+    )
+    truth = dataset.truth
+    assert truth["magnitude_kind"] == "extremes"
+    assert truth["transform"] == {"magnitude_kind": "extremes", "magnitude_scale": 2.0}
+    # deltas are untouched (the scale lives in the indicators, not the global delta)
+    assert truth["deltas"]["A"] == truth["deltas"]["B"]
+    a_m, b_m = truth["indicators"]["A"]["methylation"], truth["indicators"]["B"]["methylation"]
+    # endpoints scaled by (1 + e) = 2; interior stages untouched
+    np.testing.assert_allclose(b_m[:, 0], a_m[:, 0] * 2.0)
+    np.testing.assert_allclose(b_m[:, -1], a_m[:, -1] * 2.0)
+    np.testing.assert_array_equal(b_m[:, 1:-1], a_m[:, 1:-1])
+
+
 def test_orientation_preserves_methylation_cardinality_per_stage(reference) -> None:
     dataset = generate_semisynthetic_trajectory(
         make_params("orientation", group_effect_size=1.0), reference=reference
@@ -142,6 +169,7 @@ def test_none_mode_has_empty_transform(reference) -> None:
     ("overrides", "match"),
     [
         ({"trajectory_mode": "bogus"}, "Unknown trajectory_mode"),
+        ({"magnitude_kind": "bogus"}, "Unknown magnitude_kind"),
         ({"group_labels": ("A", "A")}, "two distinct labels"),
         ({"group_ratio": 1.5}, "group_ratio"),
         ({"group_effect_size": -1.0}, "non-negative"),

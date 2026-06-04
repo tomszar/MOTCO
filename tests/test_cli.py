@@ -440,14 +440,26 @@ def test_simulate_wires_trajectory_params(tmp_path: Path) -> None:
             "simulate",
             "--seed", "0",
             "--out-dir", str(tmp_path),
-            "--trajectory-mode", "shape",
+            "--trajectory-mode", "magnitude",
             "--n-samples", "300",
             "--effect-size", "0.5",
+            "--magnitude-kind", "extremes",
         ])
     (traj_params,) = generate_mock.call_args.args
-    assert traj_params.trajectory_mode == "shape"
+    assert traj_params.trajectory_mode == "magnitude"
     assert traj_params.n_samples == 300
     assert traj_params.group_effect_size == 0.5
+    assert traj_params.magnitude_kind == "extremes"
+
+
+def test_simulate_magnitude_kind_defaults_to_all(tmp_path: Path) -> None:
+    fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
+    with patch("motco.simulations.reference.load_reference", return_value=object()), \
+         patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory",
+               return_value=fake_dataset) as generate_mock:
+        main(["simulate", "--seed", "0", "--out-dir", str(tmp_path)])
+    (traj_params,) = generate_mock.call_args.args
+    assert traj_params.magnitude_kind == "all"
 
 
 def test_simulate_cluster_mean_shift_fans_out_to_all_omics(tmp_path: Path) -> None:
