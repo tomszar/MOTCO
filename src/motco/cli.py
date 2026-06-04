@@ -237,6 +237,7 @@ def cmd_simulate(args: argparse.Namespace) -> None:
         group_effect_size=args.effect_size,
         p_dmp=args.p_dmp,
         shape_kind=args.shape_kind,
+        magnitude_kind=args.magnitude_kind,
         delta_methyl=delta_methyl,
         delta_expr=delta_expr,
         delta_protein=delta_protein,
@@ -329,6 +330,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Group effect size: magnitude scale, extra-set size, or relocated fraction (default: 1.0)")
     p_sim.add_argument("--shape-kind", type=str, default="relocate", choices=["relocate", "magnitude"],
                        help="Shape-mode single-stage perturbation: relocate sites or scale effect (default: relocate)")
+    p_sim.add_argument("--magnitude-kind", type=str, default="all", choices=["all", "extremes"],
+                       help="Magnitude-mode scope: scale all stages (uniform delta) or endpoints only (default: all)")
     p_sim.add_argument("--p-dmp", type=float, default=0.2,
                        help="Per-stage probability a methylation feature is differential (default: 0.2)")
     p_sim.add_argument("--cluster-mean-shift", type=float, default=None,

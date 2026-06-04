@@ -17,8 +17,13 @@ transform of A's **methylation** indicators:
   of methylation sites (disjoint from the stage-changing sites) differential at
   *every* B stage and at none of A's. A constant group offset → moves only the
   (untested) group main effect, not size/orientation/shape.
-- ``magnitude``   -- same indicators, scaled methylation effect
-  ``δ_methyl_B = (1 + e)·δ_methyl`` → uniformly scales every methylation step.
+- ``magnitude``   -- scaled methylation effect. ``magnitude_kind='all'`` (the
+  default) keeps the indicators and scales the global δ
+  (``δ_methyl_B = (1 + e)·δ_methyl``) → uniformly enlarges every methylation
+  step; ``magnitude_kind='extremes'`` instead leaves δ and scales A's
+  methylation indicators at the first and last stages only → a size change
+  localized to the endpoints (a probe of whether confining the scale reduces
+  shape co-movement).
 - ``orientation`` -- relocate a fraction ``e`` of the stage-changing sites to
   different CpGs, the **same relocation at every stage** → the per-stage pattern
   runs along different feature axes (a rotation).
@@ -53,10 +58,12 @@ from motco.simulations.reference import IntersimReference, load_reference
 OmicsLayer = Literal["methylation", "expression", "proteomics"]
 TrajectoryMode = Literal["none", "translation", "magnitude", "orientation", "shape"]
 ShapeKind = Literal["relocate", "magnitude"]
+MagnitudeKind = Literal["all", "extremes"]
 
 _OMICS_LAYERS: tuple[OmicsLayer, ...] = ("methylation", "expression", "proteomics")
 _MODES = frozenset({"none", "translation", "magnitude", "orientation", "shape"})
 _SHAPE_KINDS = frozenset({"relocate", "magnitude"})
+_MAGNITUDE_KINDS = frozenset({"all", "extremes"})
 
 
 class SemiSyntheticTrajectoryError(ValueError):
@@ -74,7 +81,10 @@ class SemiSyntheticTrajectoryParams:
     differential (InterSIM's ``p.DMP``); expression/protein indicators are
     derived from it via the cross-omic maps. ``delta_*`` are the per-omic
     mean-shift sizes (InterSIM's ``delta.*``). ``shape_kind`` selects the
-    single-interior-stage perturbation used by ``shape``.
+    single-interior-stage perturbation used by ``shape``. ``magnitude_kind``
+    selects whether ``magnitude`` scales group B's methylation effect at *all*
+    stages (the default, a uniform δ scale) or only at the *extreme* stages
+    (first and last), leaving interior stages at the baseline effect.
     """
 
     seed: int
@@ -89,6 +99,7 @@ class SemiSyntheticTrajectoryParams:
     delta_expr: float = 2.0
     delta_protein: float = 2.0
     shape_kind: ShapeKind = "relocate"
+    magnitude_kind: MagnitudeKind = "all"
     stage_sample_prop: tuple[float, ...] | None = None
 
 
@@ -158,6 +169,8 @@ def _validate_params(params: SemiSyntheticTrajectoryParams) -> None:
         raise SemiSyntheticTrajectoryError(f"Unknown trajectory_mode: {params.trajectory_mode}")
     if params.shape_kind not in _SHAPE_KINDS:
         raise SemiSyntheticTrajectoryError(f"Unknown shape_kind: {params.shape_kind}")
+    if params.magnitude_kind not in _MAGNITUDE_KINDS:
+        raise SemiSyntheticTrajectoryError(f"Unknown magnitude_kind: {params.magnitude_kind}")
     if len(params.group_labels) != 2 or params.group_labels[0] == params.group_labels[1]:
         raise SemiSyntheticTrajectoryError("group_labels must contain two distinct labels.")
     if not (0 < params.group_ratio < 1):
@@ -250,8 +263,7 @@ def _transform_group_b(
         return _translation_methyl(rng, ref, params, methyl_a)
 
     if mode == "magnitude":
-        scaled = (float((1.0 + e) * params.delta_methyl), params.delta_expr, params.delta_protein)
-        return methyl_a.copy(), scaled, {"delta_methyl_scale": 1.0 + e}
+        return _magnitude_methyl(methyl_a, e, params)
 
     if mode == "orientation":
         return _orientation_methyl(rng, methyl_a, e, params)
@@ -290,6 +302,33 @@ def _translation_methyl(
         methyl_b[u, :] = 1.0  # differential at every B stage, none of A's
     deltas = (params.delta_methyl, params.delta_expr, params.delta_protein)
     return methyl_b, deltas, {"translation_set_size": int(n_extra)}
+
+
+def _magnitude_methyl(
+    methyl_a: np.ndarray,
+    e: float,
+    params: SemiSyntheticTrajectoryParams,
+) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
+    """Scale group B's methylation effect: all stages (δ scale) or endpoints only.
+
+    ``magnitude_kind='all'`` (default) scales the global methylation δ, uniformly
+    enlarging every methylation step (the original behavior). ``'extremes'``
+    instead leaves δ unchanged and scales A's methylation *indicators* at the
+    first and last stages only — a localized size change at the endpoints that
+    leaves interior vertices at the baseline effect, probing whether confining
+    the scale reduces the shape co-movement seen with the all-stage variant.
+    """
+
+    if params.magnitude_kind == "extremes":
+        methyl_b = methyl_a.astype(float).copy()
+        endpoints = (0, params.n_stages - 1)
+        for stage in endpoints:
+            methyl_b[:, stage] = methyl_a[:, stage] * (1.0 + e)
+        deltas = (params.delta_methyl, params.delta_expr, params.delta_protein)
+        return methyl_b, deltas, {"magnitude_kind": "extremes", "magnitude_scale": 1.0 + e}
+
+    scaled = (float((1.0 + e) * params.delta_methyl), params.delta_expr, params.delta_protein)
+    return methyl_a.copy(), scaled, {"magnitude_kind": "all", "delta_methyl_scale": 1.0 + e}
 
 
 def _relocate_rows(
@@ -443,6 +482,7 @@ def _build_truth(
         "n_stages": params.n_stages,
         "p_dmp": params.p_dmp,
         "shape_kind": params.shape_kind,
+        "magnitude_kind": params.magnitude_kind,
         "seed": params.seed,
         "stage_assumption": "clusters-as-stages",
         "deltas": {label_a: list(deltas_a), label_b: list(deltas_b)},
