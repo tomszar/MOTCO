@@ -48,29 +48,31 @@ clusters = result.clusters
 
 ## Semi-synthetic trajectory generation
 
-The semi-synthetic trajectory generator converts an `InterSIMResult` into a MOTCO-ready dataset with:
+The semi-synthetic trajectory generator samples directly from the numpy-native
+InterSIM reimplementation (no R at runtime) and returns a MOTCO-ready dataset with:
 
 - aligned methylation, gene expression, and proteomics matrices
-- sample metadata containing `sample_id`, `group`, `stage`, and `cluster`
-- truth metadata recording trajectory mode, affected features, stage mapping, and generator seed
+- sample metadata containing `sample_id`, `group`, and `stage`
+- truth metadata recording trajectory mode, per-stage/group differential
+  indicators, per-omic δ, and the generator seed
 
-The first generator uses an explicit **clusters-as-stages** assumption: sorted InterSIM cluster labels are mapped to ordered integer stages starting at 0. Original cluster labels are preserved in sample metadata.
+Group A is a random baseline trajectory; group B is a deterministic transform of
+group A's per-stage differential indicators selected by `trajectory_mode`.
 
 ```python
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
-    generate_semisynthetic_trajectory_from_intersim,
+    generate_semisynthetic_trajectory,
 )
 
-dataset = generate_semisynthetic_trajectory_from_intersim(
-    InterSIMParams(seed=1203, n_sample=120, cluster_sample_prop=(0.3, 0.3, 0.4)),
+dataset = generate_semisynthetic_trajectory(
     SemiSyntheticTrajectoryParams(
         seed=99,
         trajectory_mode="magnitude",
+        n_samples=120,
+        n_stages=3,
         group_effect_size=0.2,
         group_ratio=0.5,
-        prop_affected_features=0.05,
     ),
 )
 
@@ -78,15 +80,16 @@ sample_metadata = dataset.metadata
 truth = dataset.truth
 ```
 
-Supported trajectory modes:
+Supported trajectory modes (all governed by the unified `group_effect_size` knob,
+where `0` is the null for every mode):
 
 | Mode | Injected group-specific pattern |
 |------|---------------------------------|
-| `none` | No group-specific shift; useful for Type I error scenarios |
-| `translation` | Same affected-feature shift in every stage |
-| `magnitude` | Stage-proportional shift along the affected-feature direction |
-| `orientation` | Stage-proportional off-axis shift |
-| `shape` | Non-monotone stage-specific shift; requires at least three stages |
+| `none` | Identical to baseline; useful for Type I error scenarios |
+| `translation` | Constant observed-space location offset |
+| `magnitude` | Scales δ (size); `magnitude_kind='all'` scales every stage, `'extremes'` scales only the endpoint stages' methylation indicators |
+| `orientation` | One global per-omic feature permutation (rotation) |
+| `shape` | Permutes interior stages only (bend); requires at least three stages |
 
 ## Evaluation harness
 
@@ -133,7 +136,6 @@ The grid orchestration layer enumerates parameter cells, runs local replicates t
 from pathlib import Path
 
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     SimulationRunConfig,
@@ -143,11 +145,10 @@ from motco.simulations import (
 )
 
 grid = enumerate_type_i_grid(
-    baseline_intersim_params=InterSIMParams(seed=1, n_sample=60),
-    baseline_generator_params=SemiSyntheticTrajectoryParams(seed=2),
+    baseline_generator_params=SemiSyntheticTrajectoryParams(seed=2, n_samples=60),
     evaluation_params=SimulationEvaluationParams(integration_method="concat", permutations=99),
     axes={
-        "intersim.n_sample": [60, 120],
+        "generator.n_samples": [60, 120],
         "generator.group_ratio": [0.5, 0.7],
     },
     n_replicates=3,
@@ -161,7 +162,7 @@ records = run_simulation_grid(
 summaries = summarize_rejection_rates(records, alpha=0.05)
 ```
 
-Each `SimulationCell` stores a stable `cell_id`, phase, `InterSIMParams`, `SemiSyntheticTrajectoryParams`, `SimulationEvaluationParams`, replicate count, base seed, and metadata such as the varied axis. Axis names use explicit namespaces: `intersim.<field>`, `generator.<field>`, or `evaluation.<field>`.
+Each `SimulationCell` stores a stable `cell_id`, phase, `SemiSyntheticTrajectoryParams`, `SimulationEvaluationParams`, replicate count, base seed, and metadata such as the varied axis. Axis names use explicit namespaces: `generator.<field>` or `evaluation.<field>`.
 
 Initial persistence is JSON Lines. Each row records cell and replicate IDs, deterministic seeds, a parameter signature, status, p-values, pair statistics, truth metadata, runtime metadata, cell metadata, and optional error details. With `resume=True`, completed rows with matching parameter signatures are skipped. A matching cell/replicate with a different parameter signature raises unless `overwrite=True`.
 
@@ -202,8 +203,6 @@ Initial persistence is JSON Lines. Each row records cell and replicate IDs, dete
 ::: motco.simulations.run_intersim
 
 ::: motco.simulations.generate_semisynthetic_trajectory
-
-::: motco.simulations.generate_semisynthetic_trajectory_from_intersim
 
 ::: motco.simulations.integrate_semisynthetic_dataset
 
