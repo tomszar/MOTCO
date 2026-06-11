@@ -59,6 +59,18 @@ Mean ± SD across 10 seeds. The baseline M is applied uniformly to every CpG; `s
 
 **Verdict for Axis 1: a uniform `rev_logit` operating point does NOT reproduce the cross-talk. It only compresses magnitude.**
 
+**Population confirmation — `delta ≈ β(1−β) · delta_M`.** The measured δ is not a noise or estimator artifact. Computing the geometry on the *noiseless population* (apply `rev_logit` straight to the cell means — no sampling, no PCA, no estimator) gives δ = 0.446 at center versus the measured 0.447: the pipeline faithfully reports the generative→β-frame geometry. And the compression follows the first-order prediction that `rev_logit` scales an M-space step by the local slope `β(1−β)`, so β-space δ ≈ `β(1−β)` × (M-space δ), where the M-space δ here is `signal_scale·(c−1) = 2.0`:
+
+| m_baseline | slope β(1−β) | population δ | δ / slope |
+|-----------:|-------------:|-------------:|----------:|
+| 0 | 0.250 | 0.446 | 1.78 |
+| 1 | 0.197 | 0.359 | 1.83 |
+| 2 | 0.105 | 0.223 | 2.12 |
+| 3 | 0.045 | 0.109 | 2.41 |
+| 4 | 0.018 | 0.045 | 2.58 |
+
+δ / slope stays near the M-space δ of 2.0, drifting up only as second-order curvature accumulates across the step's extent deep in the tail. **Compression is governed by the local sigmoid gain at the operating point.**
+
 ---
 
 ### Axis 2 — Step scale (effect size), operating point fixed at center (M = 0)
@@ -86,7 +98,61 @@ The `none` floor falls as `signal_scale` rises (higher SNR → less angle estima
 - **Magnitude→angle cross-talk *emerges* at large effect size.** Below `signal_scale ≈ 4` the magnitude angle sits at the `none` floor (no leakage). At `signal_scale = 6` it is 6.9° against a 2.0° floor (3.5×), and at `8.0` it is 9.4° against a 1.5° floor (6.3×). **This is the specificity-study leak, reproduced by `rev_logit` alone.**
 - **Orientation remains robust** — angle ≈ 45–47°, delta at floor — across all step scales.
 
-**Mechanism.** `a_feat` is a random vector, so its coordinates have *different magnitudes*. When the step is small (or the baseline tail compresses everything uniformly), every coordinate experiences nearly the same local slope → direction preserved → no cross-talk. When the step is **large enough to span the sigmoid's curved region**, large-magnitude coordinates saturate while small ones stay linear → the β-space direction **bends** away from the M-space direction; the `2×`-scaled magnitude step bends *more*, so groups A and B end up pointing in different directions → a spurious `angle`. Cross-talk is therefore driven by **effect size (step span relative to sigmoid curvature)**, while the operating point drives **compression**. Two distinct, separable effects.
+**Direct confirmation — a pure scaling acquires a real rotation.** The cleanest way to see the cross-talk is to measure it with *no PCA, no estimator, and no noise* — just the angle between group A's β-space step and group B's β-space step, computed straight from the cell means at center (M = 0). For the magnitude manipulation the two M-space steps are **exactly collinear by construction** (`b = 2a`, angle 0°), so *any* β-space angle is purely `rev_logit` bending:
+
+| signal_scale (step span) | angle(βA, βB), population | ‖βA‖ | ‖βB‖ |
+|-------------------------:|--------------------------:|-----:|-----:|
+| 1  | 0.5° | 0.249 | 0.491 |
+| 2  | 1.8° | 0.491 | 0.937 |
+| 4  | 4.8° | 0.937 | 1.620 |
+| 6  | 7.1° | 1.314 | 2.064 |
+| 8  | 8.5° | 1.620 | 2.355 |
+| 10 | 9.3° | 1.866 | 2.554 |
+
+A pure 2× scaling in M-space emerges as a several-degree rotation in β-space, growing monotonically with step span. The full pipeline tracks this exactly: population 8.5° at `signal_scale = 8` versus the measured 9.4° (the extra is estimation noise layered on the real bending).
+
+**Mechanism.** `rev_logit` acts coordinate-wise, so the per-coordinate ratio `βB_i / βA_i` is **not constant across coordinates**: a coordinate with a large `|a_i|` has its 2× step pushed further into saturation and grows by *less than* 2×, while a small-`|a_i|` coordinate is still linear and grows by nearly 2×. Hence `βB` is not a scalar multiple of `βA` — the two vectors point in different directions, and that misalignment *is* the magnitude→orientation cross-talk. When the step is small (or a saturated baseline compresses everything by ~the same factor) the ratio is near-constant → direction preserved → no cross-talk. When the step is **large enough to span the sigmoid's curved region**, the spread in coordinate magnitudes maps to a spread in growth ratios → the β-direction **bends**, and the `2×` step bends more than the `1×` step → spurious `angle`. Cross-talk is driven by **effect size (step span relative to sigmoid curvature)**; the operating point drives **compression**. Two distinct, separable effects.
+
+---
+
+### Why the two axes differ — "where" vs "how far"
+
+Both axes push the step into nonlinear territory, but they engage different parts of the sigmoid:
+
+- **Operating point** moves a *short* step (fixed span) deeper into saturation. Over that short span the slope `β(1−β)` is nearly constant, so every coordinate is scaled by ~the same factor → the step stays collinear → **compress, don't rotate.**
+- **Effect size** holds the baseline at center but makes the step *long enough to reach from the steep middle into the flat tail*. Now coordinates experience very different local slopes → non-uniform scaling → **rotate.**
+
+Compression needs the step to *sit* somewhere flat; rotation needs the step to *cross* between steep and flat. They are orthogonal knobs — which is why the operating-point sweep shows pure compression with a frozen ~47° orientation angle, while the step-scale sweep shows angle cross-talk with a *saturating* δ. This separation is the central result of Rung 1.
+
+#### Reproducing the noiseless population tables
+
+```python
+# Population geometry behind the δ/slope and angle(βA,βB) tables:
+# no sampling, no PCA, no estimator — straight rev_logit of the cell means.
+import numpy as np
+from motco.simulations.generator import rev_logit
+from motco.simulations.linear_recovery import generate_dataset, LinearRecoveryParams
+
+def step_vectors(manip, signal):
+    d = generate_dataset(LinearRecoveryParams(
+        seed=0, n_features=50, signal_scale=signal, manipulation=manip, scale_c=2.0))
+    return d.step_A, d.step_B  # M-space steps (group A baseline, group B transform)
+
+# Axis 1 — magnitude δ vs operating point (M-space steps collinear, signal=2)
+aA, aB = step_vectors("magnitude", 2.0)
+for m in (0, 1, 2, 3, 4):
+    base = np.full(50, float(m))
+    dA = rev_logit(base + aA) - rev_logit(base)
+    dB = rev_logit(base + aB) - rev_logit(base)
+    print(m, np.linalg.norm(dB) - np.linalg.norm(dA))
+
+# Axis 2 — angle(βA, βB) at center vs step span (any angle is pure rev_logit bending)
+for s in (1, 2, 4, 6, 8, 10):
+    aA, aB = step_vectors("magnitude", float(s))
+    dA, dB = rev_logit(aA) - 0.5, rev_logit(aB) - 0.5  # rev_logit(0) = 0.5
+    cos = dA @ dB / (np.linalg.norm(dA) * np.linalg.norm(dB))
+    print(s, np.degrees(np.arccos(np.clip(cos, -1, 1))))
+```
 
 ---
 
