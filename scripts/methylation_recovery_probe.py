@@ -19,6 +19,7 @@ from pathlib import Path
 from motco.simulations.methylation_recovery import (
     MethylationRecoveryParams,
     plot_operating_point_sweep,
+    run_integration_contrast,
     run_operating_point_sweep,
     run_step_scale_sweep,
 )
@@ -64,6 +65,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = _parser().parse_args()
+    # The operating-point and step-scale sweeps characterize the β-frame failure
+    # mode, so pin them to β-integration; the contrast section runs both arms.
     base = MethylationRecoveryParams(
         n_features=args.n_features,
         n_components=args.n_components,
@@ -73,6 +76,7 @@ def main() -> None:
         scale_c=args.scale_c,
         angle_theta=args.angle_theta,
         m_baseline=0.0,
+        integration_space="beta",
     )
     seeds = list(range(args.n_seeds))
     fmt = "{:.3f}".format
@@ -98,6 +102,24 @@ def main() -> None:
                 "manipulation",
                 "delta_mean",
                 "delta_std",
+                "angle_mean",
+                "angle_std",
+            ]
+        ].to_string(index=False, float_format=fmt)
+    )
+    print()
+
+    print("=== Integration-space contrast: β vs M-value (step-scale sweep) ===")
+    contrast = run_integration_contrast(
+        args.signal_scales, seeds=seeds, base_params=base
+    )
+    print(
+        contrast[
+            [
+                "integration_space",
+                "signal_scale",
+                "manipulation",
+                "delta_mean",
                 "angle_mean",
                 "angle_std",
             ]

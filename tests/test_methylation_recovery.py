@@ -11,6 +11,7 @@ from motco.simulations.generator import rev_logit
 from motco.simulations.methylation_recovery import (
     MethylationRecoveryError,
     MethylationRecoveryParams,
+    beta_to_mvalue,
     generate_dataset,
     givens_rotation,
     inverse_design_magnitude_mvalue,
@@ -21,9 +22,10 @@ from motco.simulations.methylation_recovery import (
     run_step_scale_sweep,
 )
 
-# Regime with clean center recovery (reproduces the Rung-0 floor) and a small
-# enough cross-talk signal that the nonlinearity, not the k-noise floor, is the
-# variable under test.
+# β-integration regime: clean center recovery (reproduces the Rung-0 floor) and
+# a small enough cross-talk signal that the nonlinearity, not the k-noise floor,
+# is the variable under test. integration_space is pinned to "beta" because these
+# tests characterize the β-frame failure mode (compression + cross-talk).
 _BASE = MethylationRecoveryParams(
     seed=0,
     n_features=50,
@@ -32,6 +34,7 @@ _BASE = MethylationRecoveryParams(
     signal_scale=2.0,
     n_components=2,
     m_baseline=0.0,
+    integration_space="beta",
 )
 
 
@@ -113,6 +116,31 @@ def test_validate_bad_manipulation():
         generate_dataset(replace(_BASE, manipulation="shape"))  # type: ignore[arg-type]
 
 
+def test_validate_bad_integration_space():
+    with pytest.raises(MethylationRecoveryError, match="integration_space"):
+        generate_dataset(replace(_BASE, integration_space="logit"))  # type: ignore[arg-type]
+
+
+def test_default_integration_space_is_mvalue():
+    assert MethylationRecoveryParams().integration_space == "mvalue"
+
+
+# ---------------------------------------------------------------------------
+# beta_to_mvalue: exact inverse of rev_logit (up to clipping)
+# ---------------------------------------------------------------------------
+
+
+def test_beta_to_mvalue_inverts_rev_logit():
+    m = np.linspace(-5, 5, 101)
+    np.testing.assert_allclose(beta_to_mvalue(rev_logit(m)), m, atol=1e-6)
+
+
+def test_beta_to_mvalue_clips_saturation():
+    # β exactly at 0/1 would send logit to ±∞; clipping keeps it finite.
+    out = beta_to_mvalue(np.array([0.0, 1.0]))
+    assert np.isfinite(out).all()
+
+
 # ---------------------------------------------------------------------------
 # 5.2  Center operating point reduces to the Rung-0 clean floor
 # ---------------------------------------------------------------------------
@@ -158,6 +186,39 @@ def test_tail_compresses_magnitude_delta():
     d_tail, _, *_ = project_and_measure(generate_dataset(tail), tail)
     # saturating baseline shrinks the measured magnitude delta
     assert d_tail < 0.6 * d_center
+
+
+# ---------------------------------------------------------------------------
+# M-value integration removes the distortion (logit inverts rev_logit exactly)
+# ---------------------------------------------------------------------------
+
+
+def test_mvalue_removes_crosstalk_at_large_effect():
+    # signal=8 is where β-integration leaks ~9° into the magnitude angle.
+    p_beta = replace(_BASE, manipulation="magnitude", signal_scale=8.0, integration_space="beta")
+    p_m = replace(p_beta, integration_space="mvalue")
+    none_m = replace(_BASE, manipulation="none", signal_scale=8.0, integration_space="mvalue")
+    _, a_beta, *_ = project_and_measure(generate_dataset(p_beta), p_beta)
+    _, a_m, *_ = project_and_measure(generate_dataset(p_m), p_m)
+    _, a_none, *_ = project_and_measure(generate_dataset(none_m), none_m)
+    # β-arm leaks; M-arm sits at the null floor
+    assert a_beta > 6.0
+    assert a_m < a_none + 1.0
+
+
+def test_mvalue_recovers_true_magnitude_no_saturation():
+    # Under M-integration, delta ≈ signal_scale·(c−1) = signal_scale (c=2), linearly,
+    # at every effect size — no β-bounded saturation.
+    for signal in (2.0, 4.0, 8.0):
+        p = replace(_BASE, manipulation="magnitude", signal_scale=signal, integration_space="mvalue")
+        delta, _, *_ = project_and_measure(generate_dataset(p), p)
+        assert abs(delta - signal) < 0.3 * signal
+
+
+def test_mvalue_orientation_preserved():
+    p = replace(_BASE, manipulation="orientation", signal_scale=8.0, integration_space="mvalue")
+    _, angle, *_ = project_and_measure(generate_dataset(p), p)
+    assert 35.0 < angle < 55.0
 
 
 # ---------------------------------------------------------------------------

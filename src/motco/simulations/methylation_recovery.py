@@ -55,6 +55,8 @@ __all__ = [
     "MethylationRecoveryDataset",
     "generate_dataset",
     "project_and_measure",
+    "beta_to_mvalue",
+    "run_integration_contrast",
     "jacobian_diag",
     "inverse_design_magnitude_mvalue",
     "inverse_design_orientation_mvalue",
@@ -69,6 +71,24 @@ __all__ = [
 
 class MethylationRecoveryError(ValueError):
     """Raised on invalid ``MethylationRecoveryParams``."""
+
+
+#: β is clipped to ``[CLIP, 1 − CLIP]`` before ``logit`` so deep-saturation
+#: values (β numerically at 0/1) do not map to ±∞ during M-value integration.
+_LOGIT_CLIP = 1e-6
+
+
+def beta_to_mvalue(beta: np.ndarray, clip: float = _LOGIT_CLIP) -> np.ndarray:
+    """Clipped ``logit`` mapping β → M-value (natural log; exact inverse of rev_logit).
+
+    ``logit(β) = ln(β / (1 − β))``. This is the exact inverse of InterSIM's
+    ``rev_logit`` up to the global scale that distinguishes natural-log from the
+    log2-based M-value convention — a uniform scaling that leaves trajectory
+    *angles* invariant and rescales *magnitudes* by a constant. β is clipped to
+    ``[clip, 1 − clip]`` to keep the transform finite under deep saturation.
+    """
+    b = np.clip(beta, clip, 1.0 - clip)
+    return np.log(b / (1.0 - b))
 
 
 @dataclass(frozen=True)
@@ -108,6 +128,16 @@ class MethylationRecoveryParams:
     m_baseline:
         Scalar M-value baseline (operating point). ``0.0`` sits at the sigmoid
         center (β = 0.5, ~linear); larger magnitudes move into saturation.
+    integration_space:
+        Representation the **integration/projection** operates on. The data
+        carried through the pipeline is always β (what InterSIM passes to gene
+        expression), but the standard analysis practice is to transform to
+        M-values before integration (homoscedastic, ~Gaussian). ``"mvalue"``
+        (the default, and the recommended pipeline choice) applies a clipped
+        ``logit`` to β before PCA — the exact inverse of the generative
+        ``rev_logit``, which recovers the clean linear geometry. ``"beta"``
+        integrates the β values directly and exposes the nonlinearity's
+        compression and magnitude→angle cross-talk (the cautionary failure mode).
     """
 
     seed: int = 0
@@ -120,6 +150,7 @@ class MethylationRecoveryParams:
     angle_theta: float = 45.0
     n_components: int = 2
     m_baseline: float = 0.0
+    integration_space: Literal["beta", "mvalue"] = "mvalue"
 
     def as_linear(self) -> LinearRecoveryParams:
         """Project to the Rung-0 params (shared fields) for helper reuse."""
@@ -187,6 +218,10 @@ def _validate(p: MethylationRecoveryParams) -> None:
             f"manipulation must be 'none', 'magnitude', or 'orientation'; "
             f"got {p.manipulation!r}"
         )
+    if p.integration_space not in ("beta", "mvalue"):
+        raise MethylationRecoveryError(
+            f"integration_space must be 'beta' or 'mvalue'; got {p.integration_space!r}"
+        )
 
 
 def generate_dataset(params: MethylationRecoveryParams) -> MethylationRecoveryDataset:
@@ -251,20 +286,26 @@ def project_and_measure(
     dataset: MethylationRecoveryDataset,
     params: MethylationRecoveryParams,
 ) -> tuple[float, float, object, pd.DataFrame, np.ndarray]:
-    """Fit PCA on β, project, and measure delta/angle via the production path.
+    """Fit PCA on the integration-space features, project, and measure delta/angle.
 
-    Delegates to :func:`motco.simulations.linear_recovery.project_and_measure`
-    with the β matrix as the feature matrix, so the projection (inline PCA, no
-    per-feature standardization) and measurement (``estimate_difference`` on a
-    2-group × 2-stage design) are exactly the Rung-0 code path.
+    The β data is mapped to ``params.integration_space`` first — identity for
+    ``"beta"``, a clipped ``logit`` (:func:`beta_to_mvalue`) for ``"mvalue"`` —
+    then delegated to
+    :func:`motco.simulations.linear_recovery.project_and_measure`, so the
+    projection (inline PCA, no per-feature standardization) and measurement
+    (``estimate_difference`` on a 2-group × 2-stage design) are exactly the
+    Rung-0 code path. Because ``logit`` is the exact inverse of the generative
+    ``rev_logit``, ``"mvalue"`` integration recovers the clean M-space geometry.
 
     Returns
     -------
     delta, angle, pca, Y, Vk
         See :func:`motco.simulations.linear_recovery.project_and_measure`.
     """
+    beta = dataset.X.to_numpy(dtype=float)
+    feats = beta if params.integration_space == "beta" else beta_to_mvalue(beta)
     lin_ds = LinearRecoveryDataset(
-        X=dataset.X,
+        X=pd.DataFrame(feats, columns=dataset.X.columns, index=dataset.X.index),
         metadata=dataset.metadata,
         step_A=dataset.step_A,
         step_B=dataset.step_B,
@@ -441,6 +482,44 @@ def run_step_scale_sweep(
                 }
             )
     return pd.DataFrame(rows)
+
+
+def run_integration_contrast(
+    signal_scales: list[float],
+    seeds: list[int] | None = None,
+    base_params: MethylationRecoveryParams | None = None,
+) -> pd.DataFrame:
+    """Contrast β-space vs M-value integration across a step-scale sweep.
+
+    Runs :func:`run_step_scale_sweep` once with ``integration_space="beta"`` and
+    once with ``"mvalue"`` (overriding ``base_params``), tagging each block with
+    an ``integration_space`` column. This is the headline Rung-1 comparison: the
+    β arm shows compression + magnitude→angle cross-talk; the M arm recovers the
+    clean linear geometry (``logit`` exactly inverts the generative ``rev_logit``).
+
+    Parameters
+    ----------
+    signal_scales:
+        M-space step magnitudes ‖a_feat‖ to sweep (the effect-size axis where the
+        β-arm cross-talk is strongest).
+    seeds:
+        RNG seeds to average over. Defaults to ``list(range(10))``.
+    base_params:
+        Template configuration. Defaults to ``MethylationRecoveryParams()``.
+    """
+    if base_params is None:
+        base_params = MethylationRecoveryParams()
+
+    blocks = []
+    for space in ("beta", "mvalue"):
+        sweep = run_step_scale_sweep(
+            signal_scales,
+            seeds=seeds,
+            base_params=replace(base_params, integration_space=space),
+        )
+        sweep.insert(0, "integration_space", space)
+        blocks.append(sweep)
+    return pd.concat(blocks, ignore_index=True)
 
 
 # ---------------------------------------------------------------------------

@@ -37,6 +37,20 @@ The system SHALL quantify, as a function of operating point, both the absolute d
 - **WHEN** the operating-point sweep has been run for all three manipulations
 - **THEN** the result reports, per operating point, the `magnitude`→`angle` and `orientation`→`delta` cross-talk relative to the `none` baseline at that operating point, so any leakage attributable to `rev_logit` is separated from finite-sample noise
 
+### Requirement: Integration-space selection (β vs M-value)
+
+The system SHALL expose the representation the integration/projection operates on as a selectable parameter with at least the options β (the carried representation) and M-value (a clipped `logit` of β). The default MUST be M-value, the recommended pipeline representation. When M-value integration is selected the β matrix MUST be mapped through a finite (clipped) `logit` before projection, and the system SHALL demonstrate that this representation recovers the linear trajectory geometry — i.e. removes both the magnitude compression and the magnitude→`angle` cross-talk that β integration exhibits.
+
+#### Scenario: M-value integration removes the cross-talk and compression
+
+- **WHEN** a large-effect magnitude manipulation that produces magnitude→`angle` cross-talk and `delta` saturation under β integration is instead measured under M-value integration
+- **THEN** the measured `angle` returns to the `none` null floor and the measured `delta` recovers the intended M-space magnitude without the β-bounded saturation
+
+#### Scenario: M-value transform is finite under saturation
+
+- **WHEN** β values are at or numerically near 0 or 1 (deep saturation)
+- **THEN** the M-value transform clips β to a bounded interval so the resulting M-values are finite
+
 ### Requirement: First-order inverse design at the operating point
 
 The system SHALL provide a first-order (Jacobian-linearized) inverse design that maps a target β-space latent step back to an M-value-space feature change, using the local map `J = diag(β(1−β))` at the operating point composed with the Rung-0 linear inverse-design formula. The result MUST be labeled first-order and MUST expose the M-space change's support and sparsity summary for inspection.

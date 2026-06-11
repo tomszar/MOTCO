@@ -8,6 +8,8 @@ We reuse the Rung-0 generation **unchanged**, but reinterpret the feature matrix
 
 `rev_logit` is locally linear at M ≈ 0 (slope `β(1−β) = 0.25`) and saturates on the tails (slope → 0). Distortion therefore depends on **where on the sigmoid the trajectory sits** and **how much of the sigmoid a single step spans**. These are the two independent variables, swept separately.
 
+**Two integration representations.** The data carried through the pipeline is always β (what InterSIM passes to gene expression), but the standard analysis practice is to transform methylation to **M-values** before integration (homoscedastic, ~Gaussian). Axes 1–2 below integrate in **β-space** to expose the failure mode; the **Resolution** section then contrasts that against **M-value integration** — the `integration_space` knob, defaulting to `"mvalue"` as the recommended pipeline choice. Because `logit` is the exact inverse of the generative `rev_logit`, M-integration recovers the clean linear geometry (and is why the field already prefers M-values).
+
 ---
 
 ### Reproduction parameters
@@ -27,7 +29,7 @@ We reuse the Rung-0 generation **unchanged**, but reinterpret the feature matrix
 .venv/bin/python scripts/methylation_recovery_probe.py
 ```
 
-Operating-point figure: `build/rung1_operating_point.png`
+Operating-point figure: `build/rung1_operating_point.png`. **Axes 1–2 below integrate in β-space** (`integration_space="beta"`) to expose the failure mode; the Resolution section contrasts both arms.
 
 **Why `k = 2`.** The 2-group × 2-stage signal lives in ≤ 2 dimensions, and Rung 0 showed the angle null floor *grows with each retained noise PC*. Rung 1 probes a small (≈ 5–10°) cross-talk signal, so it retains only the signal subspace — keeping `rev_logit`, not the k-noise floor already characterized in Rung 0, as the variable under test.
 
@@ -156,13 +158,46 @@ for s in (1, 2, 4, 6, 8, 10):
 
 ---
 
+### Resolution — M-value integration removes the distortion
+
+Everything above integrates in **β-space**. But β is only the *carried* representation; the standard analysis practice is to transform methylation to **M-values** before integration. In our generator the signal is injected in M-space and mapped to β by the *exact* logistic link `rev_logit`, so `logit(β)` is its **exact inverse** — M-integration undoes the nonlinearity entirely.
+
+The step-scale sweep, run under both representations (mean ± SD over seeds 0–9):
+
+| signal_scale | manip | β-int: δ | β-int: θ | **M-int: δ** | **M-int: θ** |
+|-------------:|-------|---------:|---------:|-------------:|-------------:|
+| 2.0 | none        | 0.012 | 5.3° | 0.051 | 5.0° |
+| 2.0 | magnitude   | 0.447 | 4.4° | **2.049** | 4.0° |
+| 2.0 | orientation | 0.019 | 47.3° | 0.077 | 47.3° |
+| 4.0 | magnitude   | 0.679 | 2.9° | **4.045** | 2.0° |
+| 6.0 | magnitude   | 0.748 | **6.9°** | **6.044** | 1.3° |
+| 8.0 | none        | 0.013 | 1.5° | 0.052 | 1.3° |
+| 8.0 | magnitude   | 0.739 | **9.4°** | **8.044** | **1.0°** |
+| 8.0 | orientation | 0.047 | 46.1° | 0.075 | 45.4° |
+
+Under M-integration:
+
+- **Magnitude `delta` recovers the exact M-space truth, with no saturation:** δ = 2.05, 4.05, 6.04, 8.04 at `signal_scale` = 2, 4, 6, 8 — i.e. δ ≈ `signal_scale·(c−1)` linearly at every effect size. The β-arm's plateau (≈ 0.74) is gone; magnitude sensitivity is fully restored.
+- **The cross-talk vanishes:** the magnitude angle that reached 9.4° in β at `signal_scale = 8` drops to **1.0°**, at the `none` floor. `logit` inverts `rev_logit` coordinate-wise, so the differential-saturation bending is undone before the projector sees it.
+- **Orientation is preserved** (≈ 45°), as in β.
+
+It is literally Rung 0 again: a clean linear problem. (M is up to a global scale — natural-log `logit` vs the log2-based M-value convention — which leaves angles invariant and rescales magnitudes uniformly.)
+
+**Caveats.**
+
+1. *Clean by construction.* The inversion is exact because the generative link and the integration transform are exact inverses *and* the noise is additive in M-space. Real methylation deviates (non-exact link, probe effects, noise not strictly M-additive); within the InterSIM-faithful model the result is exact, and as a real-world claim it restates why the field already prefers M-values for analysis.
+2. *Numerical edge at saturation.* `logit(β) → ±∞` as β → 0/1, so β is clipped to `[1e−6, 1−1e−6]` before transform (`beta_to_mvalue`). The edge check at `m_baseline = 4` (β up to 0.997) stayed well inside the clip; deeper baselines lean on it, and the clipping itself is a real, characterizable M-integration failure mode.
+
+---
+
 ### Gate decision
 
-The Rung-1 result is two-sided and sharper than "does `rev_logit` cause cross-talk?":
+The Rung-1 result has two layers:
 
-- **Operating point (baseline saturation) → magnitude compression, direction preserved, NO cross-talk.** A uniform `rev_logit` baseline rescales the step but cannot rotate it.
-- **Effect size (step span) → magnitude→angle cross-talk.** Once a step traverses enough sigmoid curvature, differential per-coordinate saturation bends the direction and the magnitude manipulation leaks into `angle`. In this regime the onset is around `signal_scale ≳ 6` (β endpoints ≈ 0.997).
+1. **In β-space, `rev_logit` is a real distortion** — and it is *two* distinct distortions, not one. The **operating point** (baseline saturation) compresses magnitude `delta` while preserving direction (no cross-talk: a uniform baseline rescales but cannot rotate). The **effect size** (step span across the sigmoid) produces genuine magnitude→`angle` cross-talk via differential per-coordinate saturation, onsetting around `signal_scale ≳ 6`. So β-integration both *loses magnitude sensitivity* and *manufactures spurious orientation* — the specificity-study leak, reproduced.
 
-So `rev_logit` **is** a sufficient mechanism for the magnitude→orientation cross-talk — but only at large effect sizes; for modest effects at a uniform baseline it costs only magnitude *sensitivity*, not specificity. This implicates **effect size and per-CpG baseline heterogeneity** (real CpGs sit at different operating points, so even a modest uniform M-step lands on different local slopes) as the live suspects above this rung.
+2. **M-value integration removes both** — exactly, at every operating point and effect size — because `logit` is the inverse of the generative link. Since `logit` acts coordinate-wise, this holds regardless of per-CpG baseline *heterogeneity* too: heterogeneous operating points would also be inverted.
 
-**Next step: Rung 2** — introduce per-CpG baseline heterogeneity (the real `mean_M` operating points), holding the projector linear, to test whether realistic operating-point spread converts a modest-effect magnitude manipulation into angle cross-talk without requiring a large step. The PCA→PLS projector swap remains a separate, later rung.
+**Decision: M-value integration is the correct pipeline representation for methylation**, and the methylation `rev_logit` nonlinearity is therefore **not** a standing cross-talk source for a correctly-built pipeline — it is a cautionary failure mode of integrating in β-space.
+
+**Consequence for the ladder.** Because M-integration inverts the link coordinate-wise, the planned Rung-2 (per-CpG baseline *heterogeneity*) is **mooted under M-integration** — heterogeneous baselines are inverted just as cleanly as a uniform one. The real cross-talk must live downstream of the methylation representation: the **projector** (PCA → PLS, SNF), **per-feature standardization**, **concatenation** of heterogeneous omics, or the **cross-omic coupling**. The ladder should advance to those, with methylation fixed in M-space. The next rung is therefore re-scoped from "heterogeneous methylation baselines" to the **projector / integration step** as the next single factor.
