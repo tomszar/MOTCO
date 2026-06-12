@@ -141,6 +141,46 @@ def test_leakage_probe_reports_both_references():
     assert np.all(np.isfinite(probe["angle_mean"]))
 
 
+def test_plsda_default_label_is_stage():
+    # The headline plsda arm matches the production trajectory pipeline, which
+    # conditions PLS-DA on the disease stage — not the group.
+    assert ProjectorRecoveryParams().plsda_label == "stage"
+
+
+def test_plsda_label_routes_to_metadata_column():
+    # The supervised label is taken from the named metadata column.
+    d = generate_dataset(replace(_BASE, projector="plsda"))
+    stage_y = d.metadata["stage"].astype(str)
+    group_y = d.metadata["group"].astype(str)
+    # The two labels are genuinely different partitions, so the projections differ.
+    Y_stage = project(d, replace(_BASE, projector="plsda", plsda_label="stage"))
+    Y_group = project(d, replace(_BASE, projector="plsda", plsda_label="group"))
+    assert not np.allclose(Y_stage.to_numpy(), Y_group.to_numpy())
+    assert stage_y.nunique() == 2 and group_y.nunique() == 2
+
+
+def test_stage_conditioned_null_is_clean_but_group_conditioned_leaks():
+    # Stage-conditioned PLS-DA keeps the `none` null tight; conditioning on the
+    # group axis inflates/destabilizes it (the supervised-leakage hazard).
+    seeds = [0, 1, 2, 3, 4]
+    stage = replace(_BASE, projector="plsda", plsda_label="stage", manipulation="none")
+    group = replace(_BASE, projector="plsda", plsda_label="group", manipulation="none")
+    stage_angles = [
+        project_and_measure(generate_dataset(replace(stage, seed=s)), replace(stage, seed=s))[1]
+        for s in seeds
+    ]
+    group_angles = [
+        project_and_measure(generate_dataset(replace(group, seed=s)), replace(group, seed=s))[1]
+        for s in seeds
+    ]
+    assert np.std(stage_angles) < np.std(group_angles)
+
+
+def test_validation_rejects_bad_plsda_label():
+    with pytest.raises(ProjectorRecoveryError):
+        generate_dataset(replace(_BASE, plsda_label="bogus"))  # type: ignore[arg-type]
+
+
 def test_projector_comparison_has_null_floor_and_reference():
     comp = run_projector_comparison(seeds=[0, 1, 2], base_params=_BASE)
     # one row per (projector, manipulation)

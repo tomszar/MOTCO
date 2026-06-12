@@ -11,8 +11,14 @@ projector used before measurement:
 - ``pca``         — mean-centered PCA (the Rung-0/1 reference floor).
 - ``standardize`` — per-feature z-score (the production ``concat`` transform),
                     then PCA.
-- ``plsda``       — supervised PLS-DA latent space, conditioned on the group
-                    label (``stats/pls.fit_plsda_transform``).
+- ``plsda``       — supervised PLS-DA latent space, conditioned by default on
+                    the **stage** label (``stats/pls.fit_plsda_transform``),
+                    matching the production trajectory pipeline
+                    (``viz.plot_trajectory_from_plsr``) which orients the latent
+                    axes to separate disease stages — the trajectory — before
+                    group A-vs-B differences are measured within that space. The
+                    group-conditioned worst-case-leakage variant is exercised by
+                    ``run_leakage_probe``.
 - ``snf``         — graph-spectral embedding (``stats/snf``). SNF *fusion*
                     requires ≥ 2 networks, so on this single-block test bed the
                     arm reduces to ``get_affinity_matrix`` → ``get_spectral`` —
@@ -119,6 +125,15 @@ class ProjectorRecoveryParams:
     projector:
         Which projector to apply before measurement (``pca``/``standardize``/
         ``plsda``/``snf``).
+    plsda_label:
+        Class label the supervised ``plsda`` projector is conditioned on.
+        ``"stage"`` (default) matches the production trajectory pipeline
+        (``viz.plot_trajectory_from_plsr``), where the latent axes are oriented
+        to separate disease **stages** — the trajectory — and group A-vs-B
+        differences are then measured *within* that space. ``"group"`` conditions
+        on group membership (A/B); this is the worst-case supervised-leakage
+        configuration and is used by :func:`run_leakage_probe`. Ignored by the
+        other projectors.
     anisotropy:
         Heteroscedasticity of the per-feature noise. ``0.0`` (default) is
         isotropic (every feature shares ``noise_scale``); ``> 0`` draws
@@ -140,6 +155,7 @@ class ProjectorRecoveryParams:
     angle_theta: float = 45.0
     n_components: int = 2
     projector: Projector = "pca"
+    plsda_label: Literal["group", "stage"] = "stage"
     anisotropy: float = 0.0
     snf_K: int = 20
     snf_eps: float = 0.5
@@ -215,6 +231,10 @@ def _validate(p: ProjectorRecoveryParams) -> None:
     if p.projector not in _PROJECTORS:
         raise ProjectorRecoveryError(
             f"projector must be one of {_PROJECTORS}; got {p.projector!r}"
+        )
+    if p.plsda_label not in ("group", "stage"):
+        raise ProjectorRecoveryError(
+            f"plsda_label must be 'group' or 'stage'; got {p.plsda_label!r}"
         )
     if p.projector == "snf":
         if p.snf_K < 1 or p.snf_K >= n_samples:
@@ -297,7 +317,9 @@ def project(
                         internally); reproduces the Rung-0 floor exactly.
     - ``standardize`` — per-feature z-score (``std == 0 → 1``, matching
                         ``evaluation.py:_concat_integration``) then ``PCA``.
-    - ``plsda``       — ``fit_plsda_transform`` with the group label.
+    - ``plsda``       — ``fit_plsda_transform`` conditioned on ``plsda_label``
+                        (``stage`` by default — matching the production
+                        trajectory pipeline; ``group`` for the leakage probe).
     - ``snf``         — ``get_affinity_matrix`` → ``get_spectral`` (single-block;
                         SNF fusion needs ≥ 2 networks and is a no-op for one block).
     """
@@ -313,7 +335,7 @@ def project(
         Xz = (X - mean) / std
         Y = PCA(n_components=k).fit_transform(Xz)
     elif params.projector == "plsda":
-        y = dataset.metadata["group"].astype(str).to_numpy()
+        y = dataset.metadata[params.plsda_label].astype(str).to_numpy()
         Y = fit_plsda_transform(X, y, n_components=k)
     else:  # snf — single-block: affinity → spectral (fusion mooted for one block)
         aff = get_affinity_matrix([X], K=params.snf_K, eps=params.snf_eps)[0]
@@ -518,9 +540,13 @@ def run_leakage_probe(
 ) -> pd.DataFrame:
     """Supervised-leakage probe: ``none`` trajectory under PLS-DA vs PCA.
 
-    PLS-DA conditions the projection on the group label, so it can manufacture
-    group-aligned structure even when the two groups have *identical* (``none``)
-    trajectories. This probe measures the ``none`` ``delta``/``angle`` under both
+    This probe forces the worst-case configuration: PLS-DA conditioned on the
+    **group** label (``plsda_label="group"``), regardless of ``base_params``, so
+    it can manufacture group-aligned structure even when the two groups have
+    *identical* (``none``) trajectories. (The headline
+    :func:`run_projector_comparison` uses the stage-conditioned PLS-DA that
+    matches the production pipeline.) This probe measures the ``none``
+    ``delta``/``angle`` under both
     ``plsda`` and ``pca`` across a component grid (larger ``n_components`` relative
     to the sample size stresses the leakage), so any inflation of the PLS-DA null
     above the PCA floor is exposed.
@@ -536,7 +562,13 @@ def run_leakage_probe(
     rows = []
     for k in n_components_grid:
         for projector in ("pca", "plsda"):
-            params = replace(base_params, projector=projector, n_components=k)
+            # The leakage probe is the worst-case control: condition PLS-DA on
+            # the group axis (A/B), so any inflation of the `none` null above the
+            # PCA floor exposes supervised leakage. (The headline comparison uses
+            # the stage-conditioned PLS-DA that matches the production pipeline.)
+            params = replace(
+                base_params, projector=projector, n_components=k, plsda_label="group"
+            )
             deltas, angles = _measure_over_seeds(params, "none", seeds)
             rows.append(
                 {
