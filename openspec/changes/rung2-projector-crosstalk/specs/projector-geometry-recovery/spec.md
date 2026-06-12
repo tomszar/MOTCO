@@ -16,7 +16,7 @@ The system SHALL provide a generator-free test bed that injects a *known* two-st
 
 ### Requirement: Four-projector comparison on identical geometry
 
-The system SHALL expose the projector as an explicit parameter with at least four options: mean-centered **PCA** (the reference floor), per-feature **standardize** (matching the production `concat` integration transform), supervised **PLS-DA** (the production `stats/pls` projector, conditioned on the group label), and **SNF** spectral embedding (the production `stats/snf` graph-spectral projector). Each projector MUST map the same injected feature matrix to a latent matrix that is then measured by the identical estimator path, and the system MUST reuse the package's own `fit_plsda_transform`, `get_affinity_matrix`/`SNF`/`get_spectral` functions rather than reimplementing them.
+The system SHALL expose the projector as an explicit parameter with at least four options: mean-centered **PCA** (the reference floor), per-feature **standardize** (matching the production `concat` integration transform), supervised **PLS-DA** (the production `stats/pls` projector, conditioned by default on the **stage** label, matching the production trajectory pipeline `viz.plot_trajectory_from_plsr`; the group-conditioned variant is reserved for the supervised-leakage probe), and **SNF** spectral embedding (the production `stats/snf` graph-spectral projector). Each projector MUST map the same injected feature matrix to a latent matrix that is then measured by the identical estimator path, and the system MUST reuse the package's own `fit_plsda_transform`, `get_affinity_matrix`/`SNF`/`get_spectral` functions rather than reimplementing them.
 
 #### Scenario: PCA arm reproduces the Rung-0 floor
 
