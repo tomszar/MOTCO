@@ -1,4 +1,23 @@
-"""Evaluation harness for semi-synthetic trajectory datasets."""
+"""Evaluation harness for semi-synthetic trajectory datasets.
+
+Latent-space architecture
+--------------------------
+The trajectory pipeline is **features -> latent (molecular) space -> trajectory
+measurement**. The integration step constructs the low-dimensional *molecular
+latent space*, and trajectory geometry (``delta``/``angle``/``shape``) is
+estimated **within** that space — it is the measurement substrate, not a
+visualization artifact. The two production latent-space methods are:
+
+- ``snf``: graph-spectral embedding of the fused per-omic similarity networks.
+- ``pls``: the transform of the omic features into the subspace that maximizes
+  covariance with the **stage** label, with latent dimensionality selected by
+  double nested cross-validation (a stable, non-overfitted molecular space).
+
+``concat`` is a **baseline/diagnostic** path only: it standardizes and
+column-binds the omic blocks, leaving the data in rescaled *feature* space, not
+a constructed latent space. The viz down-projection (``viz.plot_trajectory_from_*``)
+is display-only and distinct from this measurement space.
+"""
 
 from __future__ import annotations
 
@@ -12,10 +31,11 @@ import pandas as pd
 from motco.simulations.semisynthetic import SemiSyntheticTrajectoryDataset
 from motco.stats.design import build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
+from motco.stats.pls import _modal_int_with_parsimony, fit_plsda_transform, plsda_doubleCV
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 from motco.stats.trajectory import estimate_difference
 
-IntegrationMethod = Literal["concat", "snf"]
+IntegrationMethod = Literal["concat", "snf", "pls"]
 
 _OMICS_ATTRS: tuple[str, ...] = ("methylation", "expression", "proteomics")
 
@@ -171,7 +191,13 @@ def integrate_semisynthetic_dataset(
     dataset: SemiSyntheticTrajectoryDataset,
     params: SimulationEvaluationParams,
 ) -> LatentIntegrationResult:
-    """Create a latent/outcome matrix from aligned omics layers."""
+    """Construct the molecular latent space from aligned omics layers.
+
+    ``snf`` and ``pls`` build genuine latent spaces (the measurement substrate
+    for trajectory geometry); ``concat`` is a standardized-feature-concatenation
+    baseline, not a constructed latent space. See the module docstring for the
+    latent-space architecture.
+    """
 
     _validate_dataset(dataset, params.group_col, params.stage_col)
     method = params.integration_method
@@ -179,6 +205,8 @@ def integrate_semisynthetic_dataset(
         return _concat_integration(dataset, params.integration_params)
     if method == "snf":
         return _snf_integration(dataset, params.integration_params)
+    if method == "pls":
+        return _pls_integration(dataset, params.integration_params, stage_col=params.stage_col)
     raise SimulationEvaluationError(f"Unsupported integration_method: {method!r}.")
 
 
@@ -220,7 +248,7 @@ def build_simulation_trajectory_design(
 
 
 def _validate_evaluation_params(params: SimulationEvaluationParams) -> None:
-    if params.integration_method not in {"concat", "snf"}:
+    if params.integration_method not in {"concat", "snf", "pls"}:
         raise SimulationEvaluationError(f"Unsupported integration_method: {params.integration_method!r}.")
     if params.permutations < 0:
         raise SimulationEvaluationError("permutations must be greater than or equal to 0.")
@@ -291,6 +319,7 @@ def _concat_integration(
         matrix=latent,
         metadata={
             "integration_method": "concat",
+            "integration_role": "baseline",
             "integration_params": {"standardize": standardize},
             "shape": tuple(latent.shape),
             "n_samples": int(latent.shape[0]),
@@ -332,6 +361,7 @@ def _snf_integration(
         matrix=latent,
         metadata={
             "integration_method": "snf",
+            "integration_role": "latent_space",
             "integration_params": {
                 "K": K,
                 "eps": eps,
@@ -345,6 +375,123 @@ def _snf_integration(
             "fused_shape": tuple(fused.shape),
         },
     )
+
+
+def _pls_integration(
+    dataset: SemiSyntheticTrajectoryDataset,
+    integration_params: Mapping[str, Any],
+    *,
+    stage_col: str,
+) -> LatentIntegrationResult:
+    """Build the PLS molecular latent space (stage-conditioned, double-CV-sized).
+
+    Standardize-and-concatenate the omic blocks, fit PLS-DA conditioned on the
+    stage label, and return the X-score matrix as the latent space. The number
+    of latent variables is selected by ``plsda_doubleCV`` (modal LV across
+    repeats, parsimony tie-break) so the molecular space is stable and
+    non-overfitted — the space in which trajectory geometry is then measured.
+    """
+    if stage_col not in dataset.metadata.columns:
+        raise SimulationEvaluationError(
+            f"PLS integration requires stage column {stage_col!r} in dataset metadata."
+        )
+
+    frames: list[pd.DataFrame] = []
+    layer_feature_counts: dict[str, int] = {}
+    for layer in _OMICS_ATTRS:
+        matrix = getattr(dataset, layer).astype(float)
+        layer_feature_counts[layer] = int(matrix.shape[1])
+        values = matrix.to_numpy(dtype=float)
+        mean = values.mean(axis=0, keepdims=True)
+        std = values.std(axis=0, keepdims=True)
+        std[std == 0.0] = 1.0
+        values = (values - mean) / std
+        columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
+        frames.append(pd.DataFrame(values, columns=columns))
+    X = pd.concat(frames, axis=1).reset_index(drop=True)
+    n_samples, n_features = X.shape
+    y = dataset.metadata[stage_col].reset_index(drop=True).astype(str)
+
+    stage_counts = y.value_counts()
+    if len(stage_counts) < 2 or int(stage_counts.min()) < 2:
+        raise SimulationEvaluationError(
+            "PLS integration requires at least two stages with >= 2 samples each; "
+            f"got stage counts {stage_counts.to_dict()}."
+        )
+    min_stage_count = int(stage_counts.min())
+
+    # Cross-validation knobs (configurable; clamped to a feasible range so the
+    # stratified folds stay valid on small samples). Effective values are
+    # recorded in the result metadata.
+    max_components = _clamp_int(
+        integration_params.get("max_components", 20), minimum=2, maximum=min(n_features, n_samples)
+    )
+    cv2_splits = _clamp_int(integration_params.get("cv2_splits", 4), minimum=2, maximum=min_stage_count)
+    # Samples per stage left after removing one outer test fold (conservative).
+    rest_min_per_stage = min_stage_count - -(-min_stage_count // cv2_splits)
+    if rest_min_per_stage < 2:
+        raise SimulationEvaluationError(
+            "PLS integration cross-validation is infeasible: too few samples per stage "
+            f"(min {min_stage_count}) for cv2_splits={cv2_splits}."
+        )
+    cv1_splits = _clamp_int(integration_params.get("cv1_splits", 3), minimum=2, maximum=rest_min_per_stage)
+    n_repeats = _clamp_int(integration_params.get("n_repeats", 5), minimum=1, maximum=1000)
+    random_state = int(integration_params.get("random_state", 1203))
+    n_jobs = int(integration_params.get("n_jobs", 1))
+
+    try:
+        cv_result = plsda_doubleCV(
+            X,
+            y,
+            cv1_splits=cv1_splits,
+            cv2_splits=cv2_splits,
+            n_repeats=n_repeats,
+            max_components=max_components,
+            random_state=random_state,
+            n_jobs=n_jobs,
+            progress=False,
+        )
+    except ValueError as exc:
+        raise SimulationEvaluationError(f"PLS integration cross-validation failed: {exc}") from exc
+
+    selected_lv = _modal_int_with_parsimony([int(v) for v in cv_result["table"]["LV"].tolist()])
+    mean_auroc = float(cv_result["table"]["AUROC"].mean())
+
+    scores = np.asarray(fit_plsda_transform(X, y, n_components=selected_lv))
+    latent = pd.DataFrame(
+        scores,
+        index=dataset.metadata["sample_id"].astype(str).tolist(),
+        columns=[f"pls_{i}" for i in range(scores.shape[1])],
+    )
+    return LatentIntegrationResult(
+        matrix=latent,
+        metadata={
+            "integration_method": "pls",
+            "integration_role": "latent_space",
+            "integration_params": {
+                "stage_col": stage_col,
+                "selected_lv": selected_lv,
+                "cv1_splits": cv1_splits,
+                "cv2_splits": cv2_splits,
+                "n_repeats": n_repeats,
+                "max_components": max_components,
+                "random_state": random_state,
+            },
+            "cv_mean_auroc": mean_auroc,
+            "shape": tuple(latent.shape),
+            "n_samples": int(latent.shape[0]),
+            "n_features": int(latent.shape[1]),
+            "layer_feature_counts": layer_feature_counts,
+        },
+    )
+
+
+def _clamp_int(value: Any, *, minimum: int, maximum: int) -> int:
+    if maximum < minimum:
+        raise SimulationEvaluationError(
+            f"PLS integration: infeasible cross-validation bound (minimum {minimum} > maximum {maximum})."
+        )
+    return max(minimum, min(int(value), maximum))
 
 
 def _bounded_int_param(
