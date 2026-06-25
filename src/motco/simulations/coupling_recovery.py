@@ -1,4 +1,4 @@
-3"""Cross-omic coupling test bed for trajectory recovery (Rung 4).
+"""Cross-omic coupling test bed for trajectory recovery (Rung 4).
 
 Adds exactly one factor on top of the Rung-3 multi-block floor: **cross-omic
 coupling** — the nuisance block's per-group mean shift is derived from the anchor
