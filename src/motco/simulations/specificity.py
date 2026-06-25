@@ -54,6 +54,7 @@ class ModeSpecificity:
     rejection_rates: dict[str, float]
     group_in_stage_fraction: float
     n_replicates: int
+    integration_method: str = "concat"
 
 
 @dataclass(frozen=True)
@@ -121,11 +122,26 @@ def evaluate_mode_specificity(
     n_jobs: int | None = -1,
     base_seed: int = 0,
     reference: IntersimReference | None = None,
+    integration_method: str = "concat",
+    integration_params: dict[str, object] | None = None,
 ) -> ModeSpecificity:
-    """Run replicates for one mode and report per-statistic rejection rates."""
+    """Run replicates for one mode and report per-statistic rejection rates.
+
+    ``integration_method`` selects the latent space the trajectory is measured
+    in — the ``concat`` baseline (default), ``snf``, or the ``pls`` production
+    latent space — and ``integration_params`` is forwarded to it (e.g. the PLS
+    cross-validation knobs). The same selection drives both the RRPP
+    rejection-rate evaluation and the group-in-stage projection.
+    """
 
     ref = reference if reference is not None else load_reference()
-    eval_params = SimulationEvaluationParams(permutations=permutations, n_jobs=n_jobs)
+    int_params = dict(integration_params or {})
+    eval_params = SimulationEvaluationParams(
+        permutations=permutations,
+        n_jobs=n_jobs,
+        integration_method=integration_method,  # type: ignore[arg-type]
+        integration_params=int_params,
+    )
     rejections = {stat: 0 for stat in STATISTICS}
     available = {stat: 0 for stat in STATISTICS}
     gis_values: list[float] = []
@@ -143,7 +159,14 @@ def evaluate_mode_specificity(
         )
         dataset = generate_semisynthetic_trajectory(params, reference=ref)
         result = evaluate_semisynthetic_trajectory(
-            dataset, SimulationEvaluationParams(permutations=permutations, n_jobs=n_jobs, seed=base_seed + rep)
+            dataset,
+            SimulationEvaluationParams(
+                permutations=permutations,
+                n_jobs=n_jobs,
+                seed=base_seed + rep,
+                integration_method=integration_method,  # type: ignore[arg-type]
+                integration_params=int_params,
+            ),
         )
         for stat in STATISTICS:
             p = result.p_values.get(stat)
@@ -162,6 +185,7 @@ def evaluate_mode_specificity(
         rejection_rates=rates,
         group_in_stage_fraction=float(np.mean(gis_values)),
         n_replicates=n_replicates,
+        integration_method=integration_method,
     )
 
 
@@ -177,6 +201,8 @@ def characterize_two_stage(
     n_jobs: int | None = -1,
     base_seed: int = 0,
     reference: IntersimReference | None = None,
+    integration_method: str = "concat",
+    integration_params: dict[str, object] | None = None,
 ) -> dict[str, ModeSpecificity]:
     """Run the shape-free (``n_stages=2``) isolation pass for each mode.
 
@@ -185,6 +211,9 @@ def characterize_two_stage(
     isolates ``magnitude``→``delta`` and ``orientation``→``angle`` with shape out
     of the picture — the cleanest test of whether the constructions are specific
     or whether the 3/4-stage cross-talk was shape contaminating them.
+
+    ``integration_method``/``integration_params`` select the latent space, as in
+    :func:`evaluate_mode_specificity`.
     """
 
     ref = reference if reference is not None else load_reference()
@@ -201,6 +230,8 @@ def characterize_two_stage(
             n_jobs=n_jobs,
             base_seed=base_seed,
             reference=ref,
+            integration_method=integration_method,
+            integration_params=integration_params,
         )
         for mode in modes
     }
