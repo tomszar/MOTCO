@@ -58,6 +58,17 @@ def rev_logit(x: np.ndarray) -> np.ndarray:
     return 1.0 / (1.0 + np.exp(-x))
 
 
+def logit(x: np.ndarray, clip: float = 1e-6) -> np.ndarray:
+    """Clipped logit (M-value): exact inverse of ``rev_logit``.
+
+    Clips ``x`` to ``[clip, 1 - clip]`` before applying ``ln(x / (1 - x))``
+    to guard against divergence when B values are numerically at 0 or 1.
+    """
+
+    b = np.clip(x, clip, 1.0 - clip)
+    return np.log(b / (1.0 - b))
+
+
 def bernoulli_indicators(
     rng: np.random.Generator, n_feat: int, n_cell: int, p: float
 ) -> np.ndarray:

@@ -28,6 +28,7 @@ from typing import Any, Literal, Mapping
 import numpy as np
 import pandas as pd
 
+from motco.simulations.generator import logit
 from motco.simulations.semisynthetic import SemiSyntheticTrajectoryDataset
 from motco.stats.design import build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
@@ -307,10 +308,12 @@ def _concat_integration(
         matrix = getattr(dataset, layer).astype(float)
         layer_feature_counts[layer] = int(matrix.shape[1])
         values = matrix.to_numpy(dtype=float)
+        if layer == "methylation":
+            values = logit(values)
         if standardize:
             mean = values.mean(axis=0, keepdims=True)
             std = values.std(axis=0, keepdims=True)
-            std[std == 0.0] = 1.0
+            std[std < 1e-10] = 1.0
             values = (values - mean) / std
         columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
         frames.append(pd.DataFrame(values, index=matrix.index.astype(str), columns=columns))
@@ -348,7 +351,11 @@ def _snf_integration(
     if eps <= 0:
         raise SimulationEvaluationError("SNF integration parameter 'eps' must be positive.")
 
-    layers = [getattr(dataset, layer).to_numpy(dtype=float) for layer in _OMICS_ATTRS]
+    layers = [
+        logit(getattr(dataset, layer).to_numpy(dtype=float)) if layer == "methylation"
+        else getattr(dataset, layer).to_numpy(dtype=float)
+        for layer in _OMICS_ATTRS
+    ]
     affinities = get_affinity_matrix(layers, K=K, eps=eps)
     fused = SNF(affinities, k=k, t=t)
     embedding = get_spectral(fused, n_components=n_components)
@@ -402,9 +409,11 @@ def _pls_integration(
         matrix = getattr(dataset, layer).astype(float)
         layer_feature_counts[layer] = int(matrix.shape[1])
         values = matrix.to_numpy(dtype=float)
+        if layer == "methylation":
+            values = logit(values)
         mean = values.mean(axis=0, keepdims=True)
         std = values.std(axis=0, keepdims=True)
-        std[std == 0.0] = 1.0
+        std[std < 1e-10] = 1.0
         values = (values - mean) / std
         columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
         frames.append(pd.DataFrame(values, columns=columns))

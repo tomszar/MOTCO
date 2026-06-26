@@ -1,0 +1,48 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 300,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.2
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "permutations": 999,
+    "n_jobs": -1,
+    "seed": 3
+  },
+  "trajectory_modes": ["magnitude", "orientation", "shape", "translation"],
+  "effect_sizes": [0.0, 0.25, 0.5, 0.75, 1.0],
+  "axes": {},
+  "n_replicates": 500,
+  "base_seed": 100,
+  "alpha": 0.05,
+  "acceptance": {
+    "type_i": [
+      {"alpha": 0.05, "se_tolerance": 2.0}
+    ],
+    "power": [
+      {"trajectory_mode": "magnitude", "statistic": "delta", "min_power_at_top": 0.8},
+      {"trajectory_mode": "orientation", "statistic": "angle", "min_power_at_top": 0.8},
+      {"trajectory_mode": "shape", "statistic": "shape", "min_power_at_top": 0.8}
+    ],
+    "specificity": [
+      {"trajectory_mode": "translation", "statistic": "delta", "alpha": 0.05},
+      {"trajectory_mode": "translation", "statistic": "angle", "alpha": 0.05},
+      {"trajectory_mode": "translation", "statistic": "shape", "alpha": 0.05},
+      {"trajectory_mode": "magnitude", "statistic": "angle", "alpha": 0.05},
+      {"trajectory_mode": "magnitude", "statistic": "shape", "alpha": 0.05},
+      {"trajectory_mode": "orientation", "statistic": "delta", "alpha": 0.05},
+      {"trajectory_mode": "orientation", "statistic": "shape", "alpha": 0.05},
+      {"trajectory_mode": "shape", "statistic": "delta", "alpha": 0.05},
+      {"trajectory_mode": "shape", "statistic": "angle", "alpha": 0.05}
+    ]
+  },
+  "metadata": {
+    "name": "trajectory-power-study",
+    "intent": "Paper-grade power study with PLS integration on M-value methylation. 500 replicates, 999 permutations, n=300 samples."
+  }
+}

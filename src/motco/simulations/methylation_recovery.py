@@ -33,6 +33,7 @@ import numpy as np
 import pandas as pd
 from matplotlib.figure import Figure
 
+from motco.simulations.generator import logit as beta_to_mvalue
 from motco.simulations.generator import rev_logit
 from motco.simulations.linear_recovery import (
     LinearRecoveryDataset,
@@ -71,24 +72,6 @@ __all__ = [
 
 class MethylationRecoveryError(ValueError):
     """Raised on invalid ``MethylationRecoveryParams``."""
-
-
-#: β is clipped to ``[CLIP, 1 − CLIP]`` before ``logit`` so deep-saturation
-#: values (β numerically at 0/1) do not map to ±∞ during M-value integration.
-_LOGIT_CLIP = 1e-6
-
-
-def beta_to_mvalue(beta: np.ndarray, clip: float = _LOGIT_CLIP) -> np.ndarray:
-    """Clipped ``logit`` mapping β → M-value (natural log; exact inverse of rev_logit).
-
-    ``logit(β) = ln(β / (1 − β))``. This is the exact inverse of InterSIM's
-    ``rev_logit`` up to the global scale that distinguishes natural-log from the
-    log2-based M-value convention — a uniform scaling that leaves trajectory
-    *angles* invariant and rescales *magnitudes* by a constant. β is clipped to
-    ``[clip, 1 − clip]`` to keep the transform finite under deep saturation.
-    """
-    b = np.clip(beta, clip, 1.0 - clip)
-    return np.log(b / (1.0 - b))
 
 
 @dataclass(frozen=True)
