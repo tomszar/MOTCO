@@ -361,20 +361,14 @@ def _estimate_orientation(
     orientation: int
         Orientation of the trajectory.
     """
-    # Vectorized implementation using symmetric-eigen decomposition on covariance
     X = np.asarray(obs_vect, dtype=float)[levels, :]
     # Center rows
     X = X - X.mean(axis=0, keepdims=True)
-    # Sample covariance (symmetric); eigh is efficient for symmetric matrices
-    n = X.shape[0]
-    if n > 1:
-        C = (X.T @ X) / (n - 1)
-    else:
-        # Degenerate case: fall back to outer product (all zeros if single row)
-        C = X.T @ X
-    # Eigenvalues ascending; last eigenvector corresponds to principal component
-    w, v = np.linalg.eigh(C)
-    orientation = v[:, -1]
+    # The leading eigenvector of X.T @ X is the right singular vector of X
+    # for the largest singular value; svd on the (k x p) data matrix avoids
+    # ever forming the (p x p) covariance matrix.
+    _, _, Vt = np.linalg.svd(X, full_matrices=False)
+    orientation = Vt[0, :]
     # Ensure deterministic sign following the first (centered) vector
     c1 = float(orientation @ X[0, :])
     if c1 < 0:
@@ -440,6 +434,13 @@ def _estimate_shape(
     Q_prev_sum = float(np.tril(Qm1, k=-1).sum())
     Q_improve = Q_prev_sum  # initialize to enter loop
 
+    # When n_dimensions > n_levels, H = Z2.T @ Z1 (p x p) has rank <=
+    # n_levels, so det(H) = 0 and sig = +1 always. The thin-QR path factors
+    # H through its (k x k) core instead of forming/decomposing the full
+    # (p x p) matrix, which is the dominant cost for concat-space integration
+    # (see openspec/changes/optimize-gpa-computation/design.md).
+    use_thin = n_dimensions > n_levels
+
     # Iterate until improvement is negligible
     while abs(Q_improve) > 0.00001:
         temp2 = np.empty_like(temp1)
@@ -454,32 +455,46 @@ def _estimate_shape(
             Z1 = _center_scale_unit(temp1[i])
             Z2 = _center_scale_unit(M)
 
-            # Cross-covariance and SVD
-            H = Z2.T @ Z1
-            U, S, Vt = np.linalg.svd(H, full_matrices=False)
-            V = Vt.T
-
-            # R mapping to R code: U_R <- V_np; V_R <- U_np
-            # sig <- sign(det(t(Z1) %*% Z2)) == sign(det(H))
-            detH = float(np.linalg.det(H))
-            sig = -1.0 if detH < 0.0 else 1.0  # treat 0 as +1
-
-            # Flip last column of V_R (which is U here) by sig
-            U[:, -1] *= sig
-
-            # Gam <- U_R %*% t(V_R) == V @ U.T
-            Gam = V @ U.T
-
-            # beta <- sum(Delt) with last singular value signed by sig
-            if S.size == 0:
-                beta = 0.0
-            elif S.size == 1:
-                beta = float(sig * S[0])
+            if use_thin:
+                # Economy QR: Z1.T = Q1 R1, Z2.T = Q2 R2 (Q: p x k, R: k x k).
+                # Q1 cancels out via Q1.T @ Q1 = I_k below, so only R1 is needed.
+                _, R1 = np.linalg.qr(Z1.T, mode="reduced")
+                Q2, R2 = np.linalg.qr(Z2.T, mode="reduced")
+                # H = Z2.T @ Z1 = Q2 @ (R2 @ R1.T) @ Q1.T; decompose the
+                # (k x k) core K instead of the (p x p) H.
+                K = R2 @ R1.T
+                U_k, S_k, Vt_k = np.linalg.svd(K, full_matrices=True)
+                beta = float(S_k.sum())
+                # Z1 @ Gam = R1.T @ Vt_k.T @ U_k.T @ Q2.T, using Q1.T @ Q1 = I_k
+                inner = R1.T @ (Vt_k.T @ U_k.T)
+                temp2[i] = beta * (inner @ Q2.T)
             else:
-                beta = float(np.sum(S[:-1]) + sig * S[-1])
+                # Cross-covariance and SVD
+                H = Z2.T @ Z1
+                U, S, Vt = np.linalg.svd(H, full_matrices=False)
+                V = Vt.T
 
-            # Mp1 = beta * Z1 %*% Gam
-            temp2[i] = beta * (Z1 @ Gam)
+                # R mapping to R code: U_R <- V_np; V_R <- U_np
+                # sig <- sign(det(t(Z1) %*% Z2)) == sign(det(H))
+                detH = float(np.linalg.det(H))
+                sig = -1.0 if detH < 0.0 else 1.0  # treat 0 as +1
+
+                # Flip last column of V_R (which is U here) by sig
+                U[:, -1] *= sig
+
+                # Gam <- U_R %*% t(V_R) == V @ U.T
+                Gam = V @ U.T
+
+                # beta <- sum(Delt) with last singular value signed by sig
+                if S.size == 0:
+                    beta = 0.0
+                elif S.size == 1:
+                    beta = float(sig * S[0])
+                else:
+                    beta = float(np.sum(S[:-1]) + sig * S[-1])
+
+                # Mp1 = beta * Z1 %*% Gam
+                temp2[i] = beta * (Z1 @ Gam)
 
         # Convergence check
         Qm2 = _pairwise_flat_dist(temp2)
