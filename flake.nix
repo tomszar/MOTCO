@@ -24,10 +24,20 @@
         {
           default = pkgs.mkShell {
             packages = with pkgs; [
+              python311
               uv
               R
               rPackages.InterSIM
             ];
+
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
+
+            shellHook = ''
+              export UV_PYTHON="${pkgs.python311}/bin/python"
+              export UV_PYTHON_DOWNLOADS=never
+
+              uv sync --locked --extra test --extra docs
+            '';
           };
         }
       );
