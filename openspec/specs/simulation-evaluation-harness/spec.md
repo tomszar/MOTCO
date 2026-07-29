@@ -16,15 +16,26 @@ MOTCO SHALL provide a simulation evaluation harness that accepts one `SemiSynthe
 - **THEN** the result includes the generator truth metadata from the input dataset
 
 ### Requirement: Harness supports initial integration methods
-The harness SHALL support initial integration methods that can be implemented with existing MOTCO dependencies.
+The harness SHALL construct the molecular latent space — the measurement substrate in which trajectory geometry is estimated — via a selectable integration method, operating on M-value-converted methylation and raw expression/proteomics. The production latent-space methods are **SNF** (graph-spectral embedding) and **PLS** (the transform of the omic features into the subspace that maximizes covariance with the stage label). `concat` is retained as a **baseline/diagnostic** path (standardized feature concatenation), not a constructed latent space. The viz down-projection (`plot_trajectory_from_*`) is display-only and distinct from this measurement space.
 
-#### Scenario: Concatenated integration
+#### Scenario: Concatenated baseline integration
 - **WHEN** the caller selects `concat` integration
-- **THEN** the harness creates an outcome matrix by combining aligned omics matrices with documented scaling behavior
+- **THEN** the harness converts methylation to M-values, standardises all layers, and concatenates them into the outcome matrix
+- **AND** the result metadata identifies `concat` as a baseline rather than a constructed latent space
 
 #### Scenario: SNF integration
 - **WHEN** the caller selects `snf` integration
-- **THEN** the harness creates an outcome matrix from SNF fusion and spectral embedding
+- **THEN** the harness converts methylation to M-values and creates the latent space from SNF fusion and spectral embedding
+
+#### Scenario: PLS integration
+- **WHEN** the caller selects `pls` integration
+- **THEN** the harness converts methylation to M-values, standardises all layers, fits PLS-DA conditioned on the stage label, and returns the PLS X-score matrix as the latent space
+- **AND** the number of latent variables is selected by the double nested cross-validation (modal LV across repeats, parsimony tie-break) to secure a stable, non-overfitted molecular space
+- **AND** the result metadata records the selected number of latent variables and the cross-validation parameters
+
+#### Scenario: PLS integration is infeasible
+- **WHEN** the caller selects `pls` integration but the sample provides too few observations per stage for the cross-validation
+- **THEN** the harness raises a clear validation error
 
 #### Scenario: Unsupported integration method
 - **WHEN** the caller selects an unsupported integration method

@@ -23,4 +23,4 @@
 - [x] 5.1 Run `uv run ruff check src/ tests/` — no new errors
 - [x] 5.2 Run `uv run mypy src/motco/` — no new errors
 - [x] 5.3 Run `MOTCO_TEST_PERMS=99 uv run pytest tests/ -m "not slow" --tb=short` — all tests pass (update any snapshots that change due to M-value input)
-- [ ] 5.4 Run the smoke study end-to-end: 4 shards + merge + report; confirm specificity matrix is written without errors
+- [x] 5.4 Run the smoke study end-to-end: 4 shards + merge + report; confirm specificity matrix is written without errors
