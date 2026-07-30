@@ -74,6 +74,15 @@ PLS otherwise matches the Rung-2 prediction: clean `none` null (`angle`=0.00, `s
 
 Under `snf`, `delta` and `angle` reject at 0.00 for *every* mode (including the true `magnitude`/`orientation` movers), while `shape` rejects at 1.00 everywhere — and even `none`→`shape`=0.33 (anti-conservative). The spectral embedding's metric is not commensurable with the injected size/orientation geometry (Rung 2's leak, end-to-end): it cannot detect magnitude or orientation at all, and its shape test is saturated. **SNF is unusable as the measurement latent space for `delta`/`angle`.**
 
+This is a statement about the combination of **SNF spectral coordinates with
+MOTCO's Euclidean statistics**, not a claim that SNF is generally unsuitable
+for multi-omics integration. SNF is designed around neighbourhood and graph
+connectivity preservation; it does not guarantee preservation of
+feature-space path length or vector direction. A methodologically aligned SNF
+analysis would instead test graph-native quantities such as diffusion path
+length, transition-profile divergence, neighbourhood overlap, or normalized
+stage-distance-matrix differences. Those alternatives were not tested here.
+
 ### Finding 4 — Structural: PLS confines the group signal to the stage subspace (GIS = 1.00)
 
 The group-in-stage fraction is ~0.1 under `concat` (the injected group difference is mostly *orthogonal* to the stage subspace in full feature space) but **1.00 under `pls`** for every mode. This is by construction: PLS builds the space from the stage label, so any measured group difference necessarily lies in the stage-relevant subspace. This is a double-edged property — it focuses the test on disease-relevant variation, but it also means group variation *orthogonal* to the stage axis is discarded before measurement. Worth keeping in view when interpreting PLS-space power.
