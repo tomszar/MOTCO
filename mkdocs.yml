@@ -16,6 +16,8 @@ theme:
 
 nav:
   - Home: index.md
+  - Study Reports:
+    - M-value/PLS specificity pilot: reports/mvalue-pls-pilot-2026-07-30.md
   - API Reference:
     - PLS-DA: api/pls.md
     - SNF: api/snf.md
