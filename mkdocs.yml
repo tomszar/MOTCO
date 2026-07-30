@@ -16,6 +16,7 @@ theme:
 
 nav:
   - Home: index.md
+  - Scientific Roadmap: roadmap.md
   - Study Reports:
     - M-value/PLS specificity pilot: reports/mvalue-pls-pilot-2026-07-30.md
   - API Reference:
