@@ -20,6 +20,21 @@ Graph-native diffusion, connectivity, or transition-profile statistics would
 be a separate methodology and are not implemented by the current trajectory
 API.
 
+## Interpreting shape
+
+`shape` is a strict geometric-morphometric residual configuration statistic.
+For each group trajectory, MOTCO centers the stage configuration and scales it
+to unit centroid size. Pairwise shape distance is then the residual norm after
+aligning one trajectory to the other with a determinant-positive orthogonal
+rotation.
+
+Under this contract, translation, positive uniform scale, and proper rigid
+rotation do not produce nonzero `shape` distance beyond numerical tolerance.
+Genuine configuration changes, such as moving an interior stage so relative
+stage-to-stage distances change after size normalization, remain positive.
+Mirror reflections are kept distinct by default; they are not aligned away as
+proper rotations.
+
 ## Interpreting orientation and identifying feature drivers
 
 In a shared linear PLS space, a trajectory orientation difference means that
