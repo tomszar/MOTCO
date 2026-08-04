@@ -25,7 +25,7 @@ The roadmap prioritizes interpretability and validation before larger simulation
 
 ### Not yet established
 
-- The current shape implementation has not demonstrated strict invariance to a known rigid rotation.
+- Shape invariance has been audited and corrected: production `shape` now removes translation, proper rotation, and uniform scale while keeping reflections distinct by default.
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration.
 - Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
 - A production feature-driver workflow for significant orientation differences is designed conceptually but not implemented.
@@ -73,6 +73,8 @@ Work:
 
 ## Phase 1 — Resolve shape invariance
 
+**Status:** resolved on 2026-08-04; see [Procrustes Shape Invariance Audit](reports/procrustes-shape-invariance-audit-2026-08-04.md).
+
 **Purpose:** determine whether the current nonzero shape response to rigid rotation is intended methodology or an estimator defect.
 
 Work:
@@ -83,7 +85,7 @@ Work:
 - Add permanent invariance and regression tests.
 - If necessary, correct the estimator and document any behavioral change; otherwise rename/reinterpret the statistic so its actual invariants are explicit.
 
-**Exit gate:** rigid translation, scaling, and rotation have documented expected outputs, enforced by tests. A nonzero value under any of these transformations must be intentional and clearly named.
+**Exit gate:** passed. Rigid translation, scaling, and proper rotation have documented expected outputs enforced by tests; reflection remains positive under the documented default policy.
 
 ## Phase 2 — Audit orientation and shape constructions before integration
 
@@ -231,6 +233,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Audit Procrustes shape invariance.** This is the immediate methodological blocker.
-2. **Characterize realized generator geometry.** Measure orientation and shape before integration and revise construction contracts.
-3. **Add orientation-driver attribution.** Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.
+1. **Characterize realized generator geometry.** Measure orientation and shape before integration and revise construction contracts.
+2. **Add orientation-driver attribution.** Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.
+3. **Repeat the medium pilot.** Re-run the PLS operating-characteristic pilot with corrected shape semantics and construction-level diagnostics.

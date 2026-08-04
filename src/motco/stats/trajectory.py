@@ -5,7 +5,6 @@ from typing import Sequence, Union
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics.pairwise import euclidean_distances
 
 from motco.stats.design import build_ls_means, get_model_matrix
 
@@ -198,7 +197,9 @@ def estimate_difference(
     angles: np.ndarray
         Symmetric matrix (n_groups x n_groups) with differences in direction (degrees).
     shapes: np.ndarray
-        Symmetric matrix (n_groups x n_groups) with shape distances.
+        Symmetric matrix (n_groups x n_groups) with Procrustes shape distances
+        after removing translation, proper rigid rotation, and uniform scale.
+        Reflections are retained as distinct shapes by default.
 
     Notes
     -----
@@ -380,8 +381,11 @@ def _estimate_shape(
     vectors: Union[pd.DataFrame, np.ndarray], contrast: list[list[int]]
 ) -> np.ndarray:
     """
-    Align shapes using procrustes superimpostion and estimate shape
-    differences.
+    Estimate pairwise trajectory shape distances after Procrustes alignment.
+
+    Each group trajectory is centered and scaled to unit centroid size, then
+    each pair is aligned by a proper orthogonal rotation. Mirror reflections
+    are not aligned away by default.
 
     Parameters
     ----------
@@ -398,112 +402,38 @@ def _estimate_shape(
     shape_distance: np.ndarray
         Matrix with shape distances.
     """
-    # Implement R-equivalent GPA (pgpa + pPsup): similarity Procrustes with per-iteration
-    # re-centering and re-scaling, and beta scaling = sum of (possibly signed) singular values.
     V = np.asarray(vectors, dtype=float)
     n_groups = len(contrast)
-    n_levels = len(contrast[0])
-    n_dimensions = V.shape[1]
+    shapes = [_center_scale_unit(V[np.asarray(levels, dtype=int), :]) for levels in contrast]
+    distances = np.zeros((n_groups, n_groups), dtype=float)
 
-    # Build (G, L, K) tensor of vectors per group and level once
-    X = np.empty((n_groups, n_levels, n_dimensions), dtype=float)
-    for gi, levels in enumerate(contrast):
-        X[gi] = V[np.asarray(levels, dtype=int), :]
-
-    # Helper: center then scale by centroid size (Frobenius norm of centered matrix)
-    def _center_scale_unit(A: np.ndarray) -> np.ndarray:
-        Z = A - A.mean(axis=0, keepdims=True)
-        cs = float(np.linalg.norm(Z))
-        if not np.isfinite(cs) or cs <= 1e-15:
-            cs = 1.0
-        return Z / cs
-
-    # Initialize temp1 as in R: temp1[,,i] <- trans(csize(A[,,i])[[2]])
-    temp1 = np.empty_like(X)
     for i in range(n_groups):
-        temp1[i] = _center_scale_unit(X[i])
+        for j in range(i + 1, n_groups):
+            distance = _proper_procrustes_distance(shapes[i], shapes[j])
+            distances[i, j] = distance
+            distances[j, i] = distance
 
-    # Distance matrix of flattened shapes (like dist(t(matrix(...))))
-    def _pairwise_flat_dist(arr: np.ndarray) -> np.ndarray:
-        flat = arr.reshape((n_groups, n_dimensions * n_levels))
-        return euclidean_distances(flat)
+    return distances
 
-    Qm1 = _pairwise_flat_dist(temp1)
-    Qm2 = Qm1
-    # Sum of lower triangle (no diagonal) as in R's sum(dist(.))
-    Q_prev_sum = float(np.tril(Qm1, k=-1).sum())
-    Q_improve = Q_prev_sum  # initialize to enter loop
 
-    # When n_dimensions > n_levels, H = Z2.T @ Z1 (p x p) has rank <=
-    # n_levels, so det(H) = 0 and sig = +1 always. The thin-QR path factors
-    # H through its (k x k) core instead of forming/decomposing the full
-    # (p x p) matrix, which is the dominant cost for concat-space integration
-    # (see openspec/changes/optimize-gpa-computation/design.md).
-    use_thin = n_dimensions > n_levels
+def _center_scale_unit(A: np.ndarray) -> np.ndarray:
+    """Center a trajectory and scale it to unit centroid size."""
+    Z = A - A.mean(axis=0, keepdims=True)
+    cs = float(np.linalg.norm(Z))
+    if not np.isfinite(cs) or cs <= 1e-15:
+        cs = 1.0
+    return Z / cs
 
-    # Iterate until improvement is negligible
-    while abs(Q_improve) > 0.00001:
-        temp2 = np.empty_like(temp1)
-        for i in range(n_groups):
-            # Mean shape of all groups except i (mshape(temp1[,,-i]))
-            if n_groups > 1:
-                M = temp1[np.arange(n_groups) != i].mean(axis=0)
-            else:
-                M = temp1[i]
 
-            # pPsup equivalent: re-center and re-scale both shapes
-            Z1 = _center_scale_unit(temp1[i])
-            Z2 = _center_scale_unit(M)
-
-            if use_thin:
-                # Economy QR: Z1.T = Q1 R1, Z2.T = Q2 R2 (Q: p x k, R: k x k).
-                # Q1 cancels out via Q1.T @ Q1 = I_k below, so only R1 is needed.
-                _, R1 = np.linalg.qr(Z1.T, mode="reduced")
-                Q2, R2 = np.linalg.qr(Z2.T, mode="reduced")
-                # H = Z2.T @ Z1 = Q2 @ (R2 @ R1.T) @ Q1.T; decompose the
-                # (k x k) core K instead of the (p x p) H.
-                K = R2 @ R1.T
-                U_k, S_k, Vt_k = np.linalg.svd(K, full_matrices=True)
-                beta = float(S_k.sum())
-                # Z1 @ Gam = R1.T @ Vt_k.T @ U_k.T @ Q2.T, using Q1.T @ Q1 = I_k
-                inner = R1.T @ (Vt_k.T @ U_k.T)
-                temp2[i] = beta * (inner @ Q2.T)
-            else:
-                # Cross-covariance and SVD
-                H = Z2.T @ Z1
-                U, S, Vt = np.linalg.svd(H, full_matrices=False)
-                V = Vt.T
-
-                # R mapping to R code: U_R <- V_np; V_R <- U_np
-                # sig <- sign(det(t(Z1) %*% Z2)) == sign(det(H))
-                detH = float(np.linalg.det(H))
-                sig = -1.0 if detH < 0.0 else 1.0  # treat 0 as +1
-
-                # Flip last column of V_R (which is U here) by sig
-                U[:, -1] *= sig
-
-                # Gam <- U_R %*% t(V_R) == V @ U.T
-                Gam = V @ U.T
-
-                # beta <- sum(Delt) with last singular value signed by sig
-                if S.size == 0:
-                    beta = 0.0
-                elif S.size == 1:
-                    beta = float(sig * S[0])
-                else:
-                    beta = float(np.sum(S[:-1]) + sig * S[-1])
-
-                # Mp1 = beta * Z1 %*% Gam
-                temp2[i] = beta * (Z1 @ Gam)
-
-        # Convergence check
-        Qm2 = _pairwise_flat_dist(temp2)
-        Q_sum = float(np.tril(Qm2, k=-1).sum())
-        Q_improve = Q_prev_sum - Q_sum
-        Q_prev_sum = Q_sum
-        temp1 = temp2
-
-    return Qm2
+def _proper_procrustes_distance(reference: np.ndarray, target: np.ndarray) -> float:
+    """Return residual norm after aligning target to reference with a proper rotation."""
+    H = target.T @ reference
+    U, _, Vt = np.linalg.svd(H, full_matrices=False)
+    R = U @ Vt
+    if np.linalg.det(R) < 0:
+        U[:, -1] *= -1
+        R = U @ Vt
+    return float(np.linalg.norm(reference - target @ R))
 
 
 def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:

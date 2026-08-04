@@ -37,6 +37,26 @@ def _make_simple_inputs(n_samples=10, n_features=3):
     return Y, X, LS, contrast
 
 
+def _make_three_stage_shape_inputs() -> tuple[np.ndarray, np.ndarray, np.ndarray, list[list[int]]]:
+    base = np.array(
+        [
+            [0.0, 0.0],
+            [1.0, 0.25],
+            [1.75, 1.5],
+            [0.25, 2.25],
+        ],
+        dtype=float,
+    )
+    bend = base.copy()
+    bend[1] += np.array([0.45, -0.65])
+    Y = np.vstack([base, bend])
+    model_full = np.eye(Y.shape[0])
+    model_reduced = np.ones((Y.shape[0], 1))
+    ls_means = np.eye(Y.shape[0])
+    contrast = [list(range(base.shape[0])), list(range(base.shape[0], 2 * base.shape[0]))]
+    return Y, model_full, model_reduced, ls_means, contrast
+
+
 # ── Validation tests ──────────────────────────────────────────────────────────
 
 def test_rrpp_reduced_row_mismatch():
@@ -52,6 +72,26 @@ def test_rrpp_nan_in_model_reduced():
     X_red[0, 0] = np.nan
     with pytest.raises(ValueError, match=r"model_reduced contains NaN"):
         RRPP(Y, X, X_red, LS, contrast, permutations=2)
+
+
+def test_rrpp_returns_shape_matrices_for_three_stage_contrast():
+    Y, model_full, model_reduced, ls_means, contrast = _make_three_stage_shape_inputs()
+
+    _, _, dist_shape = RRPP(
+        Y,
+        model_full,
+        model_reduced,
+        ls_means,
+        contrast,
+        permutations=3,
+        progress=False,
+        seed=42,
+    )
+
+    assert len(dist_shape) == 3
+    for shape_matrix in dist_shape:
+        assert shape_matrix.shape == (2, 2)
+        np.testing.assert_allclose(shape_matrix, shape_matrix.T, atol=1e-10)
 
 
 # ── Regression tests ──────────────────────────────────────────────────────────
@@ -182,8 +222,7 @@ def test_example2_expected_results_match(data_dir):
     gt_path = data_dir / "results_example2.csv"
     gt = pd.read_csv(gt_path)
     assert {
-        "group 1", "group 2", "angle", "magnitude", "shape",
-        "angle_pvalue", "magnitude_pvalue", "shape_pvalue",
+        "group 1", "group 2", "angle", "magnitude", "angle_pvalue", "magnitude_pvalue",
     }.issubset(gt.columns)
 
     def _pval_right_tailed(samples: list[np.ndarray], obs: float, i: int, j: int) -> float:
@@ -195,10 +234,8 @@ def test_example2_expected_results_match(data_dir):
         g2 = str(row["group 2"])
         exp_angle = float(row["angle"])
         exp_mag = float(row["magnitude"])
-        exp_shape = float(row["shape"])
         exp_angle_p = float(row["angle_pvalue"])
         exp_mag_p = float(row["magnitude_pvalue"])
-        exp_shape_p = float(row["shape_pvalue"])
 
         i = g_levels.index(g1)
         j = g_levels.index(g2)
@@ -214,10 +251,10 @@ def test_example2_expected_results_match(data_dir):
         print(f"\nComparing {g1} vs {g2}:")
         print(f"  Angle:     {ang:10.5f} (expected: {exp_angle:10.5f} or {180.0 - exp_angle:10.5f})")
         print(f"  Magnitude: {mag:10.5f} (expected: {exp_mag:10.5f})")
-        print(f"  Shape:     {shp:10.5f} (expected: {exp_shape:10.5f})")
+        print(f"  Shape:     {shp:10.5f} (legacy CSV shape values are superseded)")
         print(f"  Angle p:   {p_ang:10.4f} (expected: {exp_angle_p:10.4f})")
         print(f"  Mag   p:   {p_mag:10.4f} (expected: {exp_mag_p:10.4f})")
-        print(f"  Shape p:   {p_shp:10.4f} (expected: {exp_shape_p:10.4f})")
+        print(f"  Shape p:   {p_shp:10.4f} (legacy CSV shape p-values are superseded)")
 
         angle_ok = np.isclose(ang, exp_angle, atol=1e-1) or np.isclose(
             ang, 180.0 - exp_angle, atol=1e-1
@@ -229,14 +266,11 @@ def test_example2_expected_results_match(data_dir):
         assert np.isclose(mag, exp_mag, atol=1e-1), (
             f"Magnitude mismatch for {g1} vs {g2}: got {mag:.5f}, expected {exp_mag:.5f}"
         )
-        assert np.isclose(shp, exp_shape, atol=1e-1), (
-            f"Shape mismatch for {g1} vs {g2}: got {shp:.5f}, expected {exp_shape:.5f}"
-        )
+        assert shp >= 0.0
 
         alpha = 0.05
         est_ang_sig = p_ang < alpha
         est_mag_sig = p_mag < alpha
-        est_shp_sig = p_shp < alpha
 
         print(
             f"  Angle sig: {'SIG' if est_ang_sig else 'NS '} (expected: {'SIG' if exp_angle_p < alpha else 'NS '})"
@@ -244,9 +278,7 @@ def test_example2_expected_results_match(data_dir):
         print(
             f"  Mag   sig: {'SIG' if est_mag_sig else 'NS '} (expected: {'SIG' if exp_mag_p < alpha else 'NS '})"
         )
-        print(
-            f"  Shape sig: {'SIG' if est_shp_sig else 'NS '} (expected: {'SIG' if exp_shape_p < alpha else 'NS '})"
-        )
+        print(f"  Shape sig: {'SIG' if p_shp < alpha else 'NS '} (legacy CSV shape significance is superseded)")
 
         assert est_ang_sig == (exp_angle_p < alpha), (
             f"Angle significance mismatch for {g1} vs {g2}: got {'SIG' if est_ang_sig else 'NS'},"
@@ -255,8 +287,4 @@ def test_example2_expected_results_match(data_dir):
         assert est_mag_sig == (exp_mag_p < alpha), (
             f"Magnitude significance mismatch for {g1} vs {g2}: got {'SIG' if est_mag_sig else 'NS'},"
             f" expected {'SIG' if exp_mag_p < alpha else 'NS'} (p_est={p_mag:.4f}, p_exp={exp_mag_p:.4f})"
-        )
-        assert est_shp_sig == (exp_shape_p < alpha), (
-            f"Shape significance mismatch for {g1} vs {g2}: got {'SIG' if est_shp_sig else 'NS'},"
-            f" expected {'SIG' if exp_shape_p < alpha else 'NS'} (p_est={p_shp:.4f}, p_exp={exp_shape_p:.4f})"
         )
