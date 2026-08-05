@@ -60,6 +60,8 @@ Optional graph-native SNF methods
 
 ## Phase 0 — Close and preserve the current baseline
 
+**Status:** completed on 2026-08-05. The latent-space metric-compatibility and inverse-PLS studies are archived, and their capability specifications are canonical.
+
 **Purpose:** ensure the conclusions already reached remain reproducible and discoverable.
 
 Work:
@@ -69,7 +71,7 @@ Work:
 - Keep the M-value/PLS pilot report, inverse-study findings, configs, and reproduction commands linked from the documentation.
 - Record the current production contract: pooled PLS-DA, M-value methylation, fixed shared coordinate system, and per-statistic interpretation boundaries.
 
-**Exit gate:** a new contributor can locate and reproduce the current magnitude, orientation, shape, and inverse-interpretability evidence from the repository documentation.
+**Exit gate:** passed. A new contributor can locate and reproduce the current magnitude, orientation, shape, and inverse-interpretability evidence from the repository documentation.
 
 ## Phase 1 — Resolve shape invariance
 
