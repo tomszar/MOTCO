@@ -28,8 +28,15 @@ from typing import Any, Literal, Mapping
 import numpy as np
 import pandas as pd
 
+from motco.simulations.diagnostics import calculate_realized_geometry
 from motco.simulations.generator import logit
-from motco.simulations.semisynthetic import SemiSyntheticTrajectoryDataset
+from motco.simulations.preprocessing import (
+    OMIC_LAYERS,
+    FittedOmicsPreprocessor,
+    concatenate_blocks,
+    fit_omics_preprocessor,
+)
+from motco.simulations.semisynthetic import OmicsLayer, SemiSyntheticTrajectoryDataset
 from motco.stats.design import build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
 from motco.stats.pls import _modal_int_with_parsimony, fit_plsda_transform, plsda_doubleCV
@@ -38,7 +45,7 @@ from motco.stats.trajectory import estimate_difference
 
 IntegrationMethod = Literal["concat", "snf", "pls"]
 
-_OMICS_ATTRS: tuple[str, ...] = ("methylation", "expression", "proteomics")
+_OMICS_ATTRS: tuple[str, ...] = tuple(OMIC_LAYERS)
 
 
 class SimulationEvaluationError(ValueError):
@@ -97,6 +104,7 @@ class SimulationEvaluationResult:
     stage_levels: list[str]
     contrast: list[list[int]]
     null_distributions: dict[str, list[float]] | None = None
+    realized_geometry: dict[str, Any] = field(default_factory=dict)
 
 
 def evaluate_semisynthetic_trajectory(
@@ -109,7 +117,14 @@ def evaluate_semisynthetic_trajectory(
     _validate_evaluation_params(params)
     start = perf_counter()
 
-    latent = integrate_semisynthetic_dataset(dataset, params)
+    preprocessor = fit_omics_preprocessor(dataset)
+    observed_blocks = preprocessor.transform_dataset(dataset)
+    latent = integrate_semisynthetic_dataset(
+        dataset,
+        params,
+        preprocessor=preprocessor,
+        observed_blocks=observed_blocks,
+    )
     design = build_simulation_trajectory_design(
         dataset.metadata,
         group_col=params.group_col,
@@ -167,6 +182,14 @@ def evaluate_semisynthetic_trajectory(
         "progress": params.progress,
         "shape_available": shape_available,
     }
+    realized_geometry = calculate_realized_geometry(
+        dataset,
+        preprocessor=preprocessor,
+        observed_blocks=observed_blocks,
+        latent_matrix=latent.matrix if params.integration_method == "pls" else None,
+        group_col=params.group_col,
+        stage_col=params.stage_col,
+    ).to_dict()
 
     return SimulationEvaluationResult(
         observed_deltas=observed_deltas,
@@ -185,12 +208,16 @@ def evaluate_semisynthetic_trajectory(
         stage_levels=design.stage_levels,
         contrast=design.contrast,
         null_distributions=null_distributions,
+        realized_geometry=realized_geometry,
     )
 
 
 def integrate_semisynthetic_dataset(
     dataset: SemiSyntheticTrajectoryDataset,
     params: SimulationEvaluationParams,
+    *,
+    preprocessor: FittedOmicsPreprocessor | None = None,
+    observed_blocks: Mapping[OmicsLayer, pd.DataFrame] | None = None,
 ) -> LatentIntegrationResult:
     """Construct the molecular latent space from aligned omics layers.
 
@@ -201,13 +228,21 @@ def integrate_semisynthetic_dataset(
     """
 
     _validate_dataset(dataset, params.group_col, params.stage_col)
+    preprocessor = preprocessor or fit_omics_preprocessor(dataset)
+    if observed_blocks is None:
+        observed_blocks = preprocessor.transform_dataset(dataset)
     method = params.integration_method
     if method == "concat":
-        return _concat_integration(dataset, params.integration_params)
+        return _concat_integration(dataset, params.integration_params, observed_blocks)
     if method == "snf":
         return _snf_integration(dataset, params.integration_params)
     if method == "pls":
-        return _pls_integration(dataset, params.integration_params, stage_col=params.stage_col)
+        return _pls_integration(
+            dataset,
+            params.integration_params,
+            stage_col=params.stage_col,
+            observed_blocks=observed_blocks,
+        )
     raise SimulationEvaluationError(f"Unsupported integration_method: {method!r}.")
 
 
@@ -300,24 +335,22 @@ def _validate_group_stage_combinations(
 def _concat_integration(
     dataset: SemiSyntheticTrajectoryDataset,
     integration_params: Mapping[str, Any],
+    observed_blocks: Mapping[OmicsLayer, pd.DataFrame],
 ) -> LatentIntegrationResult:
     standardize = bool(integration_params.get("standardize", True))
-    frames: list[pd.DataFrame] = []
-    layer_feature_counts: dict[str, int] = {}
-    for layer in _OMICS_ATTRS:
-        matrix = getattr(dataset, layer).astype(float)
-        layer_feature_counts[layer] = int(matrix.shape[1])
-        values = matrix.to_numpy(dtype=float)
-        if layer == "methylation":
-            values = logit(values)
-        if standardize:
-            mean = values.mean(axis=0, keepdims=True)
-            std = values.std(axis=0, keepdims=True)
-            std[std < 1e-10] = 1.0
-            values = (values - mean) / std
-        columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
-        frames.append(pd.DataFrame(values, index=matrix.index.astype(str), columns=columns))
-    latent = pd.concat(frames, axis=1)
+    layer_feature_counts = {layer: int(getattr(dataset, layer).shape[1]) for layer in _OMICS_ATTRS}
+    if standardize:
+        latent = concatenate_blocks(observed_blocks)
+    else:
+        frames = []
+        for layer in _OMICS_ATTRS:
+            matrix = getattr(dataset, layer).astype(float)
+            values = matrix.to_numpy(dtype=float)
+            if layer == "methylation":
+                values = logit(values)
+            columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
+            frames.append(pd.DataFrame(values, index=matrix.index.astype(str), columns=columns))
+        latent = pd.concat(frames, axis=1)
     return LatentIntegrationResult(
         matrix=latent,
         metadata={
@@ -389,6 +422,7 @@ def _pls_integration(
     integration_params: Mapping[str, Any],
     *,
     stage_col: str,
+    observed_blocks: Mapping[OmicsLayer, pd.DataFrame],
 ) -> LatentIntegrationResult:
     """Build the PLS molecular latent space (stage-conditioned, double-CV-sized).
 
@@ -403,21 +437,8 @@ def _pls_integration(
             f"PLS integration requires stage column {stage_col!r} in dataset metadata."
         )
 
-    frames: list[pd.DataFrame] = []
-    layer_feature_counts: dict[str, int] = {}
-    for layer in _OMICS_ATTRS:
-        matrix = getattr(dataset, layer).astype(float)
-        layer_feature_counts[layer] = int(matrix.shape[1])
-        values = matrix.to_numpy(dtype=float)
-        if layer == "methylation":
-            values = logit(values)
-        mean = values.mean(axis=0, keepdims=True)
-        std = values.std(axis=0, keepdims=True)
-        std[std < 1e-10] = 1.0
-        values = (values - mean) / std
-        columns = [f"{layer}__{column}" for column in matrix.columns.astype(str)]
-        frames.append(pd.DataFrame(values, columns=columns))
-    X = pd.concat(frames, axis=1).reset_index(drop=True)
+    layer_feature_counts = {layer: int(getattr(dataset, layer).shape[1]) for layer in _OMICS_ATTRS}
+    X = concatenate_blocks(observed_blocks).reset_index(drop=True)
     n_samples, n_features = X.shape
     y = dataset.metadata[stage_col].reset_index(drop=True).astype(str)
 

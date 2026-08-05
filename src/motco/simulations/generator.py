@@ -52,6 +52,38 @@ class GeneratedOmics:
     indicators_protein: np.ndarray
 
 
+def omic_population_means(
+    *,
+    indicators_methyl: np.ndarray,
+    indicators_expr: np.ndarray,
+    indicators_protein: np.ndarray,
+    delta_methyl: float = 2.0,
+    delta_expr: float = 2.0,
+    delta_protein: float = 2.0,
+    reference: IntersimReference | None = None,
+    base_shift_methyl: np.ndarray | None = None,
+    base_shift_expr: np.ndarray | None = None,
+    base_shift_protein: np.ndarray | None = None,
+) -> dict[str, np.ndarray]:
+    """Return exact cell means in the units supplied to integration.
+
+    Arrays have shape ``(n_cells, n_features)``. Methylation means are in
+    pre-``rev_logit`` M-value units; expression and proteomics retain their
+    native generated units.
+    """
+
+    ref = reference if reference is not None else load_reference()
+    rho_me = np.zeros_like(ref.rho_methyl_expr) if delta_expr == 0 else ref.rho_methyl_expr
+    base_expr = rho_me * ref.methyl_gene_level_mean + np.sqrt(1 - rho_me**2) * ref.mean_expr
+    rho_ep = np.zeros_like(ref.rho_expr_protein) if delta_protein == 0 else ref.rho_expr_protein
+    base_protein = rho_ep * ref.mean_expr_with_mapped_protein + np.sqrt(1 - rho_ep**2) * ref.mean_protein
+    return {
+        "methylation": _cell_means(ref.mean_M, delta_methyl, indicators_methyl, base_shift_methyl),
+        "expression": _cell_means(base_expr, delta_expr, indicators_expr, base_shift_expr),
+        "proteomics": _cell_means(base_protein, delta_protein, indicators_protein, base_shift_protein),
+    }
+
+
 def rev_logit(x: np.ndarray) -> np.ndarray:
     """InterSIM's inverse-logit: ``1 / (1 + exp(-x))``."""
 
@@ -109,14 +141,41 @@ def _sample_cells(
     M-value space for methylation).
     """
 
-    shifted_base = base if base_shift is None else base + base_shift
+    means = _cell_means(base, delta, indicators, base_shift)
     blocks = []
     for i, n in enumerate(cell_sizes):
         if n == 0:
             continue
-        mean = shifted_base + delta * indicators[:, i]
-        blocks.append(rng.multivariate_normal(mean, cov, size=n, method="svd"))
+        blocks.append(rng.multivariate_normal(means[i], cov, size=n, method="svd"))
     return np.vstack(blocks)
+
+
+def _sample_population_means(
+    rng: np.random.Generator,
+    means: np.ndarray,
+    cov: np.ndarray,
+    cell_sizes: list[int],
+) -> np.ndarray:
+    """Draw each cell from its corresponding exact population mean."""
+
+    blocks = [
+        rng.multivariate_normal(means[i], cov, size=n, method="svd")
+        for i, n in enumerate(cell_sizes)
+        if n > 0
+    ]
+    return np.vstack(blocks)
+
+
+def _cell_means(
+    base: np.ndarray,
+    delta: float,
+    indicators: np.ndarray,
+    base_shift: np.ndarray | None = None,
+) -> np.ndarray:
+    """Construct exact cell means with cells on rows and features on columns."""
+
+    shifted_base = base if base_shift is None else base + base_shift
+    return shifted_base[None, :] + delta * indicators.T
 
 
 def _resolve_cov(
@@ -176,25 +235,25 @@ def generate_omics(
     cov_expr = _resolve_cov(sigma_expr, ref.cov_expr)
     cov_protein = _resolve_cov(sigma_protein, ref.cov_protein)
 
-    # Methylation: additive shift in M-value space, then inverse-logit.
-    methyl_M = _sample_cells(
-        rng, ref.mean_M, delta_methyl, indicators_methyl, cov_M, cell_sizes, base_shift_methyl
+    means = omic_population_means(
+        indicators_methyl=indicators_methyl,
+        indicators_expr=indicators_expr,
+        indicators_protein=indicators_protein,
+        delta_methyl=delta_methyl,
+        delta_expr=delta_expr,
+        delta_protein=delta_protein,
+        reference=ref,
+        base_shift_methyl=base_shift_methyl,
+        base_shift_expr=base_shift_expr,
+        base_shift_protein=base_shift_protein,
     )
+
+    # Methylation: additive shift in M-value space, then inverse-logit.
+    methyl_M = _sample_population_means(rng, means["methylation"], cov_M, cell_sizes)
     methylation = rev_logit(methyl_M)
 
-    # Expression: cross-omic blend with methylation; rho zeroed when no effect.
-    rho_me = np.zeros_like(ref.rho_methyl_expr) if delta_expr == 0 else ref.rho_methyl_expr
-    base_expr = rho_me * ref.methyl_gene_level_mean + np.sqrt(1 - rho_me**2) * ref.mean_expr
-    expression = _sample_cells(
-        rng, base_expr, delta_expr, indicators_expr, cov_expr, cell_sizes, base_shift_expr
-    )
-
-    # Protein: cross-omic blend with expression; rho zeroed when no effect.
-    rho_ep = np.zeros_like(ref.rho_expr_protein) if delta_protein == 0 else ref.rho_expr_protein
-    base_protein = rho_ep * ref.mean_expr_with_mapped_protein + np.sqrt(1 - rho_ep**2) * ref.mean_protein
-    proteomics = _sample_cells(
-        rng, base_protein, delta_protein, indicators_protein, cov_protein, cell_sizes, base_shift_protein
-    )
+    expression = _sample_population_means(rng, means["expression"], cov_expr, cell_sizes)
+    proteomics = _sample_population_means(rng, means["proteomics"], cov_protein, cell_sizes)
 
     cell_ids = np.concatenate([np.full(n, i) for i, n in enumerate(cell_sizes) if n > 0])
 

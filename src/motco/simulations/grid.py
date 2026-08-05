@@ -13,6 +13,7 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
+from motco.simulations.diagnostics import DIAGNOSTIC_SCHEMA_VERSION
 from motco.simulations.evaluation import SimulationEvaluationParams, SimulationEvaluationResult
 from motco.simulations.semisynthetic import (
     SemiSyntheticTrajectoryParams,
@@ -82,6 +83,7 @@ class SimulationReplicateResult:
     status: Literal["completed", "failed"]
     p_values: dict[str, float | None] = field(default_factory=dict)
     pair_statistics: dict[str, float | None] = field(default_factory=dict)
+    realized_geometry: dict[str, Any] = field(default_factory=dict)
     truth_metadata: dict[str, Any] = field(default_factory=dict)
     runtime_metadata: dict[str, Any] = field(default_factory=dict)
     cell_metadata: dict[str, Any] = field(default_factory=dict)
@@ -289,6 +291,7 @@ def parameter_signature(cell: SimulationCell) -> str:
         "base_seed": cell.base_seed,
         "metadata": _to_jsonable(cell.metadata),
         "seed_derivation_version": 3,
+        "realized_geometry_version": DIAGNOSTIC_SCHEMA_VERSION,
     }
     return _stable_digest(payload)
 
@@ -340,6 +343,7 @@ def run_simulation_replicate(
         status="completed",
         p_values=_finite_mapping(result.p_values),
         pair_statistics=_finite_mapping(result.pair_statistics),
+        realized_geometry=result.realized_geometry,
         truth_metadata=result.truth_metadata,
         runtime_metadata=result.runtime_metadata,
         cell_metadata=dict(cell.metadata),
@@ -535,6 +539,7 @@ def _replicate_result_from_dict(data: Mapping[str, Any]) -> SimulationReplicateR
         status=data["status"],
         p_values=dict(data.get("p_values", {})),
         pair_statistics=dict(data.get("pair_statistics", {})),
+        realized_geometry=dict(data.get("realized_geometry", {})),
         truth_metadata=dict(data.get("truth_metadata", {})),
         runtime_metadata=dict(data.get("runtime_metadata", {})),
         cell_metadata=dict(data.get("cell_metadata", {})),

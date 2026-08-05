@@ -128,6 +128,21 @@ p = (1 + count(null >= observed)) / (1 + n_permutations)
 
 The result includes observed `delta`, `angle`, and `shape` matrices, scalar two-group pair statistics, optional p-values, latent matrix metadata, generator truth metadata, runtime metadata, group/stage levels, and the trajectory contrast. Shape pair statistics and p-values are reported as unavailable for datasets with fewer than three stages.
 
+### Realized-geometry decomposition
+
+Generated semi-synthetic datasets also expose exact group-stage population means in integration units: methylation M-values and native expression/proteomics units. Evaluation uses one pooled fitted preprocessing artifact for both diagnostics and PLS, then reports:
+
+| Checkpoint | Scopes | Interpretation |
+|---|---|---|
+| `population_native` | each omic | Exact construction and biological-cascade geometry without sampling noise |
+| `population_standardized` | each omic and joint | Exact means under the replicate's pooled fitted feature scaling |
+| `observed_standardized` | each omic and joint | Geometry actually presented to integration, including finite sampling |
+| `pls_latent` | joint | Geometry retained in the fitted production PLS representation |
+
+Every applicable scope records both group path lengths, pairwise `delta`, `angle`, and `shape`, and explicit availability flags. Joint native-space geometry is intentionally omitted because the unstandardized omic blocks use incompatible units. Raw distances across feature and latent checkpoints are not scale-equivalent; use the decomposition to locate changes in behavior rather than subtracting distances across spaces.
+
+See the [Phase 2 findings](../reports/realized-generator-geometry-2026-08-05.md) for the revised orientation and shape construction contracts and the matched-seed characterization command.
+
 ## Grid orchestration
 
 The grid orchestration layer enumerates parameter cells, runs local replicates through the evaluation harness, persists one JSONL row per replicate, resumes completed work, and summarizes rejection rates for Type I error or power studies.
@@ -164,7 +179,7 @@ summaries = summarize_rejection_rates(records, alpha=0.05)
 
 Each `SimulationCell` stores a stable `cell_id`, phase, `SemiSyntheticTrajectoryParams`, `SimulationEvaluationParams`, replicate count, base seed, and metadata such as the varied axis. Axis names use explicit namespaces: `generator.<field>` or `evaluation.<field>`.
 
-Initial persistence is JSON Lines. Each row records cell and replicate IDs, deterministic seeds, a parameter signature, status, p-values, pair statistics, truth metadata, runtime metadata, cell metadata, and optional error details. With `resume=True`, completed rows with matching parameter signatures are skipped. A matching cell/replicate with a different parameter signature raises unless `overwrite=True`.
+Initial persistence is JSON Lines. Each row records cell and replicate IDs, deterministic seeds, a parameter signature, status, p-values, pair statistics, realized-geometry diagnostics, truth metadata, runtime metadata, cell metadata, and optional error details. The diagnostic schema version participates in the parameter signature. With `resume=True`, completed rows with matching parameter signatures are skipped. A matching cell/replicate with a different parameter signature raises unless `overwrite=True`; legacy rows remain readable but have no realized-geometry payload.
 
 `summarize_rejection_rates` groups completed replicate rows by cell and statistic, then reports available replicate count, rejection count, rejection rate, Monte Carlo standard error, and unavailable replicate count. Missing statistics, such as shape p-values for two-stage datasets, remain unavailable rather than being counted as non-significant.
 

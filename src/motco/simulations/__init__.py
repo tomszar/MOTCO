@@ -1,5 +1,11 @@
 """Simulation helpers for MOTCO."""
 
+from .diagnostics import (
+    DIAGNOSTIC_SCHEMA_VERSION,
+    GeometryDiagnostic,
+    RealizedGeometryDiagnostics,
+    flatten_geometry_diagnostics,
+)
 from .evaluation import (
     LatentIntegrationResult,
     SimulationEvaluationError,
@@ -37,6 +43,7 @@ from .generator import (
     bernoulli_indicators,
     derive_coupled_indicators,
     generate_omics,
+    omic_population_means,
 )
 from .grid import (
     SimulationCell,
@@ -81,6 +88,13 @@ from .linear_recovery import (
     project_and_measure,
     run_existence_proof,
 )
+from .realized_geometry_study import (
+    PHASE2_CONSTRUCTIONS,
+    Phase2CharacterizationConfig,
+    monotonicity_summary,
+    run_phase2_characterization,
+    summarize_phase2_characterization,
+)
 from .reference import (
     IntersimReference,
     ReferenceCacheError,
@@ -89,6 +103,7 @@ from .reference import (
     load_reference,
 )
 from .semisynthetic import (
+    PopulationTrajectories,
     SemiSyntheticTrajectoryDataset,
     SemiSyntheticTrajectoryError,
     SemiSyntheticTrajectoryParams,
@@ -114,6 +129,7 @@ __all__ = [
     "FidelityFixture",
     "FidelityGrid",
     "GeneratedOmics",
+    "GeometryDiagnostic",
     "GeneratorError",
     "IntersimReference",
     "StatisticComparison",
@@ -138,6 +154,11 @@ __all__ = [
     "LinearRecoveryDataset",
     "LinearRecoveryError",
     "LinearRecoveryParams",
+    "PopulationTrajectories",
+    "RealizedGeometryDiagnostics",
+    "DIAGNOSTIC_SCHEMA_VERSION",
+    "PHASE2_CONSTRUCTIONS",
+    "Phase2CharacterizationConfig",
     "TRAJECTORY_SHOWCASE_MODES",
     "TrajectoryShowcaseError",
     "append_replicate_results",
@@ -166,6 +187,7 @@ __all__ = [
     "evaluate_semisynthetic_trajectory",
     "generate_numpy_visual_data",
     "generate_omics",
+    "omic_population_means",
     "load_fidelity_fixture",
     "load_visual_fixture",
     "run_fidelity_visual",
@@ -183,5 +205,9 @@ __all__ = [
     "run_simulation_grid",
     "run_simulation_replicate",
     "run_trajectory_showcase",
+    "run_phase2_characterization",
+    "summarize_phase2_characterization",
+    "monotonicity_summary",
+    "flatten_geometry_diagnostics",
     "summarize_rejection_rates",
 ]

@@ -91,6 +91,8 @@ Work:
 
 ## Phase 2 — Audit orientation and shape constructions before integration
 
+**Status:** resolved on 2026-08-05; see [Realized Generator Geometry — Phase 2 Findings](reports/realized-generator-geometry-2026-08-05.md).
+
 **Purpose:** separate generator cross-talk from integration or estimator cross-talk.
 
 Work:
@@ -102,7 +104,7 @@ Work:
 - Add construction-level diagnostics to study outputs so each replicate records the realized pre-integration delta, angle, and shape—not only its requested mode/effect size.
 - Revise acceptance targets so they reflect achievable properties of the chosen constructions rather than an assumed perfectly diagonal specificity matrix.
 
-**Exit gate:** each study mode has a documented realized geometry before PLS. Remaining off-diagonal responses can be attributed to the construction, projection, or estimator rather than guessed from rejection rates.
+**Exit gate:** passed. Each study mode has a documented realized geometry before PLS, and evaluation records analytic population, standardized population, observed standardized, and PLS-latent checkpoints. Orientation is pure in native methylation but mixed after biological cascade propagation; both shape constructions are documented as free/mixed bends rather than shape-specific interventions.
 
 ## Phase 3 — Implement production orientation-driver attribution
 
@@ -235,6 +237,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Characterize realized generator geometry.** Measure orientation and shape before integration and revise construction contracts.
-2. **Add orientation-driver attribution.** Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.
-3. **Repeat the medium pilot.** Re-run the PLS operating-characteristic pilot with corrected shape semantics and construction-level diagnostics.
+1. **Add orientation-driver attribution.** Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.
+2. **Repeat the medium pilot.** Re-run the PLS operating-characteristic pilot with corrected shape semantics and construction-level diagnostics.
+3. **Run the paper-grade PLS study.** Proceed only if the medium-pilot gates pass.
