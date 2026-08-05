@@ -52,6 +52,7 @@ from motco.simulations.generator import (
     bernoulli_indicators,
     derive_coupled_indicators,
     generate_omics,
+    omic_population_means,
 )
 from motco.simulations.reference import IntersimReference, load_reference
 
@@ -104,6 +105,17 @@ class SemiSyntheticTrajectoryParams:
 
 
 @dataclass(frozen=True)
+class PopulationTrajectories:
+    """Exact group-stage means in integration units, keyed by omic layer.
+
+    Each frame uses a ``(group, stage)`` MultiIndex and canonical feature
+    columns. Methylation values are M-values rather than stored B values.
+    """
+
+    layers: dict[OmicsLayer, pd.DataFrame]
+
+
+@dataclass(frozen=True)
 class SemiSyntheticTrajectoryDataset:
     """MOTCO-ready semi-synthetic trajectory dataset."""
 
@@ -112,6 +124,7 @@ class SemiSyntheticTrajectoryDataset:
     proteomics: pd.DataFrame
     metadata: pd.DataFrame
     truth: dict[str, Any] = field(default_factory=dict)
+    population_trajectories: PopulationTrajectories | None = None
 
 
 @dataclass(frozen=True)
@@ -144,6 +157,9 @@ def generate_semisynthetic_trajectory(
 
     gen_a = _generate_group(rng, ref, indicators_a, deltas_a, group_a_sizes)
     gen_b = _generate_group(rng, ref, indicators_b, deltas_b, group_b_sizes)
+    population_trajectories = _build_population_trajectories(
+        ref, params, indicators_a, indicators_b, deltas_a, deltas_b
+    )
 
     methylation, expression, proteomics, metadata = _assemble(
         ref, params, gen_a, gen_b, group_a_sizes, group_b_sizes
@@ -156,6 +172,7 @@ def generate_semisynthetic_trajectory(
         proteomics=proteomics,
         metadata=metadata,
         truth=truth,
+        population_trajectories=population_trajectories,
     )
 
 
@@ -501,6 +518,47 @@ def _build_truth(
         },
         "transform": transform_meta,
     }
+
+
+def _build_population_trajectories(
+    ref: IntersimReference,
+    params: SemiSyntheticTrajectoryParams,
+    indicators_a: _GroupIndicators,
+    indicators_b: _GroupIndicators,
+    deltas_a: tuple[float, float, float],
+    deltas_b: tuple[float, float, float],
+) -> PopulationTrajectories:
+    """Build exact population trajectories using the generator's mean contract."""
+
+    def means(indicators: _GroupIndicators, deltas: tuple[float, float, float]) -> dict[str, np.ndarray]:
+        return omic_population_means(
+            indicators_methyl=indicators.methyl,
+            indicators_expr=indicators.expr,
+            indicators_protein=indicators.protein,
+            delta_methyl=deltas[0],
+            delta_expr=deltas[1],
+            delta_protein=deltas[2],
+            reference=ref,
+        )
+
+    by_group = {
+        params.group_labels[0]: means(indicators_a, deltas_a),
+        params.group_labels[1]: means(indicators_b, deltas_b),
+    }
+    feature_names = {
+        "methylation": ref.cpg_names,
+        "expression": ref.gene_names,
+        "proteomics": ref.protein_names,
+    }
+    index = pd.MultiIndex.from_product(
+        [params.group_labels, [str(stage) for stage in range(params.n_stages)]],
+        names=["group", "stage"],
+    )
+    layers: dict[OmicsLayer, pd.DataFrame] = {}
+    for layer in _OMICS_LAYERS:
+        values = np.vstack([by_group[group][layer] for group in params.group_labels])
+        layers[layer] = pd.DataFrame(values, index=index, columns=feature_names[layer])
+    return PopulationTrajectories(layers=layers)
 
 
 # --------------------------------------------------------------------------- #

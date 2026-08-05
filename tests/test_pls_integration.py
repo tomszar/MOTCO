@@ -119,6 +119,11 @@ def test_pls_integration_end_to_end_trajectory_statistics() -> None:
         ),
     )
 
+    assert "pls_latent" in result.realized_geometry["checkpoints"]
+    latent_diagnostic = result.realized_geometry["checkpoints"]["pls_latent"]["joint"]
+    assert latent_diagnostic["delta"] == pytest.approx(result.pair_statistics["delta"])
+    assert latent_diagnostic["angle"] == pytest.approx(result.pair_statistics["angle"])
+
     assert set(result.pair_statistics) == {"delta", "angle", "shape"}
     assert result.latent_matrix_metadata["integration_method"] == "pls"
     assert result.latent_matrix_metadata["integration_role"] == "latent_space"

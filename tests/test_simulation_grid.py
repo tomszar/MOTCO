@@ -58,6 +58,21 @@ def fake_result(
         group_levels=["A", "B"],
         stage_levels=["0", "1"],
         contrast=[[0, 1], [2, 3]],
+        realized_geometry={
+            "schema_version": 1,
+            "requested": {"trajectory_mode": "orientation", "group_effect_size": 0.5},
+            "checkpoints": {
+                "observed_standardized": {
+                    "joint": {
+                        "path_lengths": {"A": 1.0, "B": 1.0},
+                        "delta": 0.0,
+                        "angle": 20.0,
+                        "shape": None,
+                        "availability": {"delta": True, "angle": True, "shape": False},
+                    }
+                }
+            },
+        },
     )
 
 
@@ -198,6 +213,17 @@ def test_parameter_signature_includes_seed_derivation_version(monkeypatch: pytes
     assert parameter_signature(cell) != current_signature
 
 
+def test_parameter_signature_includes_geometry_schema_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    import motco.simulations.grid as grid_module
+
+    cell = make_simulation_cell(phase="type_i_baseline", generator_params=baseline_generator())
+    current_signature = parameter_signature(cell)
+
+    monkeypatch.setattr(grid_module, "DIAGNOSTIC_SCHEMA_VERSION", 2)
+
+    assert parameter_signature(cell) != current_signature
+
+
 def test_run_replicate_uses_injectable_evaluator_and_records_seeds() -> None:
     cell = make_simulation_cell(
         phase="type_i_baseline",
@@ -267,6 +293,27 @@ def test_jsonl_persistence_read_and_resume(tmp_path) -> None:
     assert calls == 2
     assert len(loaded) == 2
     assert {record.replicate_index for record in loaded} == {0, 1}
+    assert loaded[0].realized_geometry["schema_version"] == 1
+    assert loaded[0].realized_geometry["checkpoints"]["observed_standardized"]["joint"]["shape"] is None
+
+
+def test_legacy_jsonl_record_loads_without_geometry(tmp_path) -> None:
+    import json
+
+    path = tmp_path / "legacy.jsonl"
+    record = run_simulation_replicate(
+        make_simulation_cell(phase="type_i_baseline", generator_params=baseline_generator()),
+        0,
+        evaluator=lambda generator, evaluation: fake_result(),
+    )
+    payload = record.__dict__.copy()
+    payload.pop("realized_geometry")
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    loaded = read_replicate_results(path)
+
+    assert len(loaded) == 1
+    assert loaded[0].realized_geometry == {}
 
 
 def test_resume_detects_parameter_mismatch(tmp_path) -> None:
