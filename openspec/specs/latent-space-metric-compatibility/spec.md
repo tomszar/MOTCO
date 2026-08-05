@@ -1,12 +1,9 @@
 # latent-space-metric-compatibility Specification
 
 ## Purpose
-
 Document the relationship between MOTCO's Euclidean trajectory statistics and
 the geometry produced by each supported integration method.
-
 ## Requirements
-
 ### Requirement: Measurement-space assumptions are explicit
 
 The documentation SHALL state that `delta`, `angle`, and Procrustes `shape`
@@ -46,3 +43,4 @@ method.
 
 - **WHEN** the reader encounters the reported lack of `delta`/`angle` sensitivity
 - **THEN** the findings identify the metric mismatch and note that graph-native alternatives were not evaluated
+
