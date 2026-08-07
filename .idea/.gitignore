@@ -8,3 +8,5 @@
 /dataSources.local.xml
 # Machine-local language server settings
 /LanguageServersSettings.xml
+# Machine-local module SDK reference
+/motco.iml
