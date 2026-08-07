@@ -6,3 +6,5 @@
 # Datasource local storage ignored files
 /dataSources/
 /dataSources.local.xml
+# Machine-local language server settings
+/LanguageServersSettings.xml
