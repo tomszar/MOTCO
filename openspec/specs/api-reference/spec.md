@@ -1,4 +1,9 @@
-## ADDED Requirements
+# api-reference Specification
+
+## Purpose
+Defines the published MOTCO API reference site: which public symbols it must document, how it is built and previewed locally, when it deploys, and how its dependencies stay isolated from runtime and test installs.
+
+## Requirements
 
 ### Requirement: All public API symbols are discoverable in the reference
 The docs site SHALL render a dedicated API reference page for each of the four modules: `pls`, `snf`, `sd`, and `cli`. Each page SHALL display every symbol listed in `motco.stats.__all__` (for stats modules) and every public subcommand (for the CLI), including function signature, parameter names and types, return type, and docstring prose where present.

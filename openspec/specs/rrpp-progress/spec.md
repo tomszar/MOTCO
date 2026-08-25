@@ -1,4 +1,9 @@
-## ADDED Requirements
+# rrpp-progress Specification
+
+## Purpose
+Defines the progress-reporting and diagnostic-logging contract for long-running MOTCO computations: tqdm bars for serial RRPP and PLS-DA cross-validation, log-based reporting for the parallel path, numerical-fallback warnings, and the CLI verbosity flag that routes them.
+
+## Requirements
 
 ### Requirement: RRPP serial path displays a tqdm progress bar
 `RRPP` SHALL accept a `progress: bool = True` keyword argument. When `progress=True` and the serial path is used (`n_jobs` is `None` or `1`), a tqdm progress bar SHALL be displayed on stderr showing completed permutations, the unit label "perm", and an estimated time remaining.

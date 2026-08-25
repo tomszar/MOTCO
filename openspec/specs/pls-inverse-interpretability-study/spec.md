@@ -1,7 +1,7 @@
 # pls-inverse-interpretability-study Specification
 
 ## Purpose
-TBD - created by archiving change add-pls-inverse-interpretability-study. Update Purpose after archive.
+Defines the controlled study that establishes how PLS latent-space trajectory interventions reconstruct into feature space, so that magnitude, orientation, and shape results measured in latent coordinates can be interpreted as molecular feature changes.
 ## Requirements
 ### Requirement: Exact-null feature datasets
 

@@ -1,3 +1,10 @@
+# module-contracts Specification
+
+## Purpose
+Defines the public import surface of the `motco.stats` subpackage: which symbols each of the `design`, `trajectory`, and `permutation` modules exports, that the flat `motco.stats` namespace keeps returning the same objects, and that the retired `sd` module stays unimportable.
+
+## Requirements
+
 ### Requirement: design module exposes public symbols
 `motco.stats.design` SHALL export `center_matrix`, `get_model_matrix`, and `build_ls_means`.
 
