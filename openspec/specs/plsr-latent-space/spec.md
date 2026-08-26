@@ -1,4 +1,9 @@
-## ADDED Requirements
+# plsr-latent-space Specification
+
+## Purpose
+Defines the PLS-DA latent-space capability: the public fitting and transform functions in `stats/pls.py`, and the `motco plsr` multi-omics input, supervision-label, and score-output contracts that expose the fitted latent space to downstream trajectory analysis.
+
+## Requirements
 
 ### Requirement: fit_plsda_transform function
 `stats/pls.py` SHALL expose a public function `fit_plsda_transform(X, y, n_components) -> np.ndarray` that fits a `PLSRegression(n_components=n_components, scale=True)` on the full arrays `X` and `y`, and returns the resulting `x_scores_` matrix of shape `(n_samples, n_components)`.

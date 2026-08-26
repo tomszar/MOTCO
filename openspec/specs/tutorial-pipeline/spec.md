@@ -1,4 +1,9 @@
-## ADDED Requirements
+# tutorial-pipeline Specification
+
+## Purpose
+Defines the user-facing onboarding path: an end-to-end example notebook and a README quick start that walk a new user through the complete MOTCO pipeline using the pre-generated toy dataset.
+
+## Requirements
 
 ### Requirement: End-to-end notebook using toy data
 `examples/motco_example.ipynb` SHALL be rewritten to demonstrate the complete MOTCO pipeline using the pre-generated toy dataset at `examples/data/toy/`. The notebook SHALL contain the following sections in order:

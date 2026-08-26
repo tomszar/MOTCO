@@ -1,7 +1,7 @@
 # numpy-omics-generator Specification
 
 ## Purpose
-TBD - created by archiving change numpy-feature-surgery-generator. Update Purpose after archive.
+Defines MOTCO's numpy-native multi-omic generator: it reproduces InterSIM's mean-shift generative model from a cached reference, runs reproducibly by seed with no R at runtime, exposes per-stage differential indicators, and has its realism validated against InterSIM.
 ## Requirements
 ### Requirement: numpy generator reproduces InterSIM's mean-shift model
 MOTCO SHALL provide a numpy-native multi-omic generator that produces methylation, gene expression, and proteomics matrices using InterSIM's generative model: each stage mean is `μ = base + δ · v` for a per-stage differential indicator `v ∈ {0,1}ᵖ`, with samples drawn from a multivariate normal with the reference covariance, and methylation passed through the inverse-logit (`rev.logit`) transform after the additive shift.

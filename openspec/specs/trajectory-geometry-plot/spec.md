@@ -1,3 +1,8 @@
+# trajectory-geometry-plot Specification
+
+## Purpose
+Defines MOTCO's display-only trajectory visualization API: the core plotting function over pre-computed LS-mean vectors and a fitted projector, its PCA and PLS-DA convenience wrappers, and the package-root exports through which callers reach them.
+
 ## Requirements
 
 ### Requirement: Core plot function renders trajectory geometry from pre-computed vectors

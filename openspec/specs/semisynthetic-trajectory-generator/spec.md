@@ -1,3 +1,5 @@
+# semisynthetic-trajectory-generator Specification
+
 ## Purpose
 
 Generate MOTCO-ready semi-synthetic trajectory datasets from InterSIM outputs using the clusters-as-stages assumption, reproducible group assignment, trajectory effect injection, and explicit truth metadata.

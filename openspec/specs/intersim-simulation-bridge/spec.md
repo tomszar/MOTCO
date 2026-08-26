@@ -1,3 +1,5 @@
+# intersim-simulation-bridge Specification
+
 ## Purpose
 
 Provide a Python-facing bridge that invokes the R InterSIM package and returns aligned semi-synthetic methylation, gene expression, protein expression, clustering, sample ID, and metadata outputs for downstream MOTCO simulation studies.
