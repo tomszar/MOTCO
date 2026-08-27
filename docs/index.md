@@ -11,6 +11,7 @@ MOTCO provides three statistical modules:
 | [PLS-DA](api/pls.md) | Build supervised latent spaces via double cross-validated PLS discriminant analysis |
 | [SNF](api/snf.md) | Fuse multiple omics layers into a single similarity network |
 | [Trajectory Analysis](api/sd.md) | Estimate and test differences in trajectory magnitude, orientation, and shape between groups |
+| [Orientation Driver Attribution](api/attribution.md) | Explain shared-PLS trajectory orientation differences with signed feature, module, and pathway effects |
 | [Simulations](api/simulations.md) | Invoke R InterSIM and return aligned semi-synthetic omics matrices |
 
 ## Quick links
@@ -32,5 +33,6 @@ uv add motco
 - **[PLS-DA](api/pls.md)** — `plsda_doubleCV`, `calculate_vips`
 - **[SNF](api/snf.md)** — `get_affinity_matrix`, `SNF`, `get_spectral`
 - **[Trajectory Analysis](api/sd.md)** — `get_model_matrix`, `build_ls_means`, `estimate_difference`, `RRPP`, `estimate_betas`, `get_observed_vectors`, `pair_difference`, `center_matrix`
+- **[Orientation Driver Attribution](api/attribution.md)** — `analyze_orientation_attribution`, `attribution_frames`, `write_attribution_outputs`
 - **[Simulations](api/simulations.md)** — `InterSIMParams`, `InterSIMResult`, `check_intersim_available`, `run_intersim`
 - **[CLI](api/cli.md)** — `motco plsr`, `motco snf`, `motco de`

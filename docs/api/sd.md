@@ -84,6 +84,15 @@ features important to the pooled stage model, not features whose normalized
 stage association differs between groups. Orientation drivers require the
 group-specific transition contrast above.
 
+For a production attribution result from a detected orientation difference,
+use the shared fitted PLS model and the aligned pooled-standardized matrix
+with [Orientation Driver Attribution](attribution.md). The attribution API
+supports adjacent transitions for multi-stage data, optional covariate-
+adjusted mean tables, frozen-model bootstrap stability, and caller-supplied
+module/pathway labels. It reports standardized and optional original-unit
+effects separately and does not produce p-values, causal claims, or a unique
+inverse of the measured features.
+
 ## Design matrix
 
 ::: motco.stats.design.get_model_matrix

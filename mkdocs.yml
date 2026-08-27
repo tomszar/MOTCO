@@ -23,6 +23,7 @@ nav:
     - PLS-DA: api/pls.md
     - SNF: api/snf.md
     - Trajectory Analysis (SD): api/sd.md
+    - Orientation Driver Attribution: api/attribution.md
     - Simulations: api/simulations.md
     - CLI: api/cli.md
 
