@@ -212,7 +212,18 @@ __marimo__/
 .Rhistory
 .claude/
 
+# OpenSpec-generated agent skill definitions. Regenerable with `openspec update`
+# and per-developer (the target agent is a local choice), like .claude/ above.
+.agents/
+
 # Local agent/tool state
 .codex/
 .junie/
 .opencode/
+
+# Study run artifacts. The per-shard and merged JSONL are large (tens of MB) and
+# fully regenerable from the committed config; the report/ outputs and
+# PROVENANCE.txt are small and are what the findings reports cite, so they stay.
+results/**/shard_*.jsonl
+results/**/merged.jsonl
+results/**/logs/

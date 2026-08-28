@@ -161,6 +161,48 @@ Evaluate:
 
 **Exit gate:** no unresolved implementation artifact; magnitude remains specific; orientation reaches an agreed power target with an interpretable curve; shape results match its validated invariance contract. If a target fails, revise the method or scientific claim—not merely the Monte Carlo sample size.
 
+**Status: HOLD** (run 2026-08-27, [full report](reports/phase4-medium-pls-pilot-2026-08-27.md)). The pilot ran
+1,900 work units with zero failures using `examples/trajectory_power_study/phase4_pilot_100x199.json`:
+100 replicates, 199 permutations, n=300, four stages, matched seeds with a shared zero-effect anchor, and
+bounded orientation attribution.
+
+What passed:
+
+- All eighteen predeclared Type I control tests. Translation leaves every statistic at nominal level at
+  every effect size; the largest control rate anywhere was 0.09 against a bound of 0.0936.
+- Magnitude: delta power 1.00 throughout, with angle 0.01 and shape 0.00 at the top effect — the estimator
+  is more specific than the construction, whose population angle is already 39.9°.
+- Shape: shape power 0.94–1.00, monotone. The corrected Procrustes estimator detects the constructed bend.
+- Diagnostics: selected PLS dimensionality was modally 3 in all 19 cells; all 400 eligible orientation
+  replicates produced valid attribution.
+
+What failed:
+
+- Orientation angle power is 0.65 at the top effect against the 0.80 floor — over three Monte Carlo standard
+  errors short — and the curve is nearly flat across effects (0.59 → 0.65). **The cause is not yet
+  identified.** The construction is strong and survives integration (81° at population, 57° in the latent
+  space, against an 8.9° latent null floor), so a simple underpowered-signal account should not apply; and
+  the records contradict it directly, since replicates that fail to reject have a *larger* mean observed
+  angle (66.7°) than those that reject (52.5°). Latent dimensionality, weak construction, cross-talk, and
+  Monte Carlo noise are all ruled out. More replicates would not fix it.
+
+Two findings carry into Phase 5. Orientation→shape is the only response that first becomes material at the
+PLS checkpoint rather than in the population geometry. And the PLS reconstruction retains only ~6% of the
+observed orientation contrast (cosine 0.08), so its captured-component top-20 precision against generator
+truth is 0.15 while the observed component's is 1.00 — driver reports must use the observed component.
+Component selection saturates at `n_stages - 1` because supervision is on the stage label, so a space sized
+for stage separation is not sized to preserve group orientation contrast.
+
+Before Phase 5, see the [Phase 5 readiness worklist](phase5-readiness.md). The blocking item is diagnosing
+the orientation shortfall — the leading hypothesis is that the RRPP null for `angle` co-varies with the
+observed statistic within a replicate, which the pilot cannot confirm because null quantiles were not
+persisted. Then: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality if
+orientation is a primary estimand, and only then choose the Phase 5 design point.
+
+The July pilot ([`mvalue-pls-pilot-2026-07-30.md`](reports/mvalue-pls-pilot-2026-07-30.md)) predates the
+corrected shape estimator and realized-geometry diagnostics. It is retained unchanged as historical evidence
+and is superseded for Phase 4 gate purposes.
+
 ## Phase 5 — Paper-grade PLS operating-characteristic study
 
 **Purpose:** produce the definitive evidence for publication and production guidance.

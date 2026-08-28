@@ -21,6 +21,7 @@ is display-only and distinct from this measurement space.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from time import perf_counter
 from typing import Any, Literal, Mapping
@@ -39,7 +40,7 @@ from motco.simulations.preprocessing import (
 from motco.simulations.semisynthetic import OmicsLayer, SemiSyntheticTrajectoryDataset
 from motco.stats.design import build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
-from motco.stats.pls import _modal_int_with_parsimony, fit_plsda_transform, plsda_doubleCV
+from motco.stats.pls import _modal_int_with_parsimony, fit_plsda_model, plsda_doubleCV
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 from motco.stats.trajectory import estimate_difference
 
@@ -50,6 +51,24 @@ _OMICS_ATTRS: tuple[str, ...] = tuple(OMIC_LAYERS)
 
 class SimulationEvaluationError(ValueError):
     """Raised when simulation evaluation inputs or parameters are invalid."""
+
+
+@dataclass(frozen=True)
+class AttributionDiagnosticSettings:
+    """Optional orientation-attribution diagnostic settings for one evaluation.
+
+    Attribution is **disabled by default**: the zero-argument instance carries
+    ``enabled=False`` and no bootstrap work, so evaluations that do not ask for
+    diagnostics behave exactly as before. When enabled the settings are frozen
+    into the cell signature, so a diagnostic change cannot silently resume into
+    an existing shard.
+    """
+
+    enabled: bool = False
+    bootstrap_replicates: int = 0
+    bootstrap_seed: int | None = 0
+    top_k: int = 20
+    zero_tolerance: float = 1e-12
 
 
 @dataclass(frozen=True)
@@ -65,14 +84,42 @@ class SimulationEvaluationParams:
     include_null_distributions: bool = False
     group_col: str = "group"
     stage_col: str = "stage"
+    attribution: AttributionDiagnosticSettings = field(default_factory=AttributionDiagnosticSettings)
+
+
+#: Version of the JSON-safe integration metadata contract persisted per replicate.
+INTEGRATION_METADATA_VERSION = 1
+
+
+@dataclass(frozen=True)
+class PLSIntegrationArtifacts:
+    """Ephemeral fitted artifacts behind one PLS latent space.
+
+    These objects are the analysis boundary attribution conditions on: the exact
+    standardized joint feature matrix the model was fitted to, that fitted
+    estimator, and the per-feature scales needed to express effects in original
+    units. They are deliberately **not** part of the persisted evaluation result
+    — a fitted sklearn estimator is neither JSON-safe nor version-stable — and
+    are discarded once the compact diagnostics are built.
+    """
+
+    model: Any
+    features: pd.DataFrame
+    original_scales: np.ndarray
+    methylation_units: str
 
 
 @dataclass(frozen=True)
 class LatentIntegrationResult:
-    """Integrated latent/outcome matrix and metadata."""
+    """Integrated latent/outcome matrix and metadata.
+
+    ``artifacts`` carries the ephemeral fitted objects for the PLS path and is
+    never serialized; only ``metadata`` reaches the persisted record.
+    """
 
     matrix: pd.DataFrame
     metadata: dict[str, Any]
+    artifacts: PLSIntegrationArtifacts | None = None
 
 
 @dataclass(frozen=True)
@@ -105,6 +152,7 @@ class SimulationEvaluationResult:
     contrast: list[list[int]]
     null_distributions: dict[str, list[float]] | None = None
     realized_geometry: dict[str, Any] = field(default_factory=dict)
+    attribution_diagnostics: dict[str, Any] = field(default_factory=dict)
 
 
 def evaluate_semisynthetic_trajectory(
@@ -190,6 +238,10 @@ def evaluate_semisynthetic_trajectory(
         group_col=params.group_col,
         stage_col=params.stage_col,
     ).to_dict()
+    # The fitted estimator and standardized joint matrix live only inside this
+    # call: attribution consumes them here, and only the compact JSON-safe
+    # record survives into the result.
+    attribution_diagnostics = _attribution_diagnostics(dataset, params, latent)
 
     return SimulationEvaluationResult(
         observed_deltas=observed_deltas,
@@ -209,7 +261,52 @@ def evaluate_semisynthetic_trajectory(
         contrast=design.contrast,
         null_distributions=null_distributions,
         realized_geometry=realized_geometry,
+        attribution_diagnostics=attribution_diagnostics,
     )
+
+
+def _attribution_diagnostics(
+    dataset: SemiSyntheticTrajectoryDataset,
+    params: SimulationEvaluationParams,
+    latent: LatentIntegrationResult,
+) -> dict[str, Any]:
+    """Compute compact orientation-attribution diagnostics when they are enabled."""
+
+    from motco.simulations.attribution_diagnostics import (
+        AttributionDiagnosticError,
+        compute_attribution_diagnostics,
+        unavailable_record,
+    )
+
+    settings = params.attribution
+    if not settings.enabled:
+        return unavailable_record("attribution diagnostics were not requested for this cell")
+    artifacts = latent.artifacts
+    if artifacts is None:
+        raise SimulationEvaluationError(
+            "Attribution diagnostics were requested but the integration produced no fitted "
+            f"PLS artifacts (integration_method={params.integration_method!r})."
+        )
+    try:
+        return compute_attribution_diagnostics(
+            dataset,
+            model=artifacts.model,
+            features=artifacts.features,
+            original_scales=artifacts.original_scales,
+            settings=settings,
+            group_col=params.group_col,
+            stage_col=params.stage_col,
+            selected_components=latent.metadata.get("selected_lv"),
+            feature_order_signature=latent.metadata.get("feature_order_signature"),
+            methylation_units=artifacts.methylation_units,
+        )
+    except AttributionDiagnosticError as exc:
+        # A diagnostic is auxiliary evidence: a replicate whose attribution
+        # cannot be computed still contributes a valid trajectory measurement,
+        # so the failure is recorded rather than allowed to abort the run.
+        record = unavailable_record(str(exc), status="failed")
+        record["error_type"] = type(exc).__name__
+        return record
 
 
 def integrate_semisynthetic_dataset(
@@ -242,6 +339,7 @@ def integrate_semisynthetic_dataset(
             params.integration_params,
             stage_col=params.stage_col,
             observed_blocks=observed_blocks,
+            preprocessor=preprocessor,
         )
     raise SimulationEvaluationError(f"Unsupported integration_method: {method!r}.")
 
@@ -290,6 +388,27 @@ def _validate_evaluation_params(params: SimulationEvaluationParams) -> None:
         raise SimulationEvaluationError("permutations must be greater than or equal to 0.")
     if params.n_jobs == 0:
         raise SimulationEvaluationError("n_jobs must be None, -1, or a non-zero integer.")
+    _validate_attribution_settings(params.attribution, params.integration_method)
+
+
+def _validate_attribution_settings(
+    settings: AttributionDiagnosticSettings,
+    integration_method: IntegrationMethod,
+) -> None:
+    if not settings.enabled:
+        return
+    if integration_method != "pls":
+        raise SimulationEvaluationError(
+            "Orientation attribution diagnostics require integration_method='pls'; "
+            f"got {integration_method!r}. Attribution conditions on the fitted PLS estimator, "
+            "so 'concat' and 'snf' evaluations cannot supply one."
+        )
+    if settings.bootstrap_replicates < 0:
+        raise SimulationEvaluationError("attribution.bootstrap_replicates must be greater than or equal to 0.")
+    if settings.top_k < 1:
+        raise SimulationEvaluationError("attribution.top_k must be at least 1.")
+    if not (settings.zero_tolerance > 0):
+        raise SimulationEvaluationError("attribution.zero_tolerance must be positive.")
 
 
 def _validate_dataset(dataset: SemiSyntheticTrajectoryDataset, group_col: str, stage_col: str) -> None:
@@ -423,6 +542,7 @@ def _pls_integration(
     *,
     stage_col: str,
     observed_blocks: Mapping[OmicsLayer, pd.DataFrame],
+    preprocessor: FittedOmicsPreprocessor,
 ) -> LatentIntegrationResult:
     """Build the PLS molecular latent space (stage-conditioned, double-CV-sized).
 
@@ -487,7 +607,12 @@ def _pls_integration(
     selected_lv = _modal_int_with_parsimony([int(v) for v in cv_result["table"]["LV"].tolist()])
     mean_auroc = float(cv_result["table"]["AUROC"].mean())
 
-    scores = np.asarray(fit_plsda_transform(X, y, n_components=selected_lv))
+    # One final pooled fit. Its training scores are the trajectory measurement
+    # matrix *and* the same fitted estimator is handed to attribution, so both
+    # necessarily share one coordinate system; no second fit or second component
+    # selection ever happens.
+    model = fit_plsda_model(X, y, n_components=selected_lv)
+    scores = np.asarray(model.x_scores_)
     latent = pd.DataFrame(
         scores,
         index=dataset.metadata["sample_id"].astype(str).tolist(),
@@ -498,6 +623,7 @@ def _pls_integration(
         metadata={
             "integration_method": "pls",
             "integration_role": "latent_space",
+            "integration_metadata_version": INTEGRATION_METADATA_VERSION,
             "integration_params": {
                 "stage_col": stage_col,
                 "selected_lv": selected_lv,
@@ -508,12 +634,47 @@ def _pls_integration(
                 "random_state": random_state,
             },
             "cv_mean_auroc": mean_auroc,
+            "cv_repeats_completed": int(cv_result["table"].shape[0]),
+            "selected_lv": selected_lv,
             "shape": tuple(latent.shape),
             "n_samples": int(latent.shape[0]),
             "n_features": int(latent.shape[1]),
             "layer_feature_counts": layer_feature_counts,
+            "feature_order_signature": _feature_order_signature(X.columns),
         },
+        artifacts=PLSIntegrationArtifacts(
+            model=model,
+            features=X,
+            original_scales=_joint_original_scales(preprocessor, X.columns),
+            methylation_units=preprocessor.methylation_units,
+        ),
     )
+
+
+def _feature_order_signature(columns: pd.Index) -> str:
+    """Stable digest of the canonical joint feature order.
+
+    Persisted so top-k truncation and feature alignment stay auditable without
+    storing the full feature list in every record.
+    """
+
+    encoded = "\n".join(str(column) for column in columns).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:16]
+
+
+def _joint_original_scales(preprocessor: FittedOmicsPreprocessor, columns: pd.Index) -> np.ndarray:
+    """Per-feature original-unit scales in canonical joint feature order.
+
+    Methylation scales are M-value scales, matching the fitted preprocessing
+    contract; the unit basis is labeled wherever these are used.
+    """
+
+    scales = np.concatenate([preprocessor.scalers[layer].scale for layer in OMIC_LAYERS])
+    if scales.shape[0] != len(columns):
+        raise SimulationEvaluationError(
+            f"Fitted scales ({scales.shape[0]}) do not align to the joint feature matrix ({len(columns)})."
+        )
+    return scales
 
 
 def _clamp_int(value: Any, *, minimum: int, maximum: int) -> int:

@@ -37,7 +37,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--n-jobs",
         type=int,
         default=None,
-        help="Within-replicate RRPP parallelism (CPUs per task). Overrides the config when set.",
+        help=(
+            "Within-replicate RRPP parallelism (CPUs per task). Overrides the config when set. "
+            "This changes the realized permutation draws and the cell parameter signature, so "
+            "leave it unset for a reproducible, resumable study run."
+        ),
     )
     parser.add_argument(
         "--error-policy",
@@ -56,6 +60,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     config = load_study_config(args.config)
+    if args.n_jobs is not None and args.n_jobs != config.evaluation.n_jobs:
+        # RRPP seeds one RNG stream per worker, so the worker count changes the
+        # realized permutation draws; n_jobs is part of `evaluation_params` and
+        # therefore of the cell parameter signature. Overriding it silently would
+        # make already-completed replicates unresumable.
+        print(
+            f"WARNING: --n-jobs {args.n_jobs} overrides the config's n_jobs "
+            f"{config.evaluation.n_jobs}. This changes the permutation draws and the cell "
+            "parameter signature, so replicates completed under the config value cannot be "
+            "resumed and the run is no longer reproducible from the config alone.",
+            file=sys.stderr,
+        )
     if args.n_jobs is not None:
         evaluation = replace(config.evaluation, n_jobs=args.n_jobs)
         config = replace(config, evaluation=evaluation)

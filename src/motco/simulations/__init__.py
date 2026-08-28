@@ -7,6 +7,7 @@ from .diagnostics import (
     flatten_geometry_diagnostics,
 )
 from .evaluation import (
+    AttributionDiagnosticSettings,
     LatentIntegrationResult,
     SimulationEvaluationError,
     SimulationEvaluationParams,
@@ -141,6 +142,7 @@ __all__ = [
     "SemiSyntheticTrajectoryDataset",
     "SemiSyntheticTrajectoryError",
     "SemiSyntheticTrajectoryParams",
+    "AttributionDiagnosticSettings",
     "SimulationEvaluationError",
     "SimulationEvaluationParams",
     "SimulationEvaluationResult",

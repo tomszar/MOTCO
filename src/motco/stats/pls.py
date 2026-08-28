@@ -73,14 +73,16 @@ def plsda_doubleCV(
 
     Returns
     -------
-    dict with keys:
-      - "table": pd.DataFrame with one row per repeat and four columns
-            "rep" (int), "LV" (int, modal across K outer folds with parsimony
-            tie-break), "AUROC" (float, mean across K outer folds),
-            "AUROC_std" (float, sample std across K outer folds; NaN if K < 2).
-      - "models": list of length n_repeats. Each entry is a PLSRegression
-            refit on the full input (X, one-hot(y)) with the corresponding
-            row's modal n_LV.
+    dict
+        With two keys:
+
+        - ``"table"``: pd.DataFrame with one row per repeat and four columns —
+          ``"rep"`` (int), ``"LV"`` (int, modal across K outer folds with
+          parsimony tie-break), ``"AUROC"`` (float, mean across K outer folds),
+          ``"AUROC_std"`` (float, sample std across K outer folds; NaN if K < 2).
+        - ``"models"``: list of length ``n_repeats``. Each entry is a
+          PLSRegression refit on the full input (X, one-hot(y)) with the
+          corresponding row's modal n_LV.
     """
     _X_arr = np.asarray(X, dtype=float)
     _y_arr = np.asarray(y)

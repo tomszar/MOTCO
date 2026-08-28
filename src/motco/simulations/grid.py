@@ -13,8 +13,13 @@ from pathlib import Path
 from time import perf_counter
 from typing import Any, Literal
 
+from motco.simulations.attribution_diagnostics import ATTRIBUTION_SCHEMA_VERSION
 from motco.simulations.diagnostics import DIAGNOSTIC_SCHEMA_VERSION
-from motco.simulations.evaluation import SimulationEvaluationParams, SimulationEvaluationResult
+from motco.simulations.evaluation import (
+    INTEGRATION_METADATA_VERSION,
+    SimulationEvaluationParams,
+    SimulationEvaluationResult,
+)
 from motco.simulations.semisynthetic import (
     SemiSyntheticTrajectoryParams,
     generate_semisynthetic_trajectory,
@@ -87,6 +92,14 @@ class SimulationReplicateResult:
     truth_metadata: dict[str, Any] = field(default_factory=dict)
     runtime_metadata: dict[str, Any] = field(default_factory=dict)
     cell_metadata: dict[str, Any] = field(default_factory=dict)
+    # Additive Phase 4 fields. They default to empty so records written before
+    # they existed still load, and so a failed diagnostic is distinguishable
+    # from one that was never requested.
+    integration_metadata: dict[str, Any] = field(default_factory=dict)
+    attribution_status: str = "not_requested"
+    attribution_diagnostics: dict[str, Any] = field(default_factory=dict)
+    diagnostic_error_type: str | None = None
+    diagnostic_error_message: str | None = None
     error_type: str | None = None
     error_message: str | None = None
 
@@ -202,6 +215,10 @@ def enumerate_type_i_grid(
     return SimulationGrid(cells=tuple(cells), metadata={"grid_type": "type_i"})
 
 
+CellEvaluationResolver = Callable[[str, str, float], SimulationEvaluationParams]
+"""Resolve ``(phase, trajectory_mode, effect_size)`` to that cell's evaluation params."""
+
+
 def enumerate_power_grid(
     *,
     baseline_generator_params: SemiSyntheticTrajectoryParams,
@@ -211,8 +228,17 @@ def enumerate_power_grid(
     axes: Mapping[str, Sequence[Any]] | None = None,
     n_replicates: int = 1,
     base_seed: int = 0,
+    evaluation_resolver: CellEvaluationResolver | None = None,
+    cell_metadata: Mapping[str, Any] | None = None,
 ) -> SimulationGrid:
-    """Enumerate power cells from trajectory modes, effect sizes, and optional axes."""
+    """Enumerate power cells from trajectory modes, effect sizes, and optional axes.
+
+    ``evaluation_resolver`` may specialize the evaluation parameters per cell
+    (for example, to enable attribution diagnostics only on selected cells).
+    Because it runs *before* cell construction, the resolved settings enter the
+    cell id and parameter signature rather than being applied after the fact.
+    ``cell_metadata`` is merged into every emitted cell's metadata.
+    """
 
     if not trajectory_modes:
         raise SimulationGridError("trajectory_modes must contain at least one mode.")
@@ -220,30 +246,44 @@ def enumerate_power_grid(
         raise SimulationGridError("effect_sizes must contain at least one value.")
     cells: list[SimulationCell] = []
     eval_params = evaluation_params or SimulationEvaluationParams()
+    extra_metadata = dict(cell_metadata or {})
+
+    def resolve(phase: str, mode: str, effect_size: float) -> SimulationEvaluationParams:
+        if evaluation_resolver is None:
+            return eval_params
+        return evaluation_resolver(phase, mode, float(effect_size))
+
     for mode, effect_size in itertools.product(trajectory_modes, effect_sizes):
         generator = replace(
             baseline_generator_params,
             trajectory_mode=mode,  # type: ignore[arg-type]
             group_effect_size=float(effect_size),
         )
+        primary_eval = resolve("power_primary", mode, float(effect_size))
         cells.append(
             make_simulation_cell(
                 phase="power_primary",
                 generator_params=generator,
-                evaluation_params=eval_params,
+                evaluation_params=primary_eval,
                 n_replicates=n_replicates,
                 base_seed=base_seed,
-                metadata={"trajectory_mode": mode, "effect_size": float(effect_size), "varied_axis": None},
+                metadata={
+                    "trajectory_mode": mode,
+                    "effect_size": float(effect_size),
+                    "varied_axis": None,
+                    **extra_metadata,
+                },
             )
         )
         for axis, values in (axes or {}).items():
-            baseline_value = _get_axis_value(generator, eval_params, axis)
+            ofat_eval = resolve("power_ofat", mode, float(effect_size))
+            baseline_value = _get_axis_value(generator, ofat_eval, axis)
             for value in values:
                 if _to_jsonable(value) == _to_jsonable(baseline_value):
                     continue
                 generator_params, axis_eval_params = _apply_axis_value(
                     generator,
-                    eval_params,
+                    ofat_eval,
                     axis,
                     value,
                 )
@@ -265,8 +305,22 @@ def enumerate_power_grid(
     return SimulationGrid(cells=tuple(cells), metadata={"grid_type": "power"})
 
 
+#: Metadata key naming the seed family a cell draws its generator seed from.
+SEED_FAMILY_KEY = "seed_family"
+
+#: Version of the seed-derivation contract; bumped for the matched-seed policy.
+SEED_DERIVATION_VERSION = 4
+
+
 def derive_replicate_seed(cell: SimulationCell, replicate_index: int) -> int:
-    """Derive a deterministic 31-bit unsigned seed from cell identity and replicate index.
+    """Derive a deterministic 31-bit unsigned seed for one cell replicate.
+
+    By default the seed is keyed on the cell's own identity, so every cell is an
+    independent draw. When a cell carries a ``seed_family`` in its metadata — the
+    opt-in matched-seed policy — the seed is keyed on that family instead, so
+    every cell in the family generates the *same* dataset at a given replicate
+    index and requested-effect comparisons become paired at the generated
+    reference. Persistence keys stay ``(cell_id, replicate_index)`` either way.
 
     The result is masked into ``[0, 2**31 - 1]`` so it seeds numpy's default RNG
     (and any other downstream RNG) reproducibly.
@@ -276,7 +330,20 @@ def derive_replicate_seed(cell: SimulationCell, replicate_index: int) -> int:
         raise SimulationGridError(
             f"replicate_index must be in [0, {cell.n_replicates - 1}], got {replicate_index}."
         )
-    payload = {"base_seed": cell.base_seed, "cell_id": cell.cell_id, "replicate_index": replicate_index}
+    family = cell.metadata.get(SEED_FAMILY_KEY)
+    if family is None:
+        payload: dict[str, Any] = {
+            "base_seed": cell.base_seed,
+            "cell_id": cell.cell_id,
+            "replicate_index": replicate_index,
+        }
+    else:
+        payload = {
+            "base_seed": cell.base_seed,
+            "seed_derivation_version": SEED_DERIVATION_VERSION,
+            "seed_family": str(family),
+            "replicate_index": replicate_index,
+        }
     return int(_stable_digest(payload, length=8), 16) & 0x7FFFFFFF
 
 
@@ -290,8 +357,16 @@ def parameter_signature(cell: SimulationCell) -> str:
         "n_replicates": cell.n_replicates,
         "base_seed": cell.base_seed,
         "metadata": _to_jsonable(cell.metadata),
-        "seed_derivation_version": 3,
+        # Diagnostic-schema keys are explicit so a schema change can never
+        # silently resume into a shard written under a different contract.
+        # Realized geometry and the attribution settings are already covered —
+        # geometry by this version key, attribution by the ``evaluation_params``
+        # hash above (the settings are fields on those params) — so neither is
+        # duplicated here.
+        "seed_derivation_version": SEED_DERIVATION_VERSION,
         "realized_geometry_version": DIAGNOSTIC_SCHEMA_VERSION,
+        "integration_metadata_version": INTEGRATION_METADATA_VERSION,
+        "attribution_schema_version": ATTRIBUTION_SCHEMA_VERSION,
     }
     return _stable_digest(payload)
 
@@ -332,6 +407,8 @@ def run_simulation_replicate(
             error_message=str(exc),
         )
 
+    attribution = dict(result.attribution_diagnostics or {})
+    attribution_status = str(attribution.get("status", "not_requested"))
     return SimulationReplicateResult(
         cell_id=cell.cell_id,
         phase=cell.phase,
@@ -347,6 +424,11 @@ def run_simulation_replicate(
         truth_metadata=result.truth_metadata,
         runtime_metadata=result.runtime_metadata,
         cell_metadata=dict(cell.metadata),
+        integration_metadata=dict(result.latent_matrix_metadata),
+        attribution_status=attribution_status,
+        attribution_diagnostics=attribution,
+        diagnostic_error_type=attribution.get("error_type"),
+        diagnostic_error_message=attribution.get("reason") if attribution_status == "failed" else None,
     )
 
 
@@ -543,6 +625,11 @@ def _replicate_result_from_dict(data: Mapping[str, Any]) -> SimulationReplicateR
         truth_metadata=dict(data.get("truth_metadata", {})),
         runtime_metadata=dict(data.get("runtime_metadata", {})),
         cell_metadata=dict(data.get("cell_metadata", {})),
+        integration_metadata=dict(data.get("integration_metadata") or {}),
+        attribution_status=str(data.get("attribution_status") or "not_requested"),
+        attribution_diagnostics=dict(data.get("attribution_diagnostics") or {}),
+        diagnostic_error_type=data.get("diagnostic_error_type"),
+        diagnostic_error_message=data.get("diagnostic_error_message"),
         error_type=data.get("error_type"),
         error_message=data.get("error_message"),
     )
