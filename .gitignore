@@ -212,6 +212,10 @@ __marimo__/
 .Rhistory
 .claude/
 
+# OpenSpec-generated agent skill definitions. Regenerable with `openspec update`
+# and per-developer (the target agent is a local choice), like .claude/ above.
+.agents/
+
 # Local agent/tool state
 .codex/
 .junie/
