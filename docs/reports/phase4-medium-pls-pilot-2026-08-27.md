@@ -2,8 +2,10 @@
 
 **Run date:** 2026-08-27
 **Configuration:** `examples/trajectory_power_study/phase4_pilot_100x199.json`
-**Code revision:** parent commit `fabdc18` plus the uncommitted Phase 4 implementation; every changed
-source file is fingerprinted in `results/phase4-2026-08-27/PROVENANCE.txt`
+**Code revision:** `073bb2f` on `feat/phase4-medium-pls-pilot` (parent `fabdc18`). The pilot executed from
+this working tree before it was committed; the per-file fingerprints taken at launch are in
+`results/phase4-2026-08-27/PROVENANCE.txt`, and the report outputs regenerate byte-identically from this
+revision.
 **Environment:** Python 3.11.15, numpy 2.3.5, pandas 2.3.3, scikit-learn 1.8.0, scipy 1.16.3, motco 0.6.0; no R at runtime
 **Supersedes for gate purposes:** [`mvalue-pls-pilot-2026-07-30.md`](mvalue-pls-pilot-2026-07-30.md), which predates the
 corrected shape estimator, realized-geometry diagnostics, and orientation attribution. That report is retained
@@ -219,8 +221,9 @@ the driver set fixed, which this design deliberately does not do.
 - `n_jobs` is part of each cell's parameter signature because RRPP seeds one RNG stream per worker. This run
   used the config's `n_jobs=1` throughout; parallelism came from concurrent shards. Overriding `--n-jobs`
   would change the realized permutation draws and break resume.
-- The code revision is the working tree over `fabdc18`, fingerprinted in `PROVENANCE.txt`. Once that work is
-  committed, this report should be amended with the commit hash.
+- The pilot executed from the working tree that became commit `073bb2f`. Record generation used exactly that
+  code; the localization scaling fix and the `n_jobs` guard landed afterwards and affect only report
+  generation, and the reports here were regenerated after them and verified byte-identical.
 
 ## Decision and recommended next work
 

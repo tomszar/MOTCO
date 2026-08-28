@@ -2,7 +2,11 @@
 date_utc: 2026-08-27T22:06:35Z
 parent_commit: fabdc18d46ed56e8f1c695481a7ca2096569256a
 parent_commit_subject: Merge pull request #34 from tomszar/feat/orientation-driver-attribution
-working_tree: dirty (Phase 4 implementation not yet committed)
+working_tree: dirty at launch; committed as 073bb2fd5503c1585b65fa02e3fcdf33ede2419f
+code_revision: 073bb2fd5503c1585b65fa02e3fcdf33ede2419f (branch feat/phase4-medium-pls-pilot)
+note: digests below were taken at launch. Record generation used exactly that code.
+      Report-generation code changed afterwards (localization scaling fix, n_jobs guard);
+      the committed report/ outputs were regenerated after those and verified identical.
 config: examples/trajectory_power_study/phase4_pilot_100x199.json
 host_cpus: 16
 
