@@ -14,7 +14,8 @@ unchanged as historical evidence and is **not** used for the Phase 5 decision.
 ## Phase 5 gate decision: **HOLD**
 
 > Mandatory gate failed: `mandatory_power[orientation,angle]` — top-effect power `0.650` against the
-> predeclared floor of `0.800`. The curve itself is monotone within tolerance; the level is short.
+> predeclared floor of `0.800`. The curve itself is monotone within tolerance; the level is short, and the
+> cause is **not yet identified** (see "Why orientation is flat").
 
 Every other mandatory gate passed. Nothing here is a Monte Carlo accident: at 100 replicates the standard
 error at a rate of 0.65 is 0.048, so the observed power is more than three standard errors below the floor.
@@ -102,10 +103,11 @@ room to spare.
 
 `angle` power is 0.59, 0.59, 0.64, 0.65 across effects 0.25 → 1.00. It is monotone within tolerance but
 essentially **flat**: quadrupling the requested effect buys about six points of power. A construction whose
-power does not respond to its own effect size is not simply underpowered; it indicates the measurement is
-saturating against something other than the requested signal.
+power does not respond to its own effect size is not simply underpowered — something other than the
+requested signal is governing the test. The next section shows the obvious candidate (a sampling noise
+floor) is contradicted by the records.
 
-## Why orientation is flat: the geometry
+## Why orientation is flat: what the geometry does and does not explain
 
 Realized geometry at effect 1.00, joint scope (`report/phase4_geometry.csv`). Angles are in degrees;
 `delta` and `shape` are only comparable **within** a column, never across columns.
@@ -121,16 +123,31 @@ Realized geometry at effect 1.00, joint scope (`report/phase4_geometry.csv`). An
 | translation | angle | 0.0 | **16.8** | 8.9 |
 | translation | delta | 0.0 | 0.38 | 0.37 |
 
-The orientation construction is strong and survives integration: 81° at the population level, still 57° in
-the latent space. The problem is the **noise floor**. Translation, whose population angle is exactly 0°,
-measures 16.8° in the observed standardized space at n = 300. Orientation's signal is therefore being read
-against a sampling floor that is a substantial fraction of the effect, and RRPP correctly refuses to reject
-much of the time. This is a sample-size and estimator-variance property, not cross-talk.
+The construction is strong and survives integration: 81° at the population level, still 57° in the latent
+space, against a null floor of 8.9° (translation, whose population angle is exactly 0°). On a simple
+detection-threshold reading that separation should yield near-complete power, and it does not.
 
-Two consequences follow. First, orientation power at n = 300 is limited by how precisely a normalized
-direction can be estimated from 75 samples per group-stage cell in ~660 standardized features — increasing
-the requested effect barely moves that. Second, the flatness is expected under this reading and should be
-treated as a finding about the design point, not as an implementation defect.
+**The obvious explanation is wrong, and the records say so.** Within the orientation cell at effect 1.00,
+the replicates that *fail* to reject have a **larger** mean observed latent angle (66.7°) than the ones that
+reject (52.5°). A noise-floor or underpowered-signal account predicts the opposite ordering. The same
+inversion appears in shape at effect 1.00 (83.3° non-rejecting versus 61.5° rejecting), while the
+translation null behaves normally (30.7° rejecting versus 7.8° non-rejecting) — so the inversion is specific
+to cells that carry real signal, not a general property of the statistic.
+
+Two candidate explanations are ruled out. Latent dimensionality is not responsible: splitting the cell by
+selected components gives an angle rejection rate of 0.71 at `lv = 2` (n = 7) against 0.65 at `lv = 3`
+(n = 93). And it is not Monte Carlo noise: the effect is a 14-degree gap across 65 versus 35 replicates.
+
+What remains is that the RRPP permutation null for `angle` **co-varies with the observed statistic within a
+replicate** — that is, the statistic is not pivotal across replicates, so a replicate whose latent geometry
+inflates the observed angle inflates its own null by at least as much. The pilot cannot confirm this because
+`include_null_distributions` was off, so the per-replicate null quantiles were not persisted. Confirming or
+refuting it is the first item of pre-Phase-5 work; see
+[Phase 5 readiness](../phase5-readiness.md).
+
+Until that is settled, the honest statement is: **orientation power is 0.65 and the cause is not yet
+identified.** It is not cross-talk (the off-diagonal localization below shows nothing projection-associated
+for orientation's own statistic), it is not latent dimensionality, and it is not a weak construction.
 
 ## Off-diagonal responses, localized
 
