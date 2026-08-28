@@ -216,3 +216,10 @@ __marimo__/
 .codex/
 .junie/
 .opencode/
+
+# Study run artifacts. The per-shard and merged JSONL are large (tens of MB) and
+# fully regenerable from the committed config; the report/ outputs and
+# PROVENANCE.txt are small and are what the findings reports cite, so they stay.
+results/**/shard_*.jsonl
+results/**/merged.jsonl
+results/**/logs/

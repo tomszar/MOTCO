@@ -80,6 +80,169 @@ guard (parameter signature) skips already-completed replicates.
 | `base_seed`       | Deterministic seed root                                    |
 | `alpha`           | Significance level for rejection rates                     |
 | `acceptance`      | Pre-specified Type I, power, and specificity targets       |
+| `acceptance.gate` | Phase 4 gate parameters (see below); omit for pre-Phase-4 configs |
+| `attribution`     | Which cells get orientation-attribution diagnostics        |
+| `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 
 `none` is always present as the Type I baseline (enforced by enumeration);
 `translation` is added explicitly as a second negative control.
+
+## Phase 4 pilot
+
+`phase4_pilot_100x199.json` is the committed Phase 4 medium pilot: pooled PLS on
+M-value methylation, `n_samples=300`, four stages, 100 replicates per cell, 199
+RRPP permutations, the four established modes, and effects `0.00`–`1.00` by
+`0.25`. It supersedes `pilot_50x199.json`, which predates the corrected shape
+estimator and realized-geometry diagnostics and is retained as historical
+evidence only. `phase4_smoke.json` exercises the identical code paths at
+development scale; its numbers carry no scientific meaning.
+
+```bash
+# Development-scale smoke over every Phase 4 path (PLS, matched seeds,
+# attribution, geometry, gate report):
+python scripts/run_study_shard.py \
+    --config examples/trajectory_power_study/phase4_smoke.json \
+    --out-dir /tmp/motco-phase4-smoke \
+    --shard-index 0 --n-shards 1 --error-policy record
+python scripts/motco_study.py merge  --out-dir /tmp/motco-phase4-smoke
+python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/phase4_smoke.json \
+    --out-dir /tmp/motco-phase4-smoke
+
+# The medium pilot (1900 work units) on SLURM:
+sbatch --array=0-63 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase4_pilot_100x199.json,STUDY_OUT=$(pwd)/results/phase4,N_SHARDS=64 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir results/phase4
+python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/phase4_pilot_100x199.json \
+    --out-dir results/phase4
+```
+
+Do **not** pass `--n-jobs` for a Phase 4 run. RRPP seeds one RNG stream per
+worker, so the worker count changes the realized permutation draws, and `n_jobs`
+is part of `evaluation_params` and therefore of each cell's parameter signature.
+Overriding it makes completed replicates unresumable and the run irreproducible
+from the committed config alone. Parallelize across shards instead; the sbatch
+script only forwards `--n-jobs` when `STUDY_N_JOBS` is explicitly set.
+
+Write the Phase 4 run to a **new** output directory. Its parameter signatures
+include the bumped seed-derivation version and the diagnostic schema versions,
+so July shards can neither be resumed into nor overwritten by it.
+
+### Matched seeds
+
+`matched_seeds.enabled` makes every **primary** power cell draw its generator
+seed from one shared `(seed family, replicate index)` key, so at a given
+replicate index every mode and effect starts from the same generated reference
+and requested-effect comparisons are paired. Negative-control, Type I, and OFAT
+cells keep their own seed families and stay independent draws. Persistence keys
+remain `(cell_id, replicate_index)`.
+
+At `group_effect_size = 0` the generator returns group B's baseline unchanged
+and consumes no extra randomness, so per-mode zero-effect cells inside one
+family would be byte-identical datasets. With
+`matched_seeds.shared_zero_effect_anchor`, enumeration therefore emits **one**
+mode-agnostic zero-effect primary cell and every mode's power curve resolves its
+`0.00` point from that shared anchor; the report flags those rows with
+`from_shared_anchor` so the modes' nulls are not read as independent evidence.
+Enumeration also asserts that no two primary cells would generate identical data
+at the same replicate index.
+
+Configs without `matched_seeds` keep the pre-Phase-4 per-cell seed derivation
+unchanged.
+
+### Attribution diagnostics
+
+`attribution.enabled` turns on bounded orientation-attribution diagnostics for
+the cells the selector names — in the Phase 4 pilot, every nonzero primary
+`orientation` cell, with 100 frozen-model bootstrap replicates and `top_k=20`.
+Eligibility is resolved **during enumeration**, so it enters the cell's
+parameter signature and never depends on an observed p-value; conditioning on
+significance would bias the reported stability.
+
+Attribution requires `evaluation.integration_method: "pls"` — it conditions on
+the fitted PLS estimator, which `concat` and `snf` do not produce. The exact
+estimator and standardized joint matrix that produced the trajectory scores are
+reused; no second fit or component selection happens.
+
+Each eligible replicate persists a compact, versioned record: effective
+settings, ordered transitions with observed / PLS-captured / residual path
+lengths and retention, the top-k signed features per transition and component
+(standardized **and** original units, with the unit basis labeled so M-value
+methylation is not read as beta values), bootstrap sign and selection stability,
+and precision/recall against generator truth. Fitted estimators, full
+standardized matrices, bootstrap matrices, and unrestricted feature tables are
+never persisted. A cell that was never selected records
+`attribution_status: "not_requested"`; an eligible replicate whose attribution
+fails records `"failed"` with a reason and still contributes its trajectory
+measurement.
+
+Generator truth is defined as the features whose group-stage differential *mean
+change* differs between groups, including CpG→gene→protein propagated effects —
+so a real downstream driver is not scored as a false positive.
+
+### Phase 4 gate
+
+`acceptance.gate` carries every threshold the gate applies; the study code
+hard-codes none of its own, so a gate is re-specified by editing the config.
+
+| Gate field | Meaning |
+|---|---|
+| `alpha` | Significance level for control checks |
+| `control_se_tolerance` | `k` in the one-sided bound `alpha + k·sqrt(alpha(1-alpha)/n)` |
+| `monotonicity_se_tolerance` | A downward power step is tolerated when it is at most this many combined MC SEs |
+| `min_power_at_top` | Default power floor at the largest effect |
+| `confirmation_se_threshold` | An exceedance smaller than this many MC SEs counts as *marginal* |
+| `max_marginal_exceedances` | How many marginal control exceedances may be tolerated (default 1) |
+| `control_modes` | Modes whose cells are Type I controls at every effect level |
+| `rules` | `mandatory_power` / `mandatory_control` / `descriptive` mode-statistic pairs |
+| `require_complete_records` | Whether incomplete records/diagnostics block `proceed` |
+
+The mandatory rules are:
+
+- **Type I inflation** — the `none` baseline and *every* `translation` effect
+  level (translation is a location-only offset at any effect) must keep each
+  available statistic at or below the one-sided bound.
+- **Power** — each `mandatory_power` pair must reach its floor at the top effect
+  and be non-decreasing within `monotonicity_se_tolerance` combined MC SEs.
+- **Control** — each `mandatory_control` off-diagonal pair (magnitude's `angle`
+  and `shape`) is checked against the same inflation bound at its largest effect.
+- **Completeness** — every expected work unit resolved, every completed PLS
+  record carrying selected-component and realized-geometry metadata, and every
+  eligible orientation record carrying valid attribution diagnostics or a
+  recorded failure.
+
+`descriptive` pairs — orientation's and shape's off-diagonals — are reported
+against realized geometry but never gate: Phase 2 established that both
+constructions are genuinely mixed after biological propagation and joint
+preprocessing, so demanding purity there would fail a correct estimator.
+
+Gate multiplicity is predeclared. Each control cell contributes one one-sided
+test per statistic, so at a true rate of exactly alpha each exceeds its bound
+with probability around `0.023`. One marginal exceedance therefore must not
+decide the phase: when exactly one control statistic exceeds its bound by less
+than `confirmation_se_threshold` MC SEs and nothing else mandatory fails, the
+report emits `indeterminate` and names the confirmation re-run. Two or more
+exceedances, or any exceedance of at least one SE, is `hold`. Study execution
+never aborts because a scientific gate fails.
+
+### Phase 4 outputs
+
+Alongside the existing specificity, Type I, and power outputs, `report` writes:
+
+| Output | Contents |
+|---|---|
+| `phase4_operating.csv` | Rejection rate and MC SE by mode, effect, and statistic, with `from_shared_anchor` |
+| `phase4_geometry.csv` / `.png` | Realized geometry by mode, effect, checkpoint, scope, statistic, and path length, with a `measurement_space` label and unavailable counts |
+| `phase4_pls_selection.csv` / `phase4_selected_components.png` | Selected component counts, effective CV settings, AUROC, and missing-diagnostic counts |
+| `phase4_attribution.csv` / `phase4_attribution_stability.png` | Availability, observed-versus-captured retention, cross-replicate top-k Jaccard and sign agreement, bootstrap stability, and truth recovery |
+| `phase4_localization.csv` | First checkpoint at which each off-diagonal response becomes material |
+| `phase4_gate.csv`, `phase4_gate_decision.json` | Every gate observation, and the `proceed` / `hold` / `indeterminate` decision |
+
+Localization compares each checkpoint only against its **own** zero-effect null,
+on a scale-free quantity (`delta` divided by that checkpoint's path length;
+`angle` and `shape` already dimensionless). Raw distances are never compared
+across the standardized feature space and the PLS latent space. Its labels —
+construction-present, sampling/preprocessing-associated, projection-associated —
+describe *where* a response first appears, not what caused it, and gate nothing.

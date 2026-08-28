@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,22 @@ import pandas as pd
 from motco.simulations.grid import (
     SimulationReplicateResult,
     SimulationSummaryResult,
+)
+from motco.simulations.study.config import Phase4GateConfig
+from motco.simulations.study.phase4 import (
+    CHECKPOINT_ORDER as _CHECKPOINT_ORDER,
+)
+from motco.simulations.study.phase4 import (
+    MEASUREMENT_SPACES as _MEASUREMENT_SPACES,
+)
+from motco.simulations.study.phase4 import (
+    Phase4GateDecision,
+    build_operating_frame,
+    evaluate_phase4_gate,
+    localize_off_diagonal,
+    summarize_attribution,
+    summarize_pls_selection,
+    summarize_realized_geometry,
 )
 from motco.simulations.study.summary import CombinedRuleSummary
 
@@ -27,6 +44,105 @@ class ReportFrames:
     specificity_matrix: pd.DataFrame
     power_curves: pd.DataFrame
     type_i_table: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class Phase4ReportFrames:
+    """Phase 4 structured outputs, all traceable to the merged records.
+
+    Every claim a findings report makes should be readable out of one of these
+    tables; they are the primary output and the prose is secondary.
+    """
+
+    operating: pd.DataFrame
+    geometry: pd.DataFrame
+    pls_selection: pd.DataFrame
+    attribution: pd.DataFrame
+    localization: pd.DataFrame
+    gate: pd.DataFrame
+    decision: Phase4GateDecision
+
+
+def build_phase4_frames(
+    gate: Phase4GateConfig,
+    summaries: Sequence[SimulationSummaryResult],
+    records: Sequence[SimulationReplicateResult],
+    *,
+    expected_units: int | None = None,
+) -> Phase4ReportFrames:
+    """Build every Phase 4 structured output plus the gate decision."""
+
+    decision = evaluate_phase4_gate(gate, summaries, records, expected_units=expected_units)
+    return Phase4ReportFrames(
+        operating=build_operating_frame(summaries, records),
+        geometry=summarize_realized_geometry(records),
+        pls_selection=summarize_pls_selection(records),
+        attribution=summarize_attribution(records),
+        localization=localize_off_diagonal(records),
+        gate=decision.to_frame(),
+        decision=decision,
+    )
+
+
+def write_phase4_report(frames: Phase4ReportFrames, out_dir: Path) -> dict[str, Path]:
+    """Write the Phase 4 tables as CSV and the gate decision as JSON."""
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths = {
+        "phase4_operating": out_dir / "phase4_operating.csv",
+        "phase4_geometry": out_dir / "phase4_geometry.csv",
+        "phase4_pls_selection": out_dir / "phase4_pls_selection.csv",
+        "phase4_attribution": out_dir / "phase4_attribution.csv",
+        "phase4_localization": out_dir / "phase4_localization.csv",
+        "phase4_gate": out_dir / "phase4_gate.csv",
+    }
+    frames.operating.to_csv(paths["phase4_operating"], index=False)
+    frames.geometry.to_csv(paths["phase4_geometry"], index=False)
+    frames.pls_selection.to_csv(paths["phase4_pls_selection"], index=False)
+    frames.attribution.to_csv(paths["phase4_attribution"], index=False)
+    frames.localization.to_csv(paths["phase4_localization"], index=False)
+    frames.gate.to_csv(paths["phase4_gate"], index=False)
+
+    decision_path = out_dir / "phase4_gate_decision.json"
+    decision_path.write_text(
+        json.dumps(
+            {
+                "decision": frames.decision.decision,
+                "rationale": frames.decision.rationale,
+                "confirmation_runs": list(frames.decision.confirmation_runs),
+                "observations": [
+                    {
+                        "rule": observation.rule,
+                        "kind": observation.kind,
+                        "trajectory_mode": observation.trajectory_mode,
+                        "statistic": observation.statistic,
+                        "cell_id": observation.cell_id,
+                        "effect_size": observation.effect_size,
+                        "met": observation.met,
+                        "detail": observation.detail,
+                        "observations": observation.observations,
+                    }
+                    for observation in frames.decision.observations
+                ],
+            },
+            indent=2,
+            default=_json_default,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    paths["phase4_gate_decision"] = decision_path
+    return paths
+
+
+def _json_default(value: object) -> object:
+    if isinstance(value, float) and not np.isfinite(value):
+        return None
+    if isinstance(value, np.generic):
+        item = value.item()
+        return None if isinstance(item, float) and not np.isfinite(item) else item
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def build_specificity_matrix(
@@ -329,6 +445,160 @@ def render_power_curves(
     return out_path
 
 
+def render_geometry_checkpoints(frame: pd.DataFrame, out_path: Path) -> Path:
+    """Plot each statistic's realized geometry across checkpoints, by mode.
+
+    Every checkpoint is drawn on its own axis with its measurement space in the
+    label, because a standardized-feature distance and a PLS-latent distance are
+    not on one scale and must not be read off a shared axis.
+    """
+
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    joint = (
+        frame[(frame["scope"] == "joint") & (frame["statistic"].isin(("delta", "angle", "shape")))]
+        if not frame.empty
+        else frame
+    )
+    if joint.empty:
+        return _empty_figure(out_path, "Realized geometry (empty)")
+
+    checkpoints = [c for c in _CHECKPOINT_ORDER if c in set(joint["checkpoint"])]
+    statistics = [s for s in ("delta", "angle", "shape") if s in set(joint["statistic"])]
+    fig, axes = plt.subplots(
+        len(statistics),
+        len(checkpoints),
+        figsize=(3.2 * len(checkpoints), 2.8 * len(statistics)),
+        squeeze=False,
+    )
+    for row, statistic in enumerate(statistics):
+        for column, checkpoint in enumerate(checkpoints):
+            ax = axes[row][column]
+            block = joint[(joint["statistic"] == statistic) & (joint["checkpoint"] == checkpoint)]
+            for mode in sorted(block["trajectory_mode"].dropna().unique().tolist()):
+                sub = block[block["trajectory_mode"] == mode].sort_values("effect_size")
+                if sub.empty:
+                    continue
+                ax.plot(
+                    sub["effect_size"].to_numpy(dtype=float),
+                    sub["mean"].to_numpy(dtype=float),
+                    marker="o",
+                    label=mode,
+                )
+            space = _MEASUREMENT_SPACES.get(checkpoint, "unknown")
+            if row == 0:
+                ax.set_title(f"{checkpoint}\n({space})", fontsize=8)
+            if column == 0:
+                ax.set_ylabel(statistic)
+            ax.set_xlabel("effect size", fontsize=8)
+            ax.grid(True, alpha=0.3)
+    axes[0][-1].legend(fontsize=7)
+    fig.suptitle("Realized geometry by checkpoint (axes are per-space, not comparable)")
+    fig.tight_layout(rect=(0, 0, 1, 0.94))
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def render_selected_components(frame: pd.DataFrame, out_path: Path) -> Path:
+    """Plot the distribution of selected PLS component counts per cell."""
+
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    block = frame[frame["n_selected_lv"] > 0] if not frame.empty else frame
+    if block.empty:
+        return _empty_figure(out_path, "Selected PLS components (empty)")
+
+    block = block.sort_values(["trajectory_mode", "effect_size"])
+    labels = [
+        f"{row.trajectory_mode}@{row.effect_size}" for row in block.itertuples(index=False)
+    ]
+    x = np.arange(len(block))
+    means = block["selected_lv_mean"].to_numpy(dtype=float)
+    lows = means - block["selected_lv_min"].to_numpy(dtype=float)
+    highs = block["selected_lv_max"].to_numpy(dtype=float) - means
+    fig, ax = plt.subplots(figsize=(max(6.0, 0.5 * len(block)), 3.6))
+    ax.errorbar(x, means, yerr=np.vstack([lows, highs]), fmt="o", capsize=3)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
+    ax.set_ylabel("selected latent variables")
+    ax.set_title("Selected PLS components (mean with observed min/max)")
+    ax.grid(True, axis="y", alpha=0.3)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def render_attribution_stability(frame: pd.DataFrame, out_path: Path) -> Path:
+    """Plot cross-replicate top-k agreement and bootstrap sign stability."""
+
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    block = frame[frame["component"] == "observed"] if not frame.empty else frame
+    if block.empty:
+        return _empty_figure(out_path, "Attribution stability (empty)")
+
+    block = block.sort_values(["trajectory_mode", "effect_size", "transition_id"])
+    labels = [
+        f"{row.trajectory_mode}@{row.effect_size}\n{row.transition_id}"
+        for row in block.itertuples(index=False)
+    ]
+    x = np.arange(len(block))
+    fig, ax = plt.subplots(figsize=(max(6.0, 0.7 * len(block)), 3.6))
+    for column, label in (
+        ("top_k_jaccard", "cross-replicate top-k Jaccard"),
+        ("sign_agreement", "cross-replicate sign agreement"),
+        ("bootstrap_sign_stability_mean", "bootstrap sign stability"),
+    ):
+        if column not in block.columns:
+            continue
+        ax.plot(x, block[column].to_numpy(dtype=float), marker="o", label=label)
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_ylabel("agreement")
+    ax.set_title("Attribution stability (observed component)")
+    ax.grid(True, alpha=0.3)
+    ax.legend(fontsize=7)
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+def render_phase4_figures(frames: Phase4ReportFrames, out_dir: Path) -> dict[str, Path]:
+    """Render every Phase 4 figure alongside the existing study outputs."""
+
+    out_dir = Path(out_dir)
+    return {
+        "phase4_geometry_plot": render_geometry_checkpoints(
+            frames.geometry, out_dir / "phase4_geometry.png"
+        ),
+        "phase4_selected_components_plot": render_selected_components(
+            frames.pls_selection, out_dir / "phase4_selected_components.png"
+        ),
+        "phase4_attribution_stability_plot": render_attribution_stability(
+            frames.attribution, out_dir / "phase4_attribution_stability.png"
+        ),
+    }
+
+
+def _empty_figure(out_path: Path, title: str) -> Path:
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(4, 3))
+    ax.set_title(title)
+    ax.axis("off")
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 def _cell_metadata_index(records: Iterable[SimulationReplicateResult]) -> dict[str, dict]:
     index: dict[str, dict] = {}
     for record in records:
@@ -348,13 +618,20 @@ def _resolve_mode(meta: dict) -> str:
 
 
 __all__ = [
+    "Phase4ReportFrames",
     "ReportFrames",
     "StudyReportError",
+    "build_phase4_frames",
     "build_power_curves",
     "build_specificity_matrix",
     "build_type_i_table",
     "render_power_curves",
     "render_specificity_matrix",
+    "render_attribution_stability",
+    "render_geometry_checkpoints",
+    "render_phase4_figures",
+    "render_selected_components",
     "render_type_i_plot",
+    "write_phase4_report",
     "write_report_csvs",
 ]

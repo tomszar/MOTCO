@@ -20,11 +20,19 @@
 #   STUDY_OUT     Output directory; per-shard `shard_<i>.jsonl` files are written here.
 #   N_SHARDS      Total shards = #SBATCH --array width (also passed to the runner).
 #
-# CPUs-per-task → RRPP n_jobs:
-#   The runner forwards --n-jobs to RRPP via the evaluation params. Set
-#   --n-jobs $SLURM_CPUS_PER_TASK below so the within-replicate permutation
-#   loop uses every CPU allocated to this task. The two parallelism layers —
-#   cells across array tasks and permutations within a task — are orthogonal.
+# Optional environment variable:
+#   STUDY_N_JOBS  Within-replicate RRPP parallelism. Leave UNSET to use the
+#                 value in the config, which is what a reproducible study run
+#                 wants.
+#
+# Why n_jobs is not simply $SLURM_CPUS_PER_TASK:
+#   RRPP seeds one RNG stream per worker, so the realized permutation draws —
+#   and therefore the p-values — depend on the worker count. n_jobs is part of
+#   `evaluation_params` and so enters the cell parameter signature: changing it
+#   between submissions makes completed replicates unresumable and makes the run
+#   irreproducible from the committed config alone. Parallelize across array
+#   tasks (cells), and only set STUDY_N_JOBS when you deliberately accept a
+#   different signature for the whole study.
 #
 # Resubmitting failed shards:
 #   The shard JSONL files are signature-guarded and resumable. If specific
@@ -48,10 +56,15 @@ if [ -f .venv/bin/activate ]; then
     source .venv/bin/activate
 fi
 
+n_jobs_arg=()
+if [ -n "${STUDY_N_JOBS:-}" ]; then
+    n_jobs_arg=(--n-jobs "$STUDY_N_JOBS")
+fi
+
 python scripts/run_study_shard.py \
     --config "$STUDY_CONFIG" \
     --out-dir "$STUDY_OUT" \
     --shard-index "$SLURM_ARRAY_TASK_ID" \
     --n-shards "$N_SHARDS" \
-    --n-jobs "${SLURM_CPUS_PER_TASK:-1}" \
+    "${n_jobs_arg[@]}" \
     --error-policy record

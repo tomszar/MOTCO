@@ -21,15 +21,19 @@ from pathlib import Path
 
 from motco.simulations.grid import read_replicate_results
 from motco.simulations.study.config import load_study_config
+from motco.simulations.study.enumerate import enumerate_study
 from motco.simulations.study.merge import discover_shard_paths, merge_shards
 from motco.simulations.study.report import (
     ReportFrames,
+    build_phase4_frames,
     build_power_curves,
     build_specificity_matrix,
     build_type_i_table,
+    render_phase4_figures,
     render_power_curves,
     render_specificity_matrix,
     render_type_i_plot,
+    write_phase4_report,
     write_report_csvs,
 )
 from motco.simulations.study.summary import (
@@ -77,7 +81,21 @@ def _cmd_report(args: argparse.Namespace) -> int:
     evaluations = evaluate_targets(config.acceptance, per_stat, records)
     target_paths = write_target_report(evaluations, report_dir)
 
-    for key, path in {**csv_paths, **figure_paths, **target_paths}.items():
+    phase4_paths: dict[str, Path] = {}
+    if config.acceptance.gate.enabled:
+        expected_units = sum(cell.n_replicates for cell in enumerate_study(config).cells)
+        frames4 = build_phase4_frames(
+            config.acceptance.gate, per_stat, records, expected_units=expected_units
+        )
+        phase4_paths = {
+            **write_phase4_report(frames4, report_dir),
+            **render_phase4_figures(frames4, report_dir),
+        }
+        print(f"Phase 4 gate decision: {frames4.decision.decision.upper()} — {frames4.decision.rationale}")
+        for run in frames4.decision.confirmation_runs:
+            print(f"  confirmation re-run required: {run['action']}")
+
+    for key, path in {**csv_paths, **figure_paths, **target_paths, **phase4_paths}.items():
         print(f"  {key}: {path}")
     return 0
 

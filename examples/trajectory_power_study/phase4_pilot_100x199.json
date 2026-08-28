@@ -1,0 +1,91 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 300,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.2
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": ["magnitude", "orientation", "shape", "translation"],
+  "effect_sizes": [0.0, 0.25, 0.5, 0.75, 1.0],
+  "axes": {},
+  "n_replicates": 100,
+  "base_seed": 400,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase4-primary",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": true,
+    "trajectory_modes": ["orientation"],
+    "phases": ["power_primary"],
+    "nonzero_effects_only": true,
+    "bootstrap_replicates": 100,
+    "bootstrap_seed": 0,
+    "top_k": 20,
+    "zero_tolerance": 1e-12
+  },
+  "acceptance": {
+    "type_i": [
+      {"alpha": 0.05, "se_tolerance": 2.0}
+    ],
+    "power": [
+      {"trajectory_mode": "magnitude", "statistic": "delta", "min_power_at_top": 0.8},
+      {"trajectory_mode": "orientation", "statistic": "angle", "min_power_at_top": 0.8},
+      {"trajectory_mode": "shape", "statistic": "shape", "min_power_at_top": 0.8}
+    ],
+    "specificity": [],
+    "gate": {
+      "enabled": true,
+      "alpha": 0.05,
+      "control_se_tolerance": 2.0,
+      "monotonicity_se_tolerance": 2.0,
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "max_marginal_exceedances": 1,
+      "control_modes": ["none", "translation"],
+      "require_complete_records": true,
+      "rules": [
+        {"trajectory_mode": "magnitude", "statistic": "delta", "role": "mandatory_power"},
+        {"trajectory_mode": "orientation", "statistic": "angle", "role": "mandatory_power"},
+        {"trajectory_mode": "shape", "statistic": "shape", "role": "mandatory_power"},
+        {"trajectory_mode": "magnitude", "statistic": "angle", "role": "mandatory_control"},
+        {"trajectory_mode": "magnitude", "statistic": "shape", "role": "mandatory_control"},
+        {"trajectory_mode": "orientation", "statistic": "delta", "role": "descriptive"},
+        {"trajectory_mode": "orientation", "statistic": "shape", "role": "descriptive"},
+        {"trajectory_mode": "shape", "statistic": "delta", "role": "descriptive"},
+        {"trajectory_mode": "shape", "statistic": "angle", "role": "descriptive"}
+      ]
+    }
+  },
+  "metadata": {
+    "name": "trajectory-power-phase4-pilot-100x199",
+    "phase": 4,
+    "intent": "Phase 4 medium pilot: pooled PLS on M-value methylation, n=300, 4 stages, 100 replicates, 199 permutations, matched seeds with one shared zero-effect anchor, bounded orientation-attribution diagnostics, and a predeclared Phase 5 gate.",
+    "supersedes": "examples/trajectory_power_study/pilot_50x199.json",
+    "notes": [
+      "Translation is a location-only offset at any effect, so every translation power-grid level is a Type I control alongside the `none` baseline.",
+      "Orientation and shape off-diagonal responses are descriptive: Phase 2 showed both constructions are mixed after biological propagation and joint preprocessing.",
+      "The shape gate constrains only the diagonal `shape` response; it tests detectability of the constructed bend, not shape-specific purity.",
+      "Attribution eligibility is fixed at enumeration and never conditioned on an observed p-value."
+    ]
+  }
+}

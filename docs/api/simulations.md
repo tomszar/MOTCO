@@ -238,3 +238,58 @@ Initial persistence is JSON Lines. Each row records cell and replicate IDs, dete
 ::: motco.simulations.append_replicate_results
 
 ::: motco.simulations.summarize_rejection_rates
+
+## Phase 4 diagnostics and study gate
+
+Phase 4 adds two optional, additive layers on top of the existing harness: a
+bounded orientation-attribution diagnostic computed from the *same* fitted PLS
+estimator that produced the trajectory scores, and a predeclared gate that turns
+the study's operating characteristics into an explicit `proceed` / `hold` /
+`indeterminate` decision for the paper-grade study.
+
+Both are off by default. `SimulationEvaluationParams.attribution` is a disabled
+`AttributionDiagnosticSettings`, and a study configuration without an
+`attribution` or `matched_seeds` block behaves exactly as before. Enabling
+attribution requires `integration_method="pls"`; `concat` and `snf` produce no
+fitted estimator to condition on and are rejected with a descriptive error.
+
+Every gate threshold lives in the study configuration's `acceptance.gate` block,
+never in the summary or report code. See
+`examples/trajectory_power_study/README.md` for the config fields, the matched-
+seed and shared-anchor semantics, the gate rules, and the full output inventory.
+
+::: motco.simulations.AttributionDiagnosticSettings
+
+::: motco.simulations.attribution_diagnostics.compute_attribution_diagnostics
+
+::: motco.simulations.attribution_diagnostics.derive_truth_driver_features
+
+::: motco.simulations.study.AttributionSelector
+
+::: motco.simulations.study.MatchedSeedPolicy
+
+::: motco.simulations.study.Phase4GateConfig
+
+::: motco.simulations.study.GateRule
+
+::: motco.simulations.study.enumerate_study
+
+::: motco.simulations.study.summarize_realized_geometry
+
+::: motco.simulations.study.summarize_pls_selection
+
+::: motco.simulations.study.summarize_attribution
+
+::: motco.simulations.study.localize_off_diagonal
+
+::: motco.simulations.study.type_i_inflation_bound
+
+::: motco.simulations.study.evaluate_phase4_gate
+
+::: motco.simulations.study.Phase4GateDecision
+
+::: motco.simulations.study.build_phase4_frames
+
+::: motco.simulations.study.write_phase4_report
+
+::: motco.simulations.study.render_phase4_figures
