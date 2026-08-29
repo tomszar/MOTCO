@@ -71,6 +71,7 @@ The trajectory pipeline (group differences) is split across three modules — `d
 
 - **`stats/trajectory.py`** — Estimation + geometric metrics.
   - `estimate_difference(Y, model_matrix, LS_means, contrast)` — fits betas via normal equations (Cholesky → direct solve → lstsq fallback), then computes per-group trajectory size (`_estimate_size`), orientation (`_estimate_orientation` via eigendecomposition), and shape (`_estimate_shape` via iterative Procrustes GPA). Returns symmetric matrices `(deltas, angles, shapes)`. `estimate_betas`, `get_observed_vectors`, and `pair_difference` expose the beta/LS-mean prediction step directly.
+  - **Orientation sign convention deviates deliberately from the reference supplement.** PC1 is signed by net displacement `PC1 · (stage_last − stage_first)`, not by the supplement's raw first-stage row (`evo_649_sm_suppmat.r:64`), which would make the sign depend on the trajectory's position relative to the coordinate origin. See the `_estimate_orientation` docstring and `tests/test_trajectory_orientation.py` for the invariance contract.
 
 - **`stats/permutation.py`** — `RRPP(Y, model_full, model_reduced, LS_means, contrast, permutations, n_jobs)` — permutes residuals of the reduced model and calls `estimate_difference` for each permutation. Serial by default; parallel via `multiprocessing.Pool` using `_RRPPWorker` (a picklable callable).
 

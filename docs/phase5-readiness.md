@@ -21,6 +21,19 @@ These need no further pilot work and are ready for Phase 5 as-is.
 
 ## 1. Diagnose the orientation power shortfall — **blocking**
 
+> **Updated 2026-08-28.** An orientation sign-anchor defect was found and fixed
+> ([report](reports/orientation-sign-anchor-2026-08-28.md)): PC1's sign was anchored on the centered
+> first-stage row, which flips for bent trajectories. It was a real bug, but **it does not explain this
+> item.** On byte-identical data, corrected power is **0.64/0.64/0.67/0.68** across effects 0.25 → 1.00 —
+> up ~3 points, still flat, still short of 0.80 by more than two standard errors. The near-180° null mass is
+> **unchanged at 21/700**, so the artifact in the study path has a driver the fix does not address. The
+> figures below are the pre-fix values; substitute the corrected ones above when acting on this item.
+>
+> One finding narrows the search: of 700 null replicates, 46 flip to their supplement under the corrected
+> anchor, and exactly 21 cross into >150° while 21 cross out — a wash. The sign is still being noise-decided
+> in the latent space, consistent with `PC1 · (stage_last − stage_first)` itself landing near zero, or with
+> PC1's *direction* being unstable when the configuration's top two singular values are close.
+
 Orientation `angle` power is 0.65 against the 0.80 floor and nearly flat across effects (0.59 → 0.65).
 **The cause is not identified**, and the obvious explanation is contradicted by the data.
 
@@ -51,6 +64,9 @@ sample size.
 **Decision it unblocks:** whether Phase 5 can use the `angle` test as specified, needs a revised statistic,
 or needs a revised power target. Nothing else on this list matters if the test itself is mis-calibrated
 under signal.
+
+**Status after the sign-anchor fix:** still blocking. `openspec/changes/diagnose-angle-null-pivotality` is
+not displaced and proceeds as written.
 
 ## 2. Investigate orientation → shape at the PLS checkpoint
 

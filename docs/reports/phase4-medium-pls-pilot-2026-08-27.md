@@ -1,5 +1,20 @@
 # Phase 4 medium PLS pilot
 
+> **Partially superseded (2026-08-28) — orientation `angle` values only.** The orientation estimator used for
+> this pilot anchored PC1's sign on the centered first-stage row, which flips the sign for bent trajectories.
+> Every `angle` figure below therefore carries that defect. The corrected re-run is
+> [`orientation-sign-anchor-2026-08-28.md`](orientation-sign-anchor-2026-08-28.md); corrected orientation
+> `angle` power is 0.64/0.64/0.67/0.68 across effects 0.25 → 1.00, against 0.59/0.59/0.64/0.65 here.
+>
+> **The pilot's conclusions are not overturned.** The shortfall against the 0.80 floor survives correction,
+> the Type I and translation controls still hold, the magnitude and shape conclusions are untouched, and the
+> realized-geometry figures (81.1° population, 57.5° latent) substantially stand. What changes is the
+> *explanation* offered below: the "why orientation is flat" section's reasoning is superseded, since the
+> corrected estimator leaves the near-180° null mass unchanged at 21/700.
+>
+> The original numbers in this report are left exactly as run. Nothing below has been edited.
+
+
 **Run date:** 2026-08-27
 **Configuration:** `examples/trajectory_power_study/phase4_pilot_100x199.json`
 **Code revision:** `073bb2f` on `feat/phase4-medium-pls-pilot` (parent `fabdc18`). The pilot executed from

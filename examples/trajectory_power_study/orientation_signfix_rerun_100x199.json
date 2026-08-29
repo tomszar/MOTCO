@@ -1,0 +1,139 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 300,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.2
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "orientation",
+    "shape",
+    "translation"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "axes": {},
+  "n_replicates": 100,
+  "base_seed": 400,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase4-primary",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": true,
+    "trajectory_modes": [
+      "orientation"
+    ],
+    "phases": [
+      "power_primary"
+    ],
+    "nonzero_effects_only": true,
+    "bootstrap_replicates": 100,
+    "bootstrap_seed": 0,
+    "top_k": 20,
+    "zero_tolerance": 1e-12
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [
+      {
+        "trajectory_mode": "orientation",
+        "statistic": "angle",
+        "min_power_at_top": 0.8
+      },
+      {
+        "trajectory_mode": "shape",
+        "statistic": "shape",
+        "min_power_at_top": 0.8
+      }
+    ],
+    "specificity": [],
+    "gate": {
+      "enabled": true,
+      "alpha": 0.05,
+      "control_se_tolerance": 2.0,
+      "monotonicity_se_tolerance": 2.0,
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "max_marginal_exceedances": 1,
+      "control_modes": [
+        "none",
+        "translation"
+      ],
+      "require_complete_records": true,
+      "rules": [
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "angle",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "shape",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "delta",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "shape",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "delta",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "angle",
+          "role": "descriptive"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "name": "trajectory-orientation-signfix-rerun-100x199",
+    "phase": 4,
+    "intent": "Re-measure the orientation, shape, and translation cells under the corrected orientation sign anchor (net displacement instead of the centered first-stage row). Identical generator, evaluation, replicate count, effect sizes, base seed, and matched-seed policy as the Phase 4 medium pilot, so the comparison is like-for-like.",
+    "supersedes": "examples/trajectory_power_study/phase4_pilot_100x199.json",
+    "notes": [
+      "Scope follows openspec/changes/fix-orientation-sign-anchor/design.md: magnitude's `delta` conclusion does not depend on the orientation estimator, so its cells are not re-run and its power/gate rules are dropped here.",
+      "Power-primary cells draw generator seeds from the shared `phase4-primary` family keyed on (base_seed, seed_derivation_version, family, replicate_index), so dropping magnitude leaves every re-run cell's seeds byte-identical to the Phase 4 pilot.",
+      "Translation is a location-only offset at any effect, so every translation power-grid level is a Type I control alongside the `none` baseline.",
+      "Attribution diagnostics are left exactly as configured in the pilot so the evaluation path is unchanged."
+    ]
+  }
+}

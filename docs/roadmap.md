@@ -28,6 +28,7 @@ The roadmap prioritizes interpretability and validation before larger simulation
 - Shape invariance has been audited and corrected: production `shape` now removes translation, proper rotation, and uniform scale while keeping reflections distinct by default.
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration.
 - Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
+- The orientation sign-anchor defect fixed on 2026-08-28 was real but is **not** the cause of the orientation shortfall; corrected power is 0.68 at the top effect ([report](reports/orientation-sign-anchor-2026-08-28.md)).
 - A production feature-driver workflow for significant orientation differences is designed conceptually but not implemented.
 - The 500-replicate paper-grade grid should not run until the orientation/shape gates below are resolved.
 
@@ -186,6 +187,13 @@ What failed:
   angle (66.7°) than those that reject (52.5°). Latent dimensionality, weak construction, cross-talk, and
   Monte Carlo noise are all ruled out. More replicates would not fix it.
 
+  **Update 2026-08-28** ([report](reports/orientation-sign-anchor-2026-08-28.md)): an orientation sign-anchor
+  defect was found and fixed — PC1's sign was anchored on the centered first-stage row, which flips for bent
+  trajectories. It was a real bug, but it does **not** explain this failure. On byte-identical data corrected
+  power is 0.64/0.64/0.67/0.68 across effects 0.25 → 1.00: ~3 points higher, still flat, still short of 0.80.
+  The near-180° null mass is unchanged at 21/700, and the realized-geometry figures stand (81° population,
+  57° latent). The shortfall survives correction and remains unexplained.
+
 Two findings carry into Phase 5. Orientation→shape is the only response that first becomes material at the
 PLS checkpoint rather than in the population geometry. And the PLS reconstruction retains only ~6% of the
 observed orientation contrast (cosine 0.08), so its captured-component top-20 precision against generator
@@ -196,7 +204,8 @@ for stage separation is not sized to preserve group orientation contrast.
 Before Phase 5, see the [Phase 5 readiness worklist](phase5-readiness.md). The blocking item is diagnosing
 the orientation shortfall — the leading hypothesis is that the RRPP null for `angle` co-varies with the
 observed statistic within a replicate, which the pilot cannot confirm because null quantiles were not
-persisted. Then: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality if
+persisted. The 2026-08-28 sign-anchor fix ruled itself out as the cause, so that hypothesis stands and
+`diagnose-angle-null-pivotality` proceeds as written. Then: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality if
 orientation is a primary estimand, and only then choose the Phase 5 design point.
 
 The July pilot ([`mvalue-pls-pilot-2026-07-30.md`](reports/mvalue-pls-pilot-2026-07-30.md)) predates the
