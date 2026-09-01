@@ -35,16 +35,16 @@
 
 ## 5. Run the diagnostic
 
-- [ ] 5.1 Run the diagnostic profile to completion into its own dated output directory under `results/`, sharded, and merge; verify all three cells report zero failed replicates and every completed record carries a null summary.
-- [ ] 5.2 Run the analysis over the merged records and verify all four outputs are produced: association tables, rejection split, standardized counterfactual with control rates, and the uncertainty measures.
+- [x] 5.1 Run the diagnostic profile to completion into its own dated output directory under `results/`, sharded, and merge; verify all three cells report zero failed replicates and every completed record carries a null summary.
+- [x] 5.2 Run the analysis over the merged records and verify all four outputs are produced: association tables, rejection split, standardized counterfactual with control rates, and the uncertainty measures.
 
 ## 6. Findings and Phase 5 decision
 
-- [ ] 6.1 Write the dated findings report under `docs/reports/`, citing the code revision, configuration, and record set behind every number, stating the pivotality verdict, and stating whether the measured association accounts for the Phase 4 rejection inversion; verify every reported number is traceable to a committed record set.
-- [ ] 6.2 State exactly one Phase 5 consequence in the report — `angle` proceeds as specified, is replaced by a pivotal or studentized statistic, or carries a revised power target — and include the explicit statement that the cross-replicate counterfactual is a diagnostic, not a deployable test.
-- [ ] 6.3 Record the resolution in `docs/phase5-readiness.md` (item 1 closed with the decision, and its consequences for items 2–4 noted where they change) and in `docs/roadmap.md`; verify both documents link the new report.
-- [ ] 6.4 Document the null-summary record field and the diagnostic commands in `simulations/study/README.md` and the API docs; verify the reproduction commands run as written.
+- [x] 6.1 Write the dated findings report under `docs/reports/`, citing the code revision, configuration, and record set behind every number, stating the pivotality verdict, and stating whether the measured association accounts for the Phase 4 rejection inversion; verify every reported number is traceable to a committed record set.
+- [x] 6.2 State exactly one Phase 5 consequence in the report — `angle` proceeds as specified, is replaced by a pivotal or studentized statistic, or carries a revised power target — and include the explicit statement that the cross-replicate counterfactual is a diagnostic, not a deployable test.
+- [x] 6.3 Record the resolution in `docs/phase5-readiness.md` (item 1 closed with the decision, and its consequences for items 2–4 noted where they change) and in `docs/roadmap.md`; verify both documents link the new report.
+- [x] 6.4 Document the null-summary record field and the diagnostic commands in `simulations/study/README.md` and the API docs; verify the reproduction commands run as written.
 
 ## 7. Gate
 
-- [ ] 7.1 Run the pre-commit gate — `uv run ruff check src/ tests/ && uv run mypy src/motco/ && MOTCO_TEST_PERMS=99 uv run pytest tests/ -m "not slow" --tb=short` — and verify all three pass.
+- [x] 7.1 Run the pre-commit gate — `uv run ruff check src/ tests/ && uv run mypy src/motco/ && MOTCO_TEST_PERMS=99 uv run pytest tests/ -m "not slow" --tb=short` — and verify all three pass.

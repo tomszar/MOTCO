@@ -1,0 +1,65 @@
+# Angle-null pivotality diagnostic provenance
+date_utc: 2026-09-01T19:33:41Z
+parent_commit: bc0d42cc79c1d7aa557247d0bc2e048c4a3ae583
+parent_commit_subject: Merge pull request #36 from tomszar/fix/orientation-sign-anchor
+code_revision: 899179586c6c04c97e3485bcf19e504309320ba8 (branch feat/diagnose-angle-null-pivotality)
+code_revision_subject: feat: persist per-replicate RRPP null summaries and add the pivotality diagnostic
+working_tree: clean for tracked source at launch (0 tracked non-.idea paths modified); .idea/ editor state left dirty and is not load-bearing
+config: examples/trajectory_power_study/angle_pivotality_diagnostic.json
+host_cpus: 16
+shards: 16 (local, one process each)
+cells: 5 (3 primary at effect 1.00 + the enumerator's mandated 'none' and 'translation' Type I controls)
+work_units: 500 (100 replicates x 5 cells)
+note: this is a one-question diagnostic, not a power study. Acceptance targets and the
+      Phase 5 gate are disabled in the config; the deliverable is the pivotality analysis
+      over the per-replicate RRPP null summaries, not a rejection-rate verdict.
+note: the two Type I control cells are emitted unconditionally by enumerate_study; they are
+      retained deliberately because they supply the null-control reference distribution the
+      cross-replicate standardized counterfactual calibrates against.
+env: NixOS; LD_LIBRARY_PATH extended with the interpreter's own zlib so the manylinux numpy
+     wheel resolves libz.so.1 (runtime linkage only; no package or version change).
+
+## tracked-source digests
+2dfa5cc3b5b290548f4d046cf2060b402063db7503a1a3416b0f37aff38039cd  examples/trajectory_power_study/angle_pivotality_diagnostic.json
+16b39b4d11f0e0eeea73eee096f49fd68489a82e2e7cfedd2f47ba1b2c30c7b6  scripts/angle_null_pivotality.py
+fb4a8911d73427c176526cff76085e24d0d7ffea5306c7fcfeff6343f4fd2c89  scripts/motco_study.py
+76d4ffb6e40a917ddfcfdb47488165454daf106cefd0faa1ca7e7b6d593a44d0  scripts/run_study_shard.py
+a548be21d980614b7157c5eee202bd3c98fd5626291e58f79c70fac0a015c4ec  src/motco/simulations/__init__.py
+79213e28d72f48d08da9fdf8a819fd7a90c9871519c779116d2cb5343ff925e0  src/motco/simulations/attribution_diagnostics.py
+90f563116b8d6e6219203d9695039c08b0d63a47cbdada425c3693ffede6c505  src/motco/simulations/coupling_recovery.py
+d3233f4b2305a53ca5be7face0a96b5fb603b0ca04335a08bafa51368a9a37dd  src/motco/simulations/data/__init__.py
+51ed8d3a860bca6ffa8dc48c76b6877109144c50c91d7aeabbab66ec2a49d122  src/motco/simulations/diagnostics.py
+ad3002beb2d30b49053475c5392fd87b8dd99991d04f29e052bc375d9e84008b  src/motco/simulations/evaluation.py
+eea011284ccc21c79a877fa6b453aa3ffcbf4ef844f9463ea764634a377b5428  src/motco/simulations/fidelity.py
+27496912ccb65e4a0cd38196c24847ba5670e2a8a7bff14669f3b8f4044bd5db  src/motco/simulations/fidelity_visual.py
+d9c5d0cf62d790505954a71bb903881113eae8993245ab3571d6dfe4a97cfc44  src/motco/simulations/generator.py
+9f6fc2ba926dc3a02b3147ac9f3b66432541815a7a94a52e9815511a6640bd4c  src/motco/simulations/grid.py
+9cfde23c493ded275f4f895f7975d5193e1733c83a06c5d049f88006ddb2733f  src/motco/simulations/intersim.py
+cb96c9a13c6cfd85fd917154c7047ebd56d3315c5ac7318e15163a1d379e86ef  src/motco/simulations/linear_recovery.py
+b2b45e6cf5d52db3845d9cb6e3bba27620dc7be42d00cceb81f67495758453a5  src/motco/simulations/methylation_recovery.py
+7a65e9653b8212f350a2bd0cdda277ed93a44a869734399f61d97457fc3bae9b  src/motco/simulations/multiblock_recovery.py
+660c100ffafb029764e5fb2d7a058971c058c90a3c478bcd3fc049283696ef11  src/motco/simulations/pivotality.py
+2ab9a37c1a6b1d828133f350faed05979886901fb43b617e521b3a5d99e3fc50  src/motco/simulations/pls_inverse.py
+ccda4dae77c3976c920bb6835382021a89084ba4bad0169531d68fe8c49abd56  src/motco/simulations/preprocessing.py
+4afbb078c49c4cb1caf3e3c0dca42025f645ddf5a1c96647ec33b329412a7d90  src/motco/simulations/projector_recovery.py
+d236a4d8d91ebc0af601f518f1b0e8ec4ca7c9b2c1aa8b3cdeb50acd2a6ad24b  src/motco/simulations/realized_geometry_study.py
+2dd4187423ac3463edbed06747129b6bc89dd53b4c39621217a0dee67ba69632  src/motco/simulations/reference.py
+a3e0bab3c1929de2d69af40d3c25355bac9129ed7b4343dde0465f75b34c3704  src/motco/simulations/semisynthetic.py
+14e596242dd62d02c14d3387195308c48787d5384ad5eeb923a8e4a88cf3bf57  src/motco/simulations/showcase.py
+76c01ef1b2f11809bef913ea9973ba349b1f51d820345a07f949b92cd9d28f01  src/motco/simulations/specificity.py
+6fc6b11b8da5d655e8aeb21602e2bb09f25d8a009b5fd00373b24e60a99ddb95  src/motco/simulations/study/__init__.py
+e17285f86d1928bf9482ed2b879b1d2180ae64730c3ad12e66b2ea7d3710c20a  src/motco/simulations/study/config.py
+228f50948c7a93cb4aa49e647fd00350c803e6e83adf58c9fe0aa719140d4a49  src/motco/simulations/study/enumerate.py
+a2691361ed464fdf3534660a9a9c78f6a29bb66fb20a79efb1e619f337cbec1a  src/motco/simulations/study/merge.py
+217706310c15d054ef52c36191ef7512f63def8c397efe3ed179099eb0a7afb6  src/motco/simulations/study/phase4.py
+203fadd6481f0c8e38aa882467214d0958d749a9bffbae0ef826e95faf0d4ac6  src/motco/simulations/study/report.py
+f0035468d6fbbaf8d3659a070de44565398c5688f107d619cc66059d1724ac88  src/motco/simulations/study/sharding.py
+2712859ba5fe4e1bfcef79dfae78ec699b13abdf23f95992c35ac8632dc07372  src/motco/simulations/study/summary.py
+7c7df70f61bdfa337df9f348fb0be91aa972829360f1821e8832392e43a69468  src/motco/simulations/study/targets.py
+cde3326208471c8d195d778554efa0bf3bfd98a29949b55af980489f95aab569  src/motco/stats/__init__.py
+0ba4993f7fc44486414c25f0171f176fd0daef8c39324e096f3a8d12e2a8ea20  src/motco/stats/attribution.py
+54a404fd148694dc14f9609cd06d974d9e2fdafd2310f9f67bfb56b7d41693a1  src/motco/stats/design.py
+6ae4bf3156bb916f98a393f31a87952d3a6f187a3bd47fb605c33cf14f8fc484  src/motco/stats/permutation.py
+81f31f99c5890b3b75799a38346ca44577331d3c1524564e8b2f8f674c9503e2  src/motco/stats/pls.py
+50d7b0a780ac381de7fa307491c09df45cc841a954b141c017cad744f42ec497  src/motco/stats/snf.py
+b613a0a67b9aab679264441df0279ba9cf63c85f6b4d52062e2504568967adaf  src/motco/stats/trajectory.py

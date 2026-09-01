@@ -331,14 +331,22 @@ diagnostics:
 each replicate's null moved with its own observed statistic:
 
 ```bash
-python scripts/run_study_shard.py \
-    --config examples/trajectory_power_study/angle_pivotality_diagnostic.json \
-    --shard-index 0 --n-shards 8 --out-dir results/angle-pivotality/
-python scripts/motco_study.py merge --out-dir results/angle-pivotality/
+# 5 cells x 100 replicates = 500 work units; ~26 minutes on 16 cores.
+for i in $(seq 0 15); do
+  python scripts/run_study_shard.py \
+      --config examples/trajectory_power_study/angle_pivotality_diagnostic.json \
+      --out-dir results/angle-pivotality-2026-09-01 \
+      --shard-index "$i" --n-shards 16 --error-policy record &
+done
+wait
+python scripts/motco_study.py merge --out-dir results/angle-pivotality-2026-09-01
 python scripts/angle_null_pivotality.py \
-    --merged results/angle-pivotality/merged.jsonl \
-    --out-dir results/angle-pivotality/report
+    --merged  results/angle-pivotality-2026-09-01/merged.jsonl \
+    --out-dir results/angle-pivotality-2026-09-01/report
 ```
+
+Do **not** pass `--n-jobs`: it is part of the cell parameter signature, so
+overriding it changes the permutation draws and breaks resume.
 
 It writes `pivotality_association.csv` (correlation and slope of the null's
 mean/sd/q95 against the observed statistic, with a Fisher-z interval),
@@ -350,6 +358,14 @@ The standardized counterfactual is a **diagnostic, not a deployable test** — i
 borrows a reference `z` distribution from the null-control cells. Within-replicate
 studentization is a no-op: it rescales both sides of the comparison and leaves
 the p-value unchanged.
+
+Note that `enumerate_study` adds two cells the profile does not request — a
+`none` Type I baseline and a `translation` negative control. They are kept on
+purpose: they are the null-control reference the standardized counterfactual
+calibrates against.
+
+The 2026-09-01 run of this profile is written up in
+`docs/reports/angle-null-pivotality-2026-09-01.md`.
 
 Interpretation notes:
 
