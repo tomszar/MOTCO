@@ -6,7 +6,9 @@ Work to complete before launching the paper-grade study. Derived from the
 
 **Status: item 1 resolved 2026-09-01; items 2–5 open.** Phase 4 is complete; these are its follow-ups.
 The blocking item is closed — `angle` proceeds as specified — and the 0.80 orientation power floor moves to
-item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md).
+item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md). The
+[geometry audit](reports/geometry-audit-2026-09-01.md) (2026-09-01) has since narrowed items 2–4 and added
+preconditions — see its remediation plan (P1–P6).
 
 ## What is already settled — do not re-litigate
 
@@ -78,6 +80,16 @@ on its own observed statistic with slope 0.058, and is flat across the rejection
 0.0266 non-rejecting) while the observed statistic separates 6.9×. Whatever drives the 0.99 rejection rate
 is in the latent geometry, not in the permutation null.
 
+**Narrowed further by the [geometry audit](reports/geometry-audit-2026-09-01.md) (finding F3):** reflection
+is ruled out as the mechanism. Allowing reflections in the latent space changes the shape distance by 0.0%
+in 100 of 100 regenerated pilot replicates (the optimal alignment is already a proper rotation), and the
+distance still clears the replicate's own shape-null q95 in 99 of 100. What remains is the rank-limited-projection
+account: an orientation contrast that lies outside the retained rank-3 subspace re-enters the projection as
+configuration deformation. The audit also found the shape statistic is reflection-*invariant* at every
+pre-integration checkpoint (configuration rank < ambient dimension makes the proper-rotation constraint
+vacuous), so the localization table's rows mix two contracts — resolve the policy (plan item P3) before
+Phase 5 reports cross-checkpoint shape claims.
+
 ## 3. Reconsider latent dimensionality for group contrasts
 
 Component selection saturated at **3 in all 19 cells** (range 2–3, CV AUROC 1.00). That is
@@ -100,6 +112,15 @@ neither tracks the width of the `angle` null (log q95 correlates +0.139 and −0
 the latent space on evidence needs a direct measure of latent trajectory-geometry stability, which does not
 exist yet.
 
+**Resolved by the [geometry audit](reports/geometry-audit-2026-09-01.md) (finding F1):** that measure is the
+relative eigengap (λ₁−λ₂)/Σλ of the centered latent stage-mean configuration. Regenerating pivotality
+replicates from persisted seeds, the pooled-configuration eigengap predicts the recorded `angle` null q95
+(Spearman −0.75 across all 100 orientation replicates, −0.81 within the 16 extremes; narrow-null
+replicates average gap 0.097 vs 0.046 for wide-null ones; replicates that reject average gap 0.053 vs 0.035
+for those that fail). Plan item P1 persists the spectrum per replicate. Caution carried from the audit: any
+group-aware sizing or supervision would void the fixed-latent-space RRPP conditioning — see the plan's
+sequencing notes.
+
 ## 4. Choose the Phase 5 design point
 
 Only after items 2–3; item 1 is resolved. The pilot used n = 300 with four stages (75 samples per
@@ -121,6 +142,14 @@ power is governed by how tightly latent trajectory geometry is determined by the
 study should measure how the **dispersion** of `null_summary["angle"]["q95"]` contracts with samples per
 group-stage cell, not only how the rejection rate moves. In the pilot's orientation cell that dispersion
 spans 5.0°–176.6°, and it — not the observed angle — decides the outcome.
+
+**Preconditioned by the [geometry audit](reports/geometry-audit-2026-09-01.md) (findings F2, F5):** the
+orientation effect axis is censored — the relocation clamp saturates the surgery at e ≈ 0.69, and 80 of 100
+replicate pairs at e = 0.75 and e = 1.00 are byte-identical datasets. Fix the axis (plan item P2) before
+running any design-point power study, or its top cells re-measure the same data. The audit also hands this
+item a second lever besides sample size: baseline continuity (plan item P4) — n-scaling shrinks the noise
+term, but the eigengap's lower tail (near-isotropic baseline draws) is what caps the curve, and that tail is
+a property of the independent-indicator baseline, not of n.
 
 ## 5. Carry into the Phase 5 report contract
 
