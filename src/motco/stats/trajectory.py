@@ -359,19 +359,56 @@ def _estimate_orientation(
 
     Returns
     -------
-    orientation: int
-        Orientation of the trajectory.
+    orientation: np.ndarray
+        Unit vector along the trajectory's direction of progression.
+
+    Notes
+    -----
+    The estimator is PC1 of the centered stage configuration, as in the
+    reference implementation (``tests/data/reference/evo_649_sm_suppmat.r:57``).
+
+    The **sign convention deviates deliberately** from that reference. Its
+    ``#check startingpoint location`` line (``:64``) resolves PC1's inherent
+    sign ambiguity by anchoring on the raw first-stage row, ``M[1, ] . PC1``.
+    That anchor is unusable here for two reasons:
+
+    - Taken literally on raw coordinates, the sign depends on where the
+      trajectory sits relative to the coordinate origin, so a pure translation
+      can reverse it — which would break MOTCO's translation null control.
+    - Taken on the centered configuration, the anchor is
+      ``PC1 . (stage_first - centroid)``, which vanishes whenever a trajectory
+      departs and returns laterally along its own principal axis. The sign is
+      then decided by noise, and two trajectories carrying no orientation
+      difference get reported as near-antiparallel.
+
+    Anchoring on **net displacement** instead states what the reference line is
+    groping toward — orient PC1 along the direction of progression. It is
+    intrinsic to the trajectory, hence invariant to translation and to uniform
+    scale; it stays well away from zero for any real progression; and for two
+    stages it reduces exactly to the transition direction.
+
+    Fixture effect: ``results_example2.csv`` (5 levels) is reproduced exactly by
+    all three anchors. On ``results_example1.csv`` (2 levels) only the raw
+    anchor matches R — pairs ``t1/t3`` and ``t2/t3`` sit on opposite sides of
+    the PCA origin, so R reports 105.30/103.51 where both the previous centered
+    anchor and this one report the supplements 74.70/76.49. This convention
+    therefore leaves the committed fixture outputs unchanged; it does not
+    introduce the example1 deviation, which predates it. See
+    ``tests/test_trajectory_orientation.py`` for the invariance contract.
+
+    The one accepted degeneracy is a closed trajectory whose last stage returns
+    to its first: net displacement vanishes and no direction is defined.
     """
-    X = np.asarray(obs_vect, dtype=float)[levels, :]
+    X_raw = np.asarray(obs_vect, dtype=float)[levels, :]
     # Center rows
-    X = X - X.mean(axis=0, keepdims=True)
+    X = X_raw - X_raw.mean(axis=0, keepdims=True)
     # The leading eigenvector of X.T @ X is the right singular vector of X
     # for the largest singular value; svd on the (k x p) data matrix avoids
     # ever forming the (p x p) covariance matrix.
     _, _, Vt = np.linalg.svd(X, full_matrices=False)
     orientation = Vt[0, :]
-    # Ensure deterministic sign following the first (centered) vector
-    c1 = float(orientation @ X[0, :])
+    # Sign PC1 along the trajectory's direction of progression (see Notes).
+    c1 = float(orientation @ (X_raw[-1, :] - X_raw[0, :]))
     if c1 < 0:
         orientation = -orientation
     return orientation

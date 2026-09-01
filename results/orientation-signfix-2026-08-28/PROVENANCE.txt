@@ -1,0 +1,27 @@
+# Orientation sign-anchor re-run provenance
+date_utc: 2026-08-28T22:29:09Z
+parent_commit: 472584084ae69ec06459e900839dc65932f11c6c
+parent_commit_subject: Merge pull request #35 from tomszar/feat/phase4-medium-pls-pilot
+working_tree: dirty at launch (openspec/changes/fix-orientation-sign-anchor applied, uncommitted)
+config: examples/trajectory_power_study/orientation_signfix_rerun_100x199.json
+baseline_for_comparison: results/phase4-2026-08-27/merged.jsonl
+report: docs/reports/orientation-sign-anchor-2026-08-28.md
+host_cpus: 16
+shards: 16
+records: 1500 (0 failed)
+note: the only code difference from the Phase 4 pilot that affects generated
+      records is the orientation sign anchor in _estimate_orientation
+      (centered first-stage row -> net displacement). All 1500 replicate
+      generator seeds were verified byte-identical to the Phase 4 pilot's,
+      so every cell comparison is paired on the same data.
+rejection_convention: strict p < alpha (motco.simulations.grid._is_rejection)
+
+## tracked-source digests
+b613a0a67b9aab679264441df0279ba9cf63c85f6b4d52062e2504568967adaf  src/motco/stats/trajectory.py
+336f06e59c1690d2204d7729e4ca8c3b9ded19b2baf41244d81ba8994d8ca750  tests/test_trajectory_orientation.py
+ac265f8569bdc335d7f3cbeb6f065ed8d31d7eb966ffb64550a36a96c205aef0  examples/trajectory_power_study/orientation_signfix_rerun_100x199.json
+2af6710219a933808b76075922703b3c4fe1dd008da93dc9353e25ec59869036  scripts/orientation_signfix_analysis.py
+e17285f86d1928bf9482ed2b879b1d2180ae64730c3ad12e66b2ea7d3710c20a  src/motco/simulations/study/config.py
+228f50948c7a93cb4aa49e647fd00350c803e6e83adf58c9fe0aa719140d4a49  src/motco/simulations/study/enumerate.py
+fd76ffc9a01e8ccfcdd67d815a0b4af5a3060fb9c81915b5ab0238be72743833  src/motco/simulations/evaluation.py
+cc05db8468346feeeaf99b4b138a0c8e07a03837902a9823f10b4c2504b0d847  src/motco/simulations/grid.py

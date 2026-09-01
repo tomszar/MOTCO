@@ -187,13 +187,16 @@ def test_estimate_difference_inf_in_model_matrix():
 
 
 def _estimate_orientation_reference_eigh(obs_vect: np.ndarray, levels: list[int]) -> np.ndarray:
-    X = np.asarray(obs_vect, dtype=float)[levels, :]
-    X = X - X.mean(axis=0, keepdims=True)
+    X_raw = np.asarray(obs_vect, dtype=float)[levels, :]
+    X = X_raw - X_raw.mean(axis=0, keepdims=True)
     n = X.shape[0]
     C = (X.T @ X) / (n - 1) if n > 1 else X.T @ X
     _, v = np.linalg.eigh(C)
     orientation = v[:, -1]
-    c1 = float(orientation @ X[0, :])
+    # Net-displacement anchor, matching the production convention; this helper
+    # is frozen only against the eigh-vs-SVD path, not the sign convention.
+    # See openspec/changes/fix-orientation-sign-anchor/.
+    c1 = float(orientation @ (X_raw[-1, :] - X_raw[0, :]))
     if c1 < 0:
         orientation = -orientation
     return orientation
