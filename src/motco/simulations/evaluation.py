@@ -153,6 +153,11 @@ class SimulationEvaluationResult:
     null_distributions: dict[str, list[float]] | None = None
     realized_geometry: dict[str, Any] = field(default_factory=dict)
     attribution_diagnostics: dict[str, Any] = field(default_factory=dict)
+    # Compact per-statistic description of the permutation null. Produced on
+    # every RRPP run — unlike ``null_distributions``, which stays opt-in — so a
+    # record can locate its own observed statistic against its own critical
+    # value without retaining the full draw vectors.
+    null_summary: dict[str, dict[str, float]] = field(default_factory=dict)
 
 
 def evaluate_semisynthetic_trajectory(
@@ -195,6 +200,7 @@ def evaluate_semisynthetic_trajectory(
 
     p_values: dict[str, float] = {}
     null_distributions: dict[str, list[float]] | None = None
+    null_summary: dict[str, dict[str, float]] = {}
     if params.permutations > 0:
         dist_delta, dist_angle, dist_shape = RRPP(
             latent.matrix,
@@ -218,6 +224,7 @@ def evaluate_semisynthetic_trajectory(
             for statistic, observed in pair_statistics.items()
             if statistic in null_values and np.isfinite(observed)
         }
+        null_summary = _summarize_null_distributions(null_values)
         if params.include_null_distributions:
             null_distributions = null_values
 
@@ -262,6 +269,7 @@ def evaluate_semisynthetic_trajectory(
         null_distributions=null_distributions,
         realized_geometry=realized_geometry,
         attribution_diagnostics=attribution_diagnostics,
+        null_summary=null_summary,
     )
 
 
@@ -735,3 +743,41 @@ def _extract_null_distributions(
 def _empirical_p_value(null_values: list[float], observed: float) -> float:
     values = np.asarray(null_values, dtype=float)
     return float((1.0 + np.sum(values >= observed)) / (1.0 + values.size))
+
+
+#: Null quantiles retained per statistic. ``q95`` is the alpha-level upper
+#: critical value the test actually compares against; the RRPP null for an angle
+#: is bounded and skewed, so it is not recoverable from the mean and sd.
+_NULL_SUMMARY_QUANTILES: tuple[tuple[str, float], ...] = (
+    ("q50", 0.50),
+    ("q90", 0.90),
+    ("q95", 0.95),
+    ("q99", 0.99),
+)
+
+
+def _summarize_null_distributions(
+    null_values: Mapping[str, list[float]],
+) -> dict[str, dict[str, float]]:
+    """Describe each permutation null compactly enough to persist per replicate.
+
+    Non-finite draws are dropped and ``count`` reports how many survived, so an
+    exclusion is visible rather than silently folded into the moments. Every
+    value is a plain JSON-safe float: a statistic with too few retained draws to
+    define a moment omits that key instead of emitting ``NaN``, which ``json``
+    would write as a non-conforming literal.
+    """
+
+    summary: dict[str, dict[str, float]] = {}
+    for statistic, values in null_values.items():
+        draws = np.asarray(values, dtype=float)
+        retained = draws[np.isfinite(draws)]
+        entry: dict[str, float] = {"count": float(retained.size)}
+        if retained.size >= 1:
+            entry["mean"] = float(retained.mean())
+            for name, q in _NULL_SUMMARY_QUANTILES:
+                entry[name] = float(np.quantile(retained, q))
+        if retained.size >= 2:
+            entry["sd"] = float(retained.std(ddof=1))
+        summary[statistic] = entry
+    return summary

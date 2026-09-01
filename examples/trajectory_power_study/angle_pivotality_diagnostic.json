@@ -1,0 +1,57 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 300,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.2
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": ["magnitude", "orientation", "translation"],
+  "effect_sizes": [1.0],
+  "axes": {},
+  "n_replicates": 100,
+  "base_seed": 400,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase4-primary",
+    "shared_zero_effect_anchor": false
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [],
+    "power": [],
+    "specificity": [],
+    "gate": {"enabled": false}
+  },
+  "metadata": {
+    "name": "angle-pivotality-diagnostic-100x199",
+    "phase": 4,
+    "intent": "Diagnostic for `diagnose-angle-null-pivotality`: measure whether each replicate's RRPP permutation null moves with its own observed statistic. Three cells at effect 1.00 — orientation (the power shortfall), translation (the null control that behaved normally), magnitude (the comparator whose statistic reached power 1.00) — with every generator, integration, and evaluation parameter matching phase4_pilot_100x199.json.",
+    "derives_from": "examples/trajectory_power_study/phase4_pilot_100x199.json",
+    "notes": [
+      "This is a one-question diagnostic, not a power study. Acceptance targets and the Phase 5 gate are disabled: the deliverable is the pivotality analysis over the per-replicate null summaries, not a rejection-rate verdict.",
+      "Only effect 1.00 is enumerated, so there is no zero-effect anchor to share; matched seeds still pair the three primary cells at each replicate index so the comparison across modes is on the same generator draws.",
+      "Attribution diagnostics are off: they answer a different question (which features drive orientation) and cost time this diagnostic does not need.",
+      "Everything else is held at the Phase 4 pilot values on purpose — the target of the diagnostic is the Phase 4 behavior itself, so changing the permutation count or sample size would explain a different configuration."
+    ]
+  }
+}

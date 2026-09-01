@@ -276,6 +276,18 @@ seed and shared-anchor semantics, the gate rules, and the full output inventory.
 
 ::: motco.simulations.study.summarize_realized_geometry
 
+## Angle-pivotality diagnostic
+
+::: motco.simulations.pivotality.association_table
+
+::: motco.simulations.pivotality.rejection_split_table
+
+::: motco.simulations.pivotality.standardized_counterfactual_table
+
+::: motco.simulations.pivotality.replicate_z
+
+::: motco.simulations.pivotality.write_pivotality_tables
+
 ::: motco.simulations.study.summarize_pls_selection
 
 ::: motco.simulations.study.summarize_attribution
