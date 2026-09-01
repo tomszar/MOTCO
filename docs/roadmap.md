@@ -29,6 +29,7 @@ The roadmap prioritizes interpretability and validation before larger simulation
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration.
 - Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
 - The orientation sign-anchor defect fixed on 2026-08-28 was real but is **not** the cause of the orientation shortfall; corrected power is 0.68 at the top effect ([report](reports/orientation-sign-anchor-2026-08-28.md)).
+- The orientation shortfall is **diagnosed** as of 2026-09-01: the RRPP null for `angle` tracks its own observed statistic almost one-for-one (slope 0.811), which explains the rejection inversion, but the tracking is load-bearing rather than corrigible — `angle` proceeds as specified and the 0.80 floor becomes a design-point question ([report](reports/angle-null-pivotality-2026-09-01.md)).
 - A production feature-driver workflow for significant orientation differences is designed conceptually but not implemented.
 - The 500-replicate paper-grade grid should not run until the orientation/shape gates below are resolved.
 
@@ -194,6 +195,15 @@ What failed:
   The near-180° null mass is unchanged at 21/700, and the realized-geometry figures stand (81° population,
   57° latent). The shortfall survives correction and remains unexplained.
 
+  **Update 2026-09-01** ([report](reports/angle-null-pivotality-2026-09-01.md)): the shortfall is
+  **explained**. Each replicate's own `angle` critical value regresses on its own observed angle with slope
+  0.811 — near-unit tracking, specific to `angle` (the same slope is 0.030 for `delta` and 0.058 for `shape`
+  in the cells where those carry signal). That accounts for the inversion completely: the 32 non-rejecting
+  orientation replicates carry a larger mean observed angle (60.8° vs 46.5°) but a 6.6× larger critical
+  value (103.6° vs 15.8°). The tracking is **not** a defect to remove — a fixed threshold drops power from
+  0.68 to 0.01, and cross-replicate standardization gains only 0.02 — so the statistic and its test are
+  sound, and the gap to 0.80 is a design-point property.
+
 Two findings carry into Phase 5. Orientation→shape is the only response that first becomes material at the
 PLS checkpoint rather than in the population geometry. And the PLS reconstruction retains only ~6% of the
 observed orientation contrast (cosine 0.08), so its captured-component top-20 precision against generator
@@ -201,12 +211,13 @@ truth is 0.15 while the observed component's is 1.00 — driver reports must use
 Component selection saturates at `n_stages - 1` because supervision is on the stage label, so a space sized
 for stage separation is not sized to preserve group orientation contrast.
 
-Before Phase 5, see the [Phase 5 readiness worklist](phase5-readiness.md). The blocking item is diagnosing
-the orientation shortfall — the leading hypothesis is that the RRPP null for `angle` co-varies with the
-observed statistic within a replicate, which the pilot cannot confirm because null quantiles were not
-persisted. The 2026-08-28 sign-anchor fix ruled itself out as the cause, so that hypothesis stands and
-`diagnose-angle-null-pivotality` proceeds as written. Then: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality if
-orientation is a primary estimand, and only then choose the Phase 5 design point.
+Before Phase 5, see the [Phase 5 readiness worklist](phase5-readiness.md). Its blocking item — diagnosing
+the orientation shortfall — was **resolved on 2026-09-01** by
+[`diagnose-angle-null-pivotality`](reports/angle-null-pivotality-2026-09-01.md): the co-variation
+hypothesis is confirmed, it explains the inversion, no remedy recovers the power, and `angle` proceeds as
+specified. What remains: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality
+if orientation is a primary estimand, and then choose the Phase 5 design point — which now also owns the
+0.80 orientation power floor.
 
 The July pilot ([`mvalue-pls-pilot-2026-07-30.md`](reports/mvalue-pls-pilot-2026-07-30.md)) predates the
 corrected shape estimator and realized-geometry diagnostics. It is retained unchanged as historical evidence

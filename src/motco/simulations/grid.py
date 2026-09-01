@@ -98,6 +98,13 @@ class SimulationReplicateResult:
     integration_metadata: dict[str, Any] = field(default_factory=dict)
     attribution_status: str = "not_requested"
     attribution_diagnostics: dict[str, Any] = field(default_factory=dict)
+    # Per-statistic description of this replicate's own permutation null. Empty
+    # for records written before the field existed and for evaluations that ran
+    # no permutations; ``runtime_metadata["permutations"]`` separates the two.
+    # Deliberately absent from ``parameter_signature`` — it summarizes draws that
+    # already happened and changes no generation, integration, or permutation
+    # behavior, so pre-change shards stay resumable.
+    null_summary: dict[str, dict[str, float]] = field(default_factory=dict)
     diagnostic_error_type: str | None = None
     diagnostic_error_message: str | None = None
     error_type: str | None = None
@@ -427,6 +434,9 @@ def run_simulation_replicate(
         integration_metadata=dict(result.latent_matrix_metadata),
         attribution_status=attribution_status,
         attribution_diagnostics=attribution,
+        null_summary={
+            statistic: dict(entry) for statistic, entry in (result.null_summary or {}).items()
+        },
         diagnostic_error_type=attribution.get("error_type"),
         diagnostic_error_message=attribution.get("reason") if attribution_status == "failed" else None,
     )
@@ -628,6 +638,10 @@ def _replicate_result_from_dict(data: Mapping[str, Any]) -> SimulationReplicateR
         integration_metadata=dict(data.get("integration_metadata") or {}),
         attribution_status=str(data.get("attribution_status") or "not_requested"),
         attribution_diagnostics=dict(data.get("attribution_diagnostics") or {}),
+        null_summary={
+            str(statistic): {str(key): float(value) for key, value in dict(entry).items()}
+            for statistic, entry in dict(data.get("null_summary") or {}).items()
+        },
         diagnostic_error_type=data.get("diagnostic_error_type"),
         diagnostic_error_message=data.get("diagnostic_error_message"),
         error_type=data.get("error_type"),

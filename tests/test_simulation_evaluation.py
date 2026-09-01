@@ -51,6 +51,21 @@ def make_dataset(*, n_stages: int = 3) -> SemiSyntheticTrajectoryDataset:
     )
 
 
+# Captured from ``concat`` / 5 permutations / seed 2026 at commit fab94d6 — i.e.
+# before the permutation-null summary existed. Pinned so the summary can be shown
+# to leave the test it describes untouched.
+PRE_CHANGE_P_VALUES = {
+    "angle": 0.3333333333333333,
+    "delta": 0.6666666666666666,
+    "shape": 0.3333333333333333,
+}
+PRE_CHANGE_PAIR_STATISTICS = {
+    "angle": 42.194748480162865,
+    "delta": 0.23766293337564282,
+    "shape": 0.2704919212869626,
+}
+
+
 def test_concat_integration_standardizes_and_records_metadata() -> None:
     result = integrate_semisynthetic_dataset(make_dataset(), SimulationEvaluationParams(integration_method="concat"))
 
@@ -198,3 +213,98 @@ def test_truth_metadata_is_json_serializable_without_indicator_arrays() -> None:
     assert result.truth_metadata["indicator_counts"] == {"A": {"methylation": [1, 2, 1]}}
     # round-trips through JSON (this is what the study's JSONL persistence does)
     json.dumps(result.truth_metadata)
+
+
+def test_null_summary_reports_moments_and_quantiles_matching_the_draws() -> None:
+    params = SimulationEvaluationParams(
+        integration_method="concat",
+        permutations=8,
+        seed=2026,
+        include_null_distributions=True,
+    )
+    result = evaluate_semisynthetic_trajectory(make_dataset(), params)
+
+    assert result.null_distributions is not None
+    assert set(result.null_summary) == set(result.null_distributions)
+    for statistic, draws in result.null_distributions.items():
+        values = np.asarray(draws, dtype=float)
+        entry = result.null_summary[statistic]
+        assert entry["count"] == float(values.size)
+        assert entry["mean"] == pytest.approx(float(values.mean()))
+        assert entry["sd"] == pytest.approx(float(values.std(ddof=1)))
+        for name, q in (("q50", 0.50), ("q90", 0.90), ("q95", 0.95), ("q99", 0.99)):
+            assert entry[name] == pytest.approx(float(np.quantile(values, q)))
+        # JSON-safe scalars only — this is what the study's JSONL persistence writes.
+        assert all(isinstance(value, float) and np.isfinite(value) for value in entry.values())
+
+
+def test_null_summary_excludes_non_finite_draws_and_reduces_the_count() -> None:
+    from motco.simulations.evaluation import _summarize_null_distributions
+
+    clean = [1.0, 2.0, 3.0, 4.0]
+    dirty = [1.0, np.nan, 2.0, np.inf, 3.0, -np.inf, 4.0]
+    summary = _summarize_null_distributions({"angle": dirty, "delta": clean})
+
+    assert len(dirty) == 7
+    assert summary["angle"]["count"] == 4.0  # three non-finite draws dropped
+    assert summary["delta"]["count"] == 4.0
+    # The retained draws are exactly the finite ones, so both summaries agree.
+    assert summary["angle"] == summary["delta"]
+    assert summary["angle"]["mean"] == pytest.approx(2.5)
+
+
+def test_null_summary_omits_undefined_moments_rather_than_emitting_nan() -> None:
+    import json
+
+    from motco.simulations.evaluation import _summarize_null_distributions
+
+    summary = _summarize_null_distributions({"empty": [np.nan], "single": [7.0]})
+
+    assert summary["empty"] == {"count": 0.0}
+    assert "sd" not in summary["single"]
+    assert summary["single"]["mean"] == pytest.approx(7.0)
+    # NaN would round-trip through ``json`` as a non-conforming literal.
+    assert "NaN" not in json.dumps(summary)
+
+
+def test_null_summary_is_independent_of_full_distribution_retention() -> None:
+    base = dict(integration_method="concat", permutations=4, seed=99)
+    without = evaluate_semisynthetic_trajectory(
+        make_dataset(), SimulationEvaluationParams(**base, include_null_distributions=False)
+    )
+    with_full = evaluate_semisynthetic_trajectory(
+        make_dataset(), SimulationEvaluationParams(**base, include_null_distributions=True)
+    )
+
+    assert without.null_distributions is None
+    assert without.null_summary
+    assert with_full.null_distributions is not None
+    assert with_full.null_summary == without.null_summary
+
+
+def test_null_summary_is_inert_and_absent_without_permutations() -> None:
+    """The summary must not perturb the test it describes.
+
+    The expected values are the ones this configuration produced before the
+    summary existed; they are pinned as literals so a future change to the
+    summary cannot silently move the statistics or p-values it summarizes.
+    """
+
+    params = SimulationEvaluationParams(integration_method="concat", permutations=5, seed=2026)
+    first = evaluate_semisynthetic_trajectory(make_dataset(), params)
+    second = evaluate_semisynthetic_trajectory(make_dataset(), params)
+
+    assert first.p_values == second.p_values
+    assert first.pair_statistics == second.pair_statistics
+    assert first.null_summary == second.null_summary
+    assert first.p_values == pytest.approx(PRE_CHANGE_P_VALUES)
+    assert first.pair_statistics == pytest.approx(PRE_CHANGE_PAIR_STATISTICS)
+    assert first.runtime_metadata["permutations"] == 5
+    assert first.group_levels == ["A", "B"]
+    assert first.contrast == [[0, 1, 2], [3, 4, 5]]
+
+    no_perms = evaluate_semisynthetic_trajectory(
+        make_dataset(), SimulationEvaluationParams(integration_method="concat", permutations=0)
+    )
+    assert no_perms.null_summary == {}
+    assert no_perms.p_values == {}

@@ -22,6 +22,15 @@
 - [x] 4.1 Add a re-run configuration covering the orientation, shape, and translation cells at the Phase 4 parameters and seeds, writing to its own dated results directory; verify it loads and enumerates exactly the intended cells.
 - [x] 4.2 Run it to completion and merge; verify zero failed replicates.
 - [x] 4.3 Recompute the observed-angle distributions per cell and verify the 150–180° mass is gone from the null cells — the direct check that the artifact is eliminated in the study path, not just in unit tests.
+  - **Measured deviation:** the mass is **not** gone. It is unchanged at **21 of 700** null replicates before
+    and after the fix (`docs/reports/orientation-sign-anchor-2026-08-28.md`). The check ran and returned the
+    opposite of its stated expectation, which is the change's central negative finding: the sign anchor was a
+    real defect, but it is not what produces near-180° angles in the study path. The unit-level contract
+    (`Requirement: Bent trajectories do not produce spurious reversals`) is scoped to *constructed* null
+    configurations and does hold; the study-path mass is a different phenomenon. It was later explained by
+    `diagnose-angle-null-pivotality` (archived 2026-09-01): the null cell's observed-angle distribution is
+    genuinely heavy-tailed — median 5.1°, 95th percentile 153.2° — because latent trajectory geometry is
+    poorly determined in a substantial minority of draws, not because the estimator reverses a sign.
 - [x] 4.4 Report corrected orientation `angle` power against the 0.80 floor, corrected shape-cell `angle` behavior, and the translation control's rejection rates; verify the translation control still holds nominal level at every effect size.
 - [x] 4.5 Recompute the realized-geometry orientation checkpoints (population and latent) and verify whether the previously reported 81° and 57° figures change.
 

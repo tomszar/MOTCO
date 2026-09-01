@@ -303,6 +303,70 @@ results/
     └── acceptance_report.json
 ```
 
+### Per-replicate record fields
+
+Every JSONL record is one `SimulationReplicateResult`. Beyond the cell identity,
+seeds, `p_values`, and `pair_statistics`, two fields carry the per-replicate
+diagnostics:
+
+- `realized_geometry` / `integration_metadata` / `attribution_diagnostics` — the
+  Phase 4 diagnostics.
+- `null_summary` — a compact per-statistic description of *that replicate's own*
+  RRPP permutation null: `count` (retained draws, non-finite excluded), `mean`,
+  `sd`, and `q50`/`q90`/`q95`/`q99`. It is written on every run with
+  `permutations > 0`, independently of `include_null_distributions` (which
+  controls only whether the full draw vectors are *returned*, never persisted).
+
+  `null_summary` makes the pair *(observed statistic, its own critical value)*
+  computable from a single record, which is what any pivotality or calibration
+  question needs. It is **not** part of `parameter_signature` — it summarizes
+  draws that already happened and changes no generation, integration, or
+  permutation behavior — so records written before it existed still load (with an
+  empty summary) and remain resumable. A record from a `permutations = 0` run is
+  told apart from a pre-field record by `runtime_metadata["permutations"]`.
+
+### Angle-pivotality diagnostic
+
+`scripts/angle_null_pivotality.py` reads a merged record set and reports whether
+each replicate's null moved with its own observed statistic:
+
+```bash
+# 5 cells x 100 replicates = 500 work units; ~26 minutes on 16 cores.
+for i in $(seq 0 15); do
+  python scripts/run_study_shard.py \
+      --config examples/trajectory_power_study/angle_pivotality_diagnostic.json \
+      --out-dir results/angle-pivotality-2026-09-01 \
+      --shard-index "$i" --n-shards 16 --error-policy record &
+done
+wait
+python scripts/motco_study.py merge --out-dir results/angle-pivotality-2026-09-01
+python scripts/angle_null_pivotality.py \
+    --merged  results/angle-pivotality-2026-09-01/merged.jsonl \
+    --out-dir results/angle-pivotality-2026-09-01/report
+```
+
+Do **not** pass `--n-jobs`: it is part of the cell parameter signature, so
+overriding it changes the permutation draws and breaks resume.
+
+It writes `pivotality_association.csv` (correlation and slope of the null's
+mean/sd/q95 against the observed statistic, with a Fisher-z interval),
+`pivotality_rejection_split.csv` (observed statistic and critical value split by
+rejection outcome), and `pivotality_standardized.csv` (as-specified vs
+cross-replicate standardized rejection rate, controls included).
+
+The standardized counterfactual is a **diagnostic, not a deployable test** — it
+borrows a reference `z` distribution from the null-control cells. Within-replicate
+studentization is a no-op: it rescales both sides of the comparison and leaves
+the p-value unchanged.
+
+Note that `enumerate_study` adds two cells the profile does not request — a
+`none` Type I baseline and a `translation` negative control. They are kept on
+purpose: they are the null-control reference the standardized counterfactual
+calibrates against.
+
+The 2026-09-01 run of this profile is written up in
+`docs/reports/angle-null-pivotality-2026-09-01.md`.
+
 Interpretation notes:
 
 - **Diagonal of the specificity matrix** is power at the largest

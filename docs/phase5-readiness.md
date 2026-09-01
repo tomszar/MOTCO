@@ -4,7 +4,9 @@ Work to complete before launching the paper-grade study. Derived from the
 [Phase 4 medium PLS pilot](reports/phase4-medium-pls-pilot-2026-08-27.md) (run 2026-08-27, gate decision
 **HOLD**). Every number below comes from `results/phase4-2026-08-27/report/`.
 
-**Status: not started.** Phase 4 is complete; these are its follow-ups.
+**Status: item 1 resolved 2026-09-01; items 2–5 open.** Phase 4 is complete; these are its follow-ups.
+The blocking item is closed — `angle` proceeds as specified — and the 0.80 orientation power floor moves to
+item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md).
 
 ## What is already settled — do not re-litigate
 
@@ -19,54 +21,42 @@ These need no further pilot work and are ready for Phase 5 as-is.
 - **Infrastructure.** 1,900 units, 0 failures, resumable sharding, signature-guarded resume, matched seeds,
   and the gate machinery all work. Reports regenerate byte-identically.
 
-## 1. Diagnose the orientation power shortfall — **blocking**
+## 1. Diagnose the orientation power shortfall — **resolved 2026-09-01**
 
-> **Updated 2026-08-28.** An orientation sign-anchor defect was found and fixed
-> ([report](reports/orientation-sign-anchor-2026-08-28.md)): PC1's sign was anchored on the centered
-> first-stage row, which flips for bent trajectories. It was a real bug, but **it does not explain this
-> item.** On byte-identical data, corrected power is **0.64/0.64/0.67/0.68** across effects 0.25 → 1.00 —
-> up ~3 points, still flat, still short of 0.80 by more than two standard errors. The near-180° null mass is
-> **unchanged at 21/700**, so the artifact in the study path has a driver the fix does not address. The
-> figures below are the pre-fix values; substitute the corrected ones above when acting on this item.
+> **Resolved.** The non-pivotality hypothesis is **confirmed**, it fully accounts for the rejection
+> inversion, and the remedy it was expected to imply is ruled out by measurement. See
+> [The `angle` RRPP null is strongly non-pivotal](reports/angle-null-pivotality-2026-09-01.md)
+> (run 2026-09-01, `results/angle-pivotality-2026-09-01/`, 500 replicates, 0 failures).
 >
-> One finding narrows the search: of 700 null replicates, 46 flip to their supplement under the corrected
-> anchor, and exactly 21 cross into >150° while 21 cross out — a wash. The sign is still being noise-decided
-> in the latent space, consistent with `PC1 · (stage_last − stage_first)` itself landing near zero, or with
-> PC1's *direction* being unstable when the configuration's top two singular values are close.
+> **Decision: `angle` proceeds as specified.** Not a revised statistic, not a studentized test.
 
-Orientation `angle` power is 0.65 against the 0.80 floor and nearly flat across effects (0.59 → 0.65).
-**The cause is not identified**, and the obvious explanation is contradicted by the data.
+What was measured, on records that reproduce the sign-fix operating point replicate for replicate (400 of
+500 identical on seeds, statistics, and p-values to
+`results/orientation-signfix-2026-08-28/merged.jsonl`):
 
-The finding to explain: within orientation at effect 1.00, replicates that *fail* to reject have a **larger**
-mean observed latent angle (66.7°) than those that reject (52.5°). A noise-floor account predicts the
-opposite ordering. The same inversion appears in shape at effect 1.00 (83.3° vs 61.5°); the translation null
-behaves normally (30.7° rejecting vs 7.8° non-rejecting), so it is specific to cells carrying real signal.
+- **The association is real and large.** Each replicate's own 95th-percentile `angle` null regresses on its
+  own observed angle with slope **0.811** in the orientation cell and 0.87–0.96 elsewhere; every Fisher-z
+  interval excludes zero. It is specific to `angle`: under signal the same slope collapses to **0.030** for
+  `delta` in the magnitude cell and **0.058** for `shape` in the orientation cell.
+- **It explains the inversion.** Of 100 orientation replicates at effect 1.00, the 32 that fail to reject
+  carry a larger mean observed angle (60.8° vs 46.5°) but a critical value 6.6× larger (103.6° vs 15.8°).
+  Per-replicate critical values span 5.0°–176.6°. For `delta` and `shape` the critical value is flat across
+  the same split.
+- **No remedy recovers the power.** Within-replicate studentization is a proven no-op (it rescales both
+  sides of the comparison). Cross-replicate standardization against the null controls moves orientation
+  `angle` from 0.68 to **0.70** — inside Monte Carlo noise, and a diagnostic rather than a deployable test
+  in any case. A single fixed threshold calibrated on the null cell drops it to **0.01**.
+- **The tracking is load-bearing.** The null cell's observed angle distribution has median 5.1° and a 95th
+  percentile of 153.2°. Only a replicate-specific critical value adapts to that; it is worth ~67 points of
+  power relative to any fixed threshold, not a tax on power.
 
-Already ruled out:
+**What this does not settle.** The 0.80 floor. This measured one design point (n = 300, four stages, PLS at
+3 latent dimensions) and cannot say whether the gap closes with more samples. That moves to item 4.
 
-- **Latent dimensionality.** Angle rejection is 0.71 at `lv = 2` (n = 7) vs 0.65 at `lv = 3` (n = 93).
-- **Weak construction.** The signal survives integration: 81° population → 57° latent, against an 8.9°
-  latent null floor.
-- **Monte Carlo noise.** A 14-degree gap across a 65/35 split.
-- **Cross-talk.** Localization finds nothing projection-associated for orientation's own statistic.
-
-**Leading hypothesis:** the RRPP permutation null for `angle` co-varies with the observed statistic within a
-replicate — the statistic is not pivotal, so a replicate whose latent geometry inflates the observed angle
-inflates its own null at least as much.
-
-**What to run.** The pilot did not persist null quantiles (`include_null_distributions` was off), so this
-cannot be settled from existing records. Re-run a modest set of orientation replicates at effect 1.00 with
-`SimulationEvaluationParams(include_null_distributions=True)` and, per replicate, record the observed angle
-alongside its null mean and 95th percentile. Then check whether the null quantile tracks the observed
-statistic across replicates. If it does, the fix is a pivotal statistic or a studentized test, not a larger
-sample size.
-
-**Decision it unblocks:** whether Phase 5 can use the `angle` test as specified, needs a revised statistic,
-or needs a revised power target. Nothing else on this list matters if the test itself is mis-calibrated
-under signal.
-
-**Status after the sign-anchor fix:** still blocking. `openspec/changes/diagnose-angle-null-pivotality` is
-not displaced and proceeds as written.
+**Left open, and newly visible.** Nothing the harness persists identifies which replicates are resolvable:
+within the orientation cell, selected dimensionality is 3 in 93 of 100 and CV mean AUROC is 1.0000 in every
+replicate, while log(null q95) correlates +0.139 with dimensionality and −0.179 with AUROC. A direct measure
+of latent trajectory-geometry stability does not exist yet.
 
 ## 2. Investigate orientation → shape at the PLS checkpoint
 
@@ -81,6 +71,12 @@ statistic measured within it. `simulations/specificity.py` already has the geome
 
 **Decision it unblocks:** whether Phase 5 reports orientation's shape response as a known projection artifact
 or as a finding about the constructions.
+
+**Narrowed by item 1** ([report](reports/angle-null-pivotality-2026-09-01.md)): the shape response is not a
+null-tracking artifact. In the orientation cell `shape` is nearly pivotal — its own critical value regresses
+on its own observed statistic with slope 0.058, and is flat across the rejection split (0.0233 rejecting vs
+0.0266 non-rejecting) while the observed statistic separates 6.9×. Whatever drives the 0.99 rejection rate
+is in the latent geometry, not in the permutation null.
 
 ## 3. Reconsider latent dimensionality for group contrasts
 
@@ -97,19 +93,34 @@ a design question about the architecture, not a bug — see the latent-space not
 
 **Decision it unblocks:** the integration configuration Phase 5 commits to.
 
+**Constrained by item 1** ([report](reports/angle-null-pivotality-2026-09-01.md)): this cannot be settled
+with the diagnostics the harness records today. Within the orientation cell selected dimensionality is
+effectively constant (3 in 93 of 100) and CV mean AUROC is saturated at 1.0000 in every replicate, and
+neither tracks the width of the `angle` null (log q95 correlates +0.139 and −0.179 respectively). Re-sizing
+the latent space on evidence needs a direct measure of latent trajectory-geometry stability, which does not
+exist yet.
+
 ## 4. Choose the Phase 5 design point
 
-Only after items 1–3. The pilot used n = 300 with four stages (75 samples per group-stage cell) over ~660
-standardized features.
+Only after items 2–3; item 1 is resolved. The pilot used n = 300 with four stages (75 samples per
+group-stage cell) over ~660 standardized features.
 
 **What to establish:** how orientation's operating characteristics scale with samples per group-stage cell
-and with feature count, so the Phase 5 sample size is chosen on evidence rather than inherited. If item 1
-shows the test is mis-calibrated under signal, fix that first — scaling a mis-calibrated test just measures
-it more precisely.
+and with feature count, so the Phase 5 sample size is chosen on evidence rather than inherited. Item 1 has
+since shown the test is **not** mis-calibrated under signal, so scaling it is a meaningful measurement
+rather than a more precise reading of a broken instrument.
 
 **Also decide:** whether the 0.80 orientation power floor is achievable at a defensible sample size, or
 whether the target should be revised. Per the Phase 4 exit gate, a failed target means revising the method
 or the scientific claim — not merely the Monte Carlo sample size.
+
+**This item now owns the 0.80 floor**, handed over by item 1
+([report](reports/angle-null-pivotality-2026-09-01.md)), which established that the statistic and its test
+are sound and that the shortfall is a design-point property. It also hands over a concrete lever: orientation
+power is governed by how tightly latent trajectory geometry is determined by the data, so the design-point
+study should measure how the **dispersion** of `null_summary["angle"]["q95"]` contracts with samples per
+group-stage cell, not only how the rejection rate moves. In the pilot's orientation cell that dispersion
+spans 5.0°–176.6°, and it — not the observed angle — decides the outcome.
 
 ## 5. Carry into the Phase 5 report contract
 

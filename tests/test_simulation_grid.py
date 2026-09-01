@@ -43,9 +43,11 @@ def fake_result(
     p_values: dict[str, float] | None = None,
     pair_statistics: dict[str, float] | None = None,
     truth_seed: int = 0,
+    null_summary: dict[str, dict[str, float]] | None = None,
 ) -> SimulationEvaluationResult:
     matrix = np.zeros((2, 2), dtype=float)
     return SimulationEvaluationResult(
+        null_summary=null_summary or {},
         observed_deltas=matrix,
         observed_angles=matrix,
         observed_shapes=matrix,
@@ -380,3 +382,112 @@ def test_rejection_summaries_handle_available_and_missing_statistics() -> None:
     assert by_stat["shape"].available_replicates == 0
     assert by_stat["shape"].rejection_rate is None
     assert by_stat["shape"].unavailable_replicates == 2
+
+
+def sample_null_summary() -> dict[str, dict[str, float]]:
+    return {
+        "delta": {"count": 199.0, "mean": 0.8, "sd": 0.2, "q50": 0.75, "q90": 1.0, "q95": 1.1, "q99": 1.3},
+        "angle": {"count": 197.0, "mean": 41.0, "sd": 9.0, "q50": 40.0, "q90": 53.0, "q95": 57.0, "q99": 64.0},
+    }
+
+
+def test_null_summary_reaches_the_persisted_record(tmp_path) -> None:
+    path = tmp_path / "results.jsonl"
+    summary = sample_null_summary()
+    cell = make_simulation_cell(phase="power", generator_params=baseline_generator(), n_replicates=1)
+    run_simulation_grid(
+        SimulationGrid(cells=(cell,)),
+        config=SimulationRunConfig(output_path=path),
+        evaluator=lambda generator, evaluation: fake_result(null_summary=summary),
+    )
+
+    loaded = read_replicate_results(path)
+
+    assert len(loaded) == 1
+    assert loaded[0].status == "completed"
+    assert loaded[0].null_summary == summary
+    # The pair (observed statistic, its own critical value) — the quantity the
+    # pivotality question is about — is computable from this single record.
+    assert loaded[0].pair_statistics["angle"] == 2.0
+    assert loaded[0].null_summary["angle"]["q95"] == 57.0
+
+
+def test_legacy_record_loads_with_empty_null_summary_distinguishable_from_no_permutations(tmp_path) -> None:
+    import json
+
+    cell = make_simulation_cell(phase="power", generator_params=baseline_generator())
+    record = run_simulation_replicate(
+        cell, 0, evaluator=lambda generator, evaluation: fake_result(null_summary=sample_null_summary())
+    )
+
+    # A record written before the field existed: the key is simply absent.
+    legacy_payload = record.__dict__.copy()
+    legacy_payload.pop("null_summary")
+    legacy_payload["runtime_metadata"] = {"runtime_seconds": 0.1, "permutations": 199}
+    # A record from an evaluation that ran no permutations: the key is present
+    # and empty, and the run itself is recorded as having permuted nothing.
+    no_perms_payload = record.__dict__.copy()
+    no_perms_payload["null_summary"] = {}
+    no_perms_payload["runtime_metadata"] = {"runtime_seconds": 0.1, "permutations": 0}
+
+    path = tmp_path / "mixed.jsonl"
+    path.write_text(
+        json.dumps(legacy_payload) + "\n" + json.dumps(no_perms_payload) + "\n",
+        encoding="utf-8",
+    )
+    legacy, no_perms = read_replicate_results(path)
+
+    assert legacy.null_summary == {}
+    assert no_perms.null_summary == {}
+    assert legacy.runtime_metadata["permutations"] == 199
+    assert no_perms.runtime_metadata["permutations"] == 0
+
+
+def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
+    """The record field is derived from draws that already happened.
+
+    The digest is pinned to the value this cell produced at commit fab94d6 —
+    before the null-summary field existed — so pre-change shards stay resumable.
+    """
+
+    cell = make_simulation_cell(
+        phase="type_i_baseline",
+        generator_params=baseline_generator(),
+        evaluation_params=baseline_evaluation(),
+        n_replicates=2,
+        cell_id="pinned",
+    )
+    assert parameter_signature(cell) == "40abd06f9c330b35a927abd16f2bf4c5c544f1a4aec53f8e9844eeee40d1f3b2"
+
+    # Resume against a record written without the field must skip, not overwrite.
+    import json
+
+    path = tmp_path / "results.jsonl"
+    prior = run_simulation_replicate(
+        cell, 0, evaluator=lambda generator, evaluation: fake_result(truth_seed=99)
+    )
+    payload = prior.__dict__.copy()
+    payload.pop("null_summary")
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    calls = 0
+
+    def evaluator(
+        generator_params: SemiSyntheticTrajectoryParams,
+        evaluation_params: SimulationEvaluationParams,
+    ) -> SimulationEvaluationResult:
+        nonlocal calls
+        calls += 1
+        return fake_result(truth_seed=generator_params.seed, null_summary=sample_null_summary())
+
+    run_simulation_grid(
+        SimulationGrid(cells=(cell,)), config=SimulationRunConfig(output_path=path), evaluator=evaluator
+    )
+
+    loaded = read_replicate_results(path)
+    assert calls == 1  # replicate 0 was skipped, only replicate 1 ran
+    assert len(loaded) == 2
+    by_index = {record.replicate_index: record for record in loaded}
+    assert by_index[0].truth_metadata["seed"] == 99  # the pre-change record survived untouched
+    assert by_index[0].null_summary == {}
+    assert by_index[1].null_summary == sample_null_summary()
