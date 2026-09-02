@@ -44,10 +44,12 @@ def fake_result(
     pair_statistics: dict[str, float] | None = None,
     truth_seed: int = 0,
     null_summary: dict[str, dict[str, float]] | None = None,
+    config_spectrum: dict | None = None,
 ) -> SimulationEvaluationResult:
     matrix = np.zeros((2, 2), dtype=float)
     return SimulationEvaluationResult(
         null_summary=null_summary or {},
+        config_spectrum=config_spectrum or {},
         observed_deltas=matrix,
         observed_angles=matrix,
         observed_shapes=matrix,
@@ -446,8 +448,11 @@ def test_legacy_record_loads_with_empty_null_summary_distinguishable_from_no_per
 def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     """The record field is derived from draws that already happened.
 
-    The digest is pinned to the value this cell produced at commit fab94d6 —
-    before the null-summary field existed — so pre-change shards stay resumable.
+    ``null_summary`` itself never enters the signature — the resume below, which
+    skips a record written without the field, is what pins that. The digest is
+    pinned separately so *any* signature change has to be a deliberate edit
+    here; it last moved when ``config_spectrum_version`` entered the payload
+    (``record-latent-config-spectrum``), which was the point of that change.
     """
 
     cell = make_simulation_cell(
@@ -457,7 +462,7 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
         n_replicates=2,
         cell_id="pinned",
     )
-    assert parameter_signature(cell) == "40abd06f9c330b35a927abd16f2bf4c5c544f1a4aec53f8e9844eeee40d1f3b2"
+    assert parameter_signature(cell) == "cab61a54f07c0420ba811b3a372cf81c96b60710f722e4aa486071f5f050ac9e"
 
     # Resume against a record written without the field must skip, not overwrite.
     import json
@@ -491,3 +496,171 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     assert by_index[0].truth_metadata["seed"] == 99  # the pre-change record survived untouched
     assert by_index[0].null_summary == {}
     assert by_index[1].null_summary == sample_null_summary()
+
+
+# ── Latent configuration spectrum ─────────────────────────────────────────────
+
+
+def sample_config_spectrum() -> dict:
+    return {
+        "version": 1,
+        "pooled": {
+            "n_points": 4,
+            "n_dimensions": 6,
+            "total_variance": 12.5,
+            "spectrum": [0.6, 0.25, 0.1, 0.05],
+            "relative_eigengap": 0.35,
+        },
+        "groups": {
+            "A": {
+                "n_points": 4,
+                "n_dimensions": 6,
+                "total_variance": 9.0,
+                "spectrum": [0.5, 0.3, 0.15, 0.05],
+                "relative_eigengap": 0.2,
+            },
+            "B": {
+                "n_points": 4,
+                "n_dimensions": 6,
+                "total_variance": 8.0,
+                "spectrum": [0.7, 0.2, 0.1],
+                "relative_eigengap": 0.5,
+            },
+        },
+        "permutation_pooled_eigengap": {
+            "count": 199.0,
+            "mean": 0.31,
+            "sd": 0.08,
+            "q05": 0.19,
+            "q50": 0.30,
+            "q95": 0.45,
+        },
+    }
+
+
+def test_config_spectrum_reaches_the_persisted_record(tmp_path) -> None:
+    path = tmp_path / "results.jsonl"
+    spectrum = sample_config_spectrum()
+    cell = make_simulation_cell(phase="power", generator_params=baseline_generator(), n_replicates=1)
+
+    run_simulation_grid(
+        SimulationGrid(cells=(cell,)),
+        config=SimulationRunConfig(output_path=path),
+        evaluator=lambda generator, evaluation: fake_result(config_spectrum=spectrum),
+    )
+
+    (loaded,) = read_replicate_results(path)
+    assert loaded.config_spectrum == spectrum
+
+
+def test_config_spectrum_version_enters_the_parameter_signature(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Unlike the null summary, the spectrum schema is signature-bearing.
+
+    A pre-change shard must refuse resume rather than produce a merged set in
+    which only some records carry the covariate.
+    """
+
+    import motco.simulations.grid as grid_module
+
+    cell = make_simulation_cell(
+        phase="type_i_baseline",
+        generator_params=baseline_generator(),
+        n_replicates=2,
+        base_seed=77,
+    )
+    current = parameter_signature(cell)
+    assert parameter_signature(cell) == current  # stable across enumerations
+
+    monkeypatch.setattr(grid_module, "CONFIG_SPECTRUM_VERSION", 2)
+    assert parameter_signature(cell) != current
+
+
+def test_resume_against_a_pre_spectrum_signature_is_refused(tmp_path) -> None:
+    import json
+
+    cell = make_simulation_cell(
+        phase="power_primary",
+        generator_params=baseline_generator(),
+        evaluation_params=baseline_evaluation(),
+        n_replicates=1,
+        cell_id="resume-probe",
+    )
+    prior = run_simulation_replicate(
+        cell, 0, evaluator=lambda generator, evaluation: fake_result(truth_seed=7)
+    )
+    payload = prior.__dict__.copy()
+    payload.pop("config_spectrum")
+    # A record written under the pre-change contract: no spectrum, and a
+    # signature computed without the spectrum schema version.
+    payload["parameter_signature"] = "pre-change-signature"
+    path = tmp_path / "results.jsonl"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(SimulationGridError, match="different parameter signature"):
+        run_simulation_grid(
+            SimulationGrid(cells=(cell,)),
+            config=SimulationRunConfig(output_path=path),
+            evaluator=lambda generator, evaluation: fake_result(),
+        )
+
+
+def test_resume_under_the_new_schema_succeeds(tmp_path) -> None:
+    path = tmp_path / "results.jsonl"
+    cell = make_simulation_cell(
+        phase="power_primary",
+        generator_params=baseline_generator(),
+        evaluation_params=baseline_evaluation(),
+        n_replicates=2,
+        cell_id="resume-ok",
+    )
+    calls = 0
+
+    def evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
+        nonlocal calls
+        calls += 1
+        return fake_result(config_spectrum=sample_config_spectrum())
+
+    run_simulation_grid(
+        SimulationGrid(cells=(cell,)), config=SimulationRunConfig(output_path=path), evaluator=evaluator
+    )
+    run_simulation_grid(
+        SimulationGrid(cells=(cell,)), config=SimulationRunConfig(output_path=path), evaluator=evaluator
+    )
+
+    assert calls == 2  # the second run skipped both completed replicates
+    assert all(record.config_spectrum for record in read_replicate_results(path))
+
+
+def test_legacy_record_loads_with_an_empty_spectrum_block(tmp_path) -> None:
+    """An absent field and a recorded degenerate spectrum stay distinguishable."""
+
+    import json
+
+    cell = make_simulation_cell(phase="power", generator_params=baseline_generator(), n_replicates=1)
+    degenerate = {
+        "version": 1,
+        "pooled": {
+            "n_points": 4,
+            "n_dimensions": 6,
+            "total_variance": 0.0,
+            "spectrum": [],
+            "relative_eigengap": None,
+        },
+        "groups": {},
+    }
+    record = run_simulation_replicate(
+        cell, 0, evaluator=lambda generator, evaluation: fake_result(config_spectrum=degenerate)
+    )
+
+    legacy_payload = record.__dict__.copy()
+    legacy_payload.pop("config_spectrum")
+    path = tmp_path / "mixed.jsonl"
+    path.write_text(
+        json.dumps(legacy_payload) + "\n" + json.dumps(record.__dict__) + "\n",
+        encoding="utf-8",
+    )
+    legacy, recorded = read_replicate_results(path)
+
+    assert legacy.config_spectrum == {}
+    assert recorded.config_spectrum == degenerate
+    assert recorded.config_spectrum["pooled"]["relative_eigengap"] is None

@@ -24,6 +24,7 @@ from motco.simulations.semisynthetic import (
     SemiSyntheticTrajectoryParams,
     generate_semisynthetic_trajectory,
 )
+from motco.stats.trajectory import CONFIG_SPECTRUM_VERSION
 
 SimulationPhase = Literal[
     "type_i_baseline",
@@ -105,6 +106,15 @@ class SimulationReplicateResult:
     # already happened and changes no generation, integration, or permutation
     # behavior, so pre-change shards stay resumable.
     null_summary: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Latent stage-mean configuration spectrum (pooled and per group) and, when
+    # permutations ran, the pooled eigengap over those draws. Empty for records
+    # written before the field existed; a *recorded* degenerate spectrum is a
+    # populated block whose ``relative_eigengap`` is ``None``, which is how the
+    # two are told apart. Unlike ``null_summary`` this **is** in
+    # ``parameter_signature``: a resumed pre-change shard would otherwise produce
+    # a merged set where only some records carry the covariate, and a missing
+    # covariate is indistinguishable from a degenerate one at analysis time.
+    config_spectrum: dict[str, Any] = field(default_factory=dict)
     diagnostic_error_type: str | None = None
     diagnostic_error_message: str | None = None
     error_type: str | None = None
@@ -374,6 +384,7 @@ def parameter_signature(cell: SimulationCell) -> str:
         "realized_geometry_version": DIAGNOSTIC_SCHEMA_VERSION,
         "integration_metadata_version": INTEGRATION_METADATA_VERSION,
         "attribution_schema_version": ATTRIBUTION_SCHEMA_VERSION,
+        "config_spectrum_version": CONFIG_SPECTRUM_VERSION,
     }
     return _stable_digest(payload)
 
@@ -437,6 +448,7 @@ def run_simulation_replicate(
         null_summary={
             statistic: dict(entry) for statistic, entry in (result.null_summary or {}).items()
         },
+        config_spectrum=dict(result.config_spectrum or {}),
         diagnostic_error_type=attribution.get("error_type"),
         diagnostic_error_message=attribution.get("reason") if attribution_status == "failed" else None,
     )
@@ -642,6 +654,9 @@ def _replicate_result_from_dict(data: Mapping[str, Any]) -> SimulationReplicateR
             str(statistic): {str(key): float(value) for key, value in dict(entry).items()}
             for statistic, entry in dict(data.get("null_summary") or {}).items()
         },
+        # A record written before the field existed loads as an empty block —
+        # distinct from a recorded block whose eigengap is ``None``.
+        config_spectrum=dict(data.get("config_spectrum") or {}),
         diagnostic_error_type=data.get("diagnostic_error_type"),
         diagnostic_error_message=data.get("diagnostic_error_message"),
         error_type=data.get("error_type"),

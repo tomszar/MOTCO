@@ -308,3 +308,97 @@ def test_null_summary_is_inert_and_absent_without_permutations() -> None:
     )
     assert no_perms.null_summary == {}
     assert no_perms.p_values == {}
+
+
+# ── Latent configuration spectrum ─────────────────────────────────────────────
+
+
+def test_config_spectrum_accompanies_every_evaluation() -> None:
+    import json
+
+    result = evaluate_semisynthetic_trajectory(
+        make_dataset(), SimulationEvaluationParams(integration_method="concat", permutations=0)
+    )
+
+    block = result.config_spectrum
+    assert set(block) == {"version", "pooled", "groups"}
+    assert set(block["groups"]) == {"A", "B"}
+    for entry in [block["pooled"], *block["groups"].values()]:
+        assert 0.0 <= entry["relative_eigengap"] <= 1.0
+        assert sum(entry["spectrum"]) == pytest.approx(1.0)
+    # JSON-safe: no NaN/Inf literals reach the persisted record.
+    assert "NaN" not in json.dumps(block)
+
+
+def test_config_spectrum_matches_an_independent_recomputation() -> None:
+    from motco.stats.trajectory import configuration_spectrum, estimate_betas
+
+    dataset = make_dataset()
+    params = SimulationEvaluationParams(integration_method="concat", permutations=0)
+    result = evaluate_semisynthetic_trajectory(dataset, params)
+
+    latent = integrate_semisynthetic_dataset(dataset, params).matrix
+    design = build_simulation_trajectory_design(dataset.metadata)
+    obs_vect = np.asarray(design.ls_means, dtype=float) @ np.asarray(
+        estimate_betas(design.model_full, latent), dtype=float
+    )
+    pooled = (obs_vect[design.contrast[0], :] + obs_vect[design.contrast[1], :]) / 2.0
+
+    assert result.config_spectrum["pooled"] == configuration_spectrum(pooled)
+    for level, levels in zip(result.group_levels, design.contrast):
+        assert result.config_spectrum["groups"][level] == configuration_spectrum(obs_vect[levels, :])
+
+
+def test_permutation_eigengap_summary_accompanies_rrpp_runs() -> None:
+    result = evaluate_semisynthetic_trajectory(
+        make_dataset(),
+        SimulationEvaluationParams(integration_method="concat", permutations=6, seed=5),
+    )
+
+    summary = result.config_spectrum["permutation_pooled_eigengap"]
+    assert summary["count"] == 6.0
+    assert set(summary) == {"count", "mean", "sd", "q05", "q50", "q95"}
+    assert 0.0 <= summary["mean"] <= 1.0
+    # Only the summary survives — never the per-permutation vectors.
+    assert not any(
+        isinstance(value, list) for value in result.config_spectrum.values()
+    )
+
+
+def test_permutation_eigengap_summary_is_absent_without_permutations() -> None:
+    result = evaluate_semisynthetic_trajectory(
+        make_dataset(), SimulationEvaluationParams(integration_method="concat", permutations=0)
+    )
+
+    assert "permutation_pooled_eigengap" not in result.config_spectrum
+    assert result.config_spectrum["pooled"] is not None
+
+
+def test_permutation_eigengap_summary_drops_undefined_draws() -> None:
+    from motco.simulations.evaluation import _summarize_permutation_eigengaps
+
+    summary = _summarize_permutation_eigengaps([0.2, None, 0.4, float("nan")])
+
+    assert summary["count"] == 2.0
+    assert summary["mean"] == pytest.approx(0.3)
+    assert _summarize_permutation_eigengaps([None]) == {"count": 0.0}
+
+
+def test_config_spectrum_recording_leaves_the_test_untouched() -> None:
+    """Recording the covariate moves no statistic, draw, or p-value.
+
+    The literals are the values this configuration produced before the spectrum
+    existed (the same ones the null-summary change pinned), so the inertness
+    claim is checked against the pre-change pipeline and not merely against a
+    second run of the current one.
+    """
+
+    params = SimulationEvaluationParams(
+        integration_method="concat", permutations=5, seed=2026, include_null_distributions=True
+    )
+    result = evaluate_semisynthetic_trajectory(make_dataset(), params)
+
+    assert result.p_values == pytest.approx(PRE_CHANGE_P_VALUES)
+    assert result.pair_statistics == pytest.approx(PRE_CHANGE_PAIR_STATISTICS)
+    assert result.null_summary["angle"]["count"] == 5.0
+    assert result.config_spectrum["permutation_pooled_eigengap"]["count"] == 5.0

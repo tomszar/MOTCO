@@ -9,7 +9,11 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from motco.stats.trajectory import estimate_betas, estimate_difference
+from motco.stats.trajectory import (
+    estimate_betas,
+    estimate_difference,
+    pooled_relative_eigengap,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,24 +28,37 @@ class _RRPPWorker:
         model_full: Union[pd.DataFrame, np.ndarray],
         ls_means: Union[pd.DataFrame, np.ndarray],
         contrast: list[list[int]],
+        return_eigengaps: bool = False,
     ) -> None:
         self.y_hat = y_hat
         self.y_res = y_res
         self.model_full = model_full
         self.ls_means = ls_means
         self.contrast = contrast
+        self.return_eigengaps = return_eigengaps
 
     def __call__(self, n_iters: int, seed: int):
         rng = np.random.default_rng(seed)
         n = self.y_res.shape[0]
         out_d, out_a, out_s = [], [], []
+        out_g: list[float | None] = []
         for _ in range(n_iters):
+            # The permutation index is drawn identically whether or not the
+            # spectrum is recorded: the spectrum path consumes no randomness.
             idx = rng.permutation(n)
             y_random = self.y_hat + self.y_res[idx, :]
-            d, a, s = estimate_difference(y_random, self.model_full, self.ls_means, self.contrast)
+            if self.return_eigengaps:
+                d, a, s, spectra = estimate_difference(
+                    y_random, self.model_full, self.ls_means, self.contrast, return_spectra=True
+                )
+                out_g.append(pooled_relative_eigengap(spectra))
+            else:
+                d, a, s = estimate_difference(y_random, self.model_full, self.ls_means, self.contrast)
             out_d.append(d)
             out_a.append(a)
             out_s.append(s)
+        if self.return_eigengaps:
+            return out_d, out_a, out_s, out_g
         return out_d, out_a, out_s
 
 
@@ -55,6 +72,7 @@ def RRPP(
     n_jobs: Optional[int] = None,
     progress: bool = True,
     seed: Optional[int] = None,
+    return_eigengaps: bool = False,
 ) -> tuple:
     """
     Residual Randomization in a Permutation Procedure to evaluate
@@ -81,6 +99,13 @@ def RRPP(
         runs single-threaded (backward-compatible default).
     seed: Optional[int]
         Optional seed for reproducible residual randomization.
+    return_eigengaps: bool
+        When ``True``, additionally return the pooled stage-mean configuration
+        relative eigengap of each permutation draw, so a replicate can locate its
+        observed eigengap against its own permutation distribution. The spectrum
+        consumes no randomness, so the permutation draws and the three returned
+        null distributions are identical with the flag on or off. Off by default:
+        the returned tuple is then exactly the historical three-element one.
 
     Returns
     -------
@@ -140,18 +165,28 @@ def RRPP(
     deltas: list[np.ndarray] = []
     angles: list[np.ndarray] = []
     shapes: list[np.ndarray] = []
+    eigengaps: list[float | None] = []
 
     # Serial path
     if n_jobs in (None, 1):
         n = y_res_np.shape[0]
         rng = np.random.default_rng(seed)
         for _ in tqdm(range(permutations), desc="RRPP", unit="perm", disable=not progress):
+            # Drawn before any spectrum work, and identically either way.
             idx = rng.permutation(n)
             y_random = y_hat_np + y_res_np[idx, :]
-            d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
+            if return_eigengaps:
+                d, a, s, spectra = estimate_difference(
+                    y_random, model_full, LS_means, contrast, return_spectra=True
+                )
+                eigengaps.append(pooled_relative_eigengap(spectra))
+            else:
+                d, a, s = estimate_difference(y_random, model_full, LS_means, contrast)
             deltas.append(d)
             angles.append(a)
             shapes.append(s)
+        if return_eigengaps:
+            return deltas, angles, shapes, eigengaps
         return deltas, angles, shapes
 
     # Parallel path
@@ -165,13 +200,19 @@ def RRPP(
     ss = np.random.SeedSequence(seed)
     seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(n_workers)]
 
-    worker = _RRPPWorker(y_hat_np, y_res_np, model_full, LS_means, contrast)
+    worker = _RRPPWorker(
+        y_hat_np, y_res_np, model_full, LS_means, contrast, return_eigengaps=return_eigengaps
+    )
     with multiprocessing.Pool(processes=n_workers) as pool:
         parts = pool.starmap(worker, zip(counts, seeds))
 
-    for d_list, a_list, s_list in parts:
-        deltas.extend(d_list)
-        angles.extend(a_list)
-        shapes.extend(s_list)
+    for part in parts:
+        deltas.extend(part[0])
+        angles.extend(part[1])
+        shapes.extend(part[2])
+        if return_eigengaps:
+            eigengaps.extend(part[3])
 
+    if return_eigengaps:
+        return deltas, angles, shapes, eigengaps
     return deltas, angles, shapes

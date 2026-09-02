@@ -1,0 +1,71 @@
+# Latent configuration-spectrum acceptance run provenance
+date_utc: 2026-09-02T16:06:57Z
+parent_commit: 84061bdec824da9c33865d52e59a13b3750fb9fb
+parent_commit_subject: Merge pull request #38 from tomszar/docs/geometry-audit
+code_revision: working tree of the `record-latent-config-spectrum` change (uncommitted at launch); the
+               tracked-source digests below pin the exact sources that ran
+config: examples/trajectory_power_study/angle_pivotality_diagnostic.json (unchanged, byte-identical to the
+        2026-09-01 diagnostic run)
+host_cpus: 24
+shards: 16 (local, one process each; OMP/OPENBLAS/MKL threads pinned to 1)
+cells: 5 (3 primary at effect 1.00 + the enumerator's mandated 'none' and 'translation' Type I controls)
+work_units: 500 (100 replicates x 5 cells), 0 failed, 500 carrying the configuration-spectrum block
+note: this is the acceptance run for `record-latent-config-spectrum` (task 5.2/5.3), not a new power study.
+      The config is held byte-identical to the 2026-09-01 pivotality diagnostic on purpose: the deliverable
+      is that the recorded eigengap reproduces the geometry audit's association while every rejection rate
+      reproduces the 2026-09-01 operating point exactly.
+note: the cell parameter signature changed with this run (config_spectrum_version entered the payload), so
+      the 2026-09-01 shards are deliberately not resumable into this directory. That is the intended
+      policy — see the change's design note, section 3.
+env: NixOS; LD_LIBRARY_PATH extended with the interpreter's own zlib so the manylinux numpy wheel resolves
+     libz.so.1 (runtime linkage only; no package or version change).
+python: 3.11.15; numpy 2.3.5, pandas 2.3.3, scikit-learn 1.8.0, scipy 1.16.3; no R at runtime
+
+## tracked-source digests
+2dfa5cc3b5b290548f4d046cf2060b402063db7503a1a3416b0f37aff38039cd  examples/trajectory_power_study/angle_pivotality_diagnostic.json
+7b50f7a30c74f11ff00e5c1d9baf4a09942510020b12c75547390e50d13ea3eb  scripts/angle_null_pivotality.py
+d3bc4bb2cd59994c10b29d462d4ff5539fb08ab18fbda74c07529deeab224e2c  scripts/motco_study.py
+76d4ffb6e40a917ddfcfdb47488165454daf106cefd0faa1ca7e7b6d593a44d0  scripts/run_study_shard.py
+83ef80930f160b25fafc24c30e0a6a40b5a66cf240e617ddc52cd33ac3bfc9b3  src/motco/cli.py
+31bda1541dcaf5172299a3ce9413ce642ed8e66031c36e1299563cc049cafcc1  src/motco/__init__.py
+79213e28d72f48d08da9fdf8a819fd7a90c9871519c779116d2cb5343ff925e0  src/motco/simulations/attribution_diagnostics.py
+90f563116b8d6e6219203d9695039c08b0d63a47cbdada425c3693ffede6c505  src/motco/simulations/coupling_recovery.py
+d3233f4b2305a53ca5be7face0a96b5fb603b0ca04335a08bafa51368a9a37dd  src/motco/simulations/data/__init__.py
+51ed8d3a860bca6ffa8dc48c76b6877109144c50c91d7aeabbab66ec2a49d122  src/motco/simulations/diagnostics.py
+5cfdd19843e0cfa4d450c7c00c6e4a1fb450852e7b922effed1c231a62a562a8  src/motco/simulations/evaluation.py
+eea011284ccc21c79a877fa6b453aa3ffcbf4ef844f9463ea764634a377b5428  src/motco/simulations/fidelity.py
+27496912ccb65e4a0cd38196c24847ba5670e2a8a7bff14669f3b8f4044bd5db  src/motco/simulations/fidelity_visual.py
+d9c5d0cf62d790505954a71bb903881113eae8993245ab3571d6dfe4a97cfc44  src/motco/simulations/generator.py
+7b3ea572e6df4b3fc81894c446b85901233a4b893d52e098b03723a386a6b960  src/motco/simulations/grid.py
+a548be21d980614b7157c5eee202bd3c98fd5626291e58f79c70fac0a015c4ec  src/motco/simulations/__init__.py
+9cfde23c493ded275f4f895f7975d5193e1733c83a06c5d049f88006ddb2733f  src/motco/simulations/intersim.py
+cb96c9a13c6cfd85fd917154c7047ebd56d3315c5ac7318e15163a1d379e86ef  src/motco/simulations/linear_recovery.py
+b2b45e6cf5d52db3845d9cb6e3bba27620dc7be42d00cceb81f67495758453a5  src/motco/simulations/methylation_recovery.py
+7a65e9653b8212f350a2bd0cdda277ed93a44a869734399f61d97457fc3bae9b  src/motco/simulations/multiblock_recovery.py
+84c17d8738f44d01a38ddfa46f0aa6632ca99e83e40ed6c089573c863d7f603a  src/motco/simulations/pivotality.py
+2ab9a37c1a6b1d828133f350faed05979886901fb43b617e521b3a5d99e3fc50  src/motco/simulations/pls_inverse.py
+ccda4dae77c3976c920bb6835382021a89084ba4bad0169531d68fe8c49abd56  src/motco/simulations/preprocessing.py
+4afbb078c49c4cb1caf3e3c0dca42025f645ddf5a1c96647ec33b329412a7d90  src/motco/simulations/projector_recovery.py
+d236a4d8d91ebc0af601f518f1b0e8ec4ca7c9b2c1aa8b3cdeb50acd2a6ad24b  src/motco/simulations/realized_geometry_study.py
+2dd4187423ac3463edbed06747129b6bc89dd53b4c39621217a0dee67ba69632  src/motco/simulations/reference.py
+a3e0bab3c1929de2d69af40d3c25355bac9129ed7b4343dde0465f75b34c3704  src/motco/simulations/semisynthetic.py
+14e596242dd62d02c14d3387195308c48787d5384ad5eeb923a8e4a88cf3bf57  src/motco/simulations/showcase.py
+76c01ef1b2f11809bef913ea9973ba349b1f51d820345a07f949b92cd9d28f01  src/motco/simulations/specificity.py
+e17285f86d1928bf9482ed2b879b1d2180ae64730c3ad12e66b2ea7d3710c20a  src/motco/simulations/study/config.py
+228f50948c7a93cb4aa49e647fd00350c803e6e83adf58c9fe0aa719140d4a49  src/motco/simulations/study/enumerate.py
+c56b5e6e8c2196ed8e7bf7a33d8f1530712f7c057949e7da2e09af5e55ce471d  src/motco/simulations/study/__init__.py
+a2691361ed464fdf3534660a9a9c78f6a29bb66fb20a79efb1e619f337cbec1a  src/motco/simulations/study/merge.py
+217706310c15d054ef52c36191ef7512f63def8c397efe3ed179099eb0a7afb6  src/motco/simulations/study/phase4.py
+0869b5d44f68bdc2339b416bcfb2569ac940f2120828365264d24cfb297a7db6  src/motco/simulations/study/report.py
+f0035468d6fbbaf8d3659a070de44565398c5688f107d619cc66059d1724ac88  src/motco/simulations/study/sharding.py
+ab249e1f4a11d2a47d386df8648bfd3c2118446960dbdbda6ad14c99357e629a  src/motco/simulations/study/spectrum.py
+2712859ba5fe4e1bfcef79dfae78ec699b13abdf23f95992c35ac8632dc07372  src/motco/simulations/study/summary.py
+7c7df70f61bdfa337df9f348fb0be91aa972829360f1821e8832392e43a69468  src/motco/simulations/study/targets.py
+0ba4993f7fc44486414c25f0171f176fd0daef8c39324e096f3a8d12e2a8ea20  src/motco/stats/attribution.py
+54a404fd148694dc14f9609cd06d974d9e2fdafd2310f9f67bfb56b7d41693a1  src/motco/stats/design.py
+cde3326208471c8d195d778554efa0bf3bfd98a29949b55af980489f95aab569  src/motco/stats/__init__.py
+79b8a643e8ce39a23a056fc8c6d9bb200b7fc00cc49844109d3b8621318df689  src/motco/stats/permutation.py
+81f31f99c5890b3b75799a38346ca44577331d3c1524564e8b2f8f674c9503e2  src/motco/stats/pls.py
+50d7b0a780ac381de7fa307491c09df45cc841a954b141c017cad744f42ec497  src/motco/stats/snf.py
+3b2c5493d1e6522f1bf15a0e83246d602ddf8adc713504fde41ba5f438c26e39  src/motco/stats/trajectory.py
+dd99805791686127cca21d827f27b845b4de2bfd1fb2aa8e3709cb5833a3a597  src/motco/viz.py

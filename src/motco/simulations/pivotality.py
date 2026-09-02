@@ -18,6 +18,10 @@ permutation-null summary persisted by
    carrying the *larger* mean observed angle) shows up.
 3. :func:`standardized_counterfactual_table` — the cross-replicate standardized
    recalibration.
+4. :func:`spectrum_association_table` — whether the *recorded* latent
+   configuration eigengap predicts how wide a replicate's own null will be. This
+   answers the question the first three leave open: which replicates are
+   resolvable at all, from a quantity the harness now persists.
 
 **The counterfactual is a diagnostic, not a deployable test.** Standardizing an
 observed statistic by its own null's mean and sd and comparing it to that same
@@ -39,8 +43,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from motco.simulations.grid import SimulationReplicateResult
+from motco.stats.trajectory import pooled_relative_eigengap
 
 STATISTICS: tuple[str, ...] = ("delta", "angle", "shape")
 
@@ -255,6 +261,131 @@ def association_table(
     return rows
 
 
+@dataclass(frozen=True)
+class SpectrumAssociationRow:
+    """Association between the recorded eigengap and the replicate's null width.
+
+    The geometry audit found that what decides an orientation replicate's
+    outcome is the width of its own ``angle`` null, and that the width is
+    predicted by the relative eigengap of the latent stage-mean configuration:
+    a near-isotropic configuration gives PC1 no dominant axis to lock onto. This
+    row reports that association per cell and statistic.
+    """
+
+    cell: CellKey
+    statistic: str
+    null_target: str
+    n_replicates: int
+    #: ``ok`` when the association was computed; ``unavailable`` when no record
+    #: in the cell carries a spectrum block, which is a different fact from a
+    #: computed association of zero.
+    status: str
+    #: Rank (Spearman) correlation — the headline measure, robust to the
+    #: heavy right tail of the angular null width.
+    spearman: float | None
+    spearman_ci_low: float | None
+    spearman_ci_high: float | None
+    #: Pearson correlation of ``log(eigengap)`` against ``log(null_target)``,
+    #: the scale on which the audit reported the relationship as near-linear.
+    log_log_pearson: float | None
+    log_log_pearson_ci_low: float | None
+    log_log_pearson_ci_high: float | None
+    #: Slope of ``log(null_target)`` on ``log(eigengap)``: how many-fold the
+    #: null widens per fold of eigengap contraction.
+    log_log_slope: float | None
+    mean_eigengap: float | None
+    mean_null_target: float | None
+    n_records_with_spectrum: int
+
+
+def _paired_eigengap(
+    records: Sequence[SimulationReplicateResult], statistic: str, null_target: str
+) -> tuple[np.ndarray, np.ndarray]:
+    xs: list[float] = []
+    ys: list[float] = []
+    for record in records:
+        gap = pooled_relative_eigengap(record.config_spectrum)
+        target = _null_feature(record, statistic, null_target)
+        if gap is None or target is None:
+            continue
+        xs.append(gap)
+        ys.append(target)
+    return np.asarray(xs, dtype=float), np.asarray(ys, dtype=float)
+
+
+def _spearman_with_interval(
+    x: np.ndarray, y: np.ndarray
+) -> tuple[float | None, float | None, float | None]:
+    """Rank correlation with the same Fisher-z treatment as the Pearson rows.
+
+    Ties are averaged (pandas' default rank), so a cell with repeated values
+    still yields the standard tie-corrected coefficient.
+    """
+
+    if x.size < 3:
+        return None, None, None
+    rx = pd.Series(x).rank().to_numpy(dtype=float)
+    ry = pd.Series(y).rank().to_numpy(dtype=float)
+    return _correlation_with_interval(rx, ry)
+
+
+def _positive_logs(x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Log both sides, keeping only pairs where both are strictly positive.
+
+    A degenerate configuration (eigengap 0) or a null with zero width has no
+    logarithm; dropping the pair keeps the log–log fit finite and the retained
+    count is reported beside it.
+    """
+
+    mask = (x > 0.0) & (y > 0.0)
+    return np.log(x[mask]), np.log(y[mask])
+
+
+def spectrum_association_table(
+    records: Iterable[SimulationReplicateResult],
+    *,
+    statistics: Sequence[str] = STATISTICS,
+    null_targets: Sequence[str] = NULL_TARGETS,
+) -> list[SpectrumAssociationRow]:
+    """Per cell and statistic, does the recorded eigengap predict the null width?
+
+    This closes the gap the pivotality report left open — that "nothing the
+    harness records today identifies which replicates will be resolvable". The
+    eigengap is read from the record; nothing is regenerated and no permutation
+    is re-run.
+    """
+
+    rows: list[SpectrumAssociationRow] = []
+    for cell, group in group_by_cell(records).items():
+        n_with_spectrum = sum(1 for record in group if record.config_spectrum)
+        for statistic in statistics:
+            for target in null_targets:
+                x, y = _paired_eigengap(group, statistic, target)
+                spearman, s_low, s_high = _spearman_with_interval(x, y)
+                log_x, log_y = _positive_logs(x, y)
+                pearson, p_low, p_high = _correlation_with_interval(log_x, log_y)
+                rows.append(
+                    SpectrumAssociationRow(
+                        cell=cell,
+                        statistic=statistic,
+                        null_target=target,
+                        n_replicates=int(x.size),
+                        status="ok" if n_with_spectrum else "unavailable",
+                        spearman=spearman,
+                        spearman_ci_low=s_low,
+                        spearman_ci_high=s_high,
+                        log_log_pearson=pearson,
+                        log_log_pearson_ci_low=p_low,
+                        log_log_pearson_ci_high=p_high,
+                        log_log_slope=_slope(log_x, log_y),
+                        mean_eigengap=float(x.mean()) if x.size else None,
+                        mean_null_target=float(y.mean()) if y.size else None,
+                        n_records_with_spectrum=n_with_spectrum,
+                    )
+                )
+    return rows
+
+
 def rejection_split_table(
     records: Iterable[SimulationReplicateResult],
     *,
@@ -433,6 +564,9 @@ def write_pivotality_tables(
     tables: Mapping[str, list[dict[str, object]]] = {
         "pivotality_association": rows_to_records(
             association_table(records, statistics=statistics)
+        ),
+        "pivotality_spectrum": rows_to_records(
+            spectrum_association_table(records, statistics=statistics)
         ),
         "pivotality_rejection_split": rows_to_records(
             rejection_split_table(records, alpha=alpha, statistics=statistics)

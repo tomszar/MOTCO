@@ -24,11 +24,8 @@ from motco.simulations.study.config import load_study_config
 from motco.simulations.study.enumerate import enumerate_study
 from motco.simulations.study.merge import discover_shard_paths, merge_shards
 from motco.simulations.study.report import (
-    ReportFrames,
     build_phase4_frames,
-    build_power_curves,
-    build_specificity_matrix,
-    build_type_i_table,
+    build_report_frames,
     render_phase4_figures,
     render_power_curves,
     render_specificity_matrix,
@@ -65,11 +62,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
     config = load_study_config(args.config)
     per_stat = summarize_study(records, alpha=config.alpha)
     combined = summarize_combined_rule(records, alpha=config.alpha)
-    frames = ReportFrames(
-        specificity_matrix=build_specificity_matrix(per_stat, records),
-        power_curves=build_power_curves(per_stat, records),
-        type_i_table=build_type_i_table(per_stat, combined, records),
-    )
+    frames = build_report_frames(per_stat, combined, records, alpha=config.alpha)
     report_dir = out_dir / "report"
     report_dir.mkdir(parents=True, exist_ok=True)
     csv_paths = write_report_csvs(frames, report_dir)

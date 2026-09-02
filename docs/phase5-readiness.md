@@ -60,6 +60,12 @@ within the orientation cell, selected dimensionality is 3 in 93 of 100 and CV me
 replicate, while log(null q95) correlates +0.139 with dimensionality and −0.179 with AUROC. A direct measure
 of latent trajectory-geometry stability does not exist yet.
 
+**Closed 2026-09-02.** It does now: the relative eigengap of the centered latent stage-mean configuration is
+persisted on every replicate (`config_spectrum`, pooled and per group, plus the pooled eigengap over the
+permutation draws), and the pivotality analysis reports its association with each replicate's own null
+width. See [Recording the latent configuration
+spectrum](reports/latent-config-spectrum-2026-09-02.md).
+
 ## 2. Investigate orientation → shape at the PLS checkpoint
 
 Orientation's `shape` rejection rate is 0.97–1.00, and localization puts it as the **only** response that
@@ -121,6 +127,14 @@ for those that fail). Plan item P1 persists the spectrum per replicate. Caution 
 group-aware sizing or supervision would void the fixed-latent-space RRPP conditioning — see the plan's
 sequencing notes.
 
+**P1 landed 2026-09-02.** The measure is now recorded per replicate rather than regenerated: every record
+carries `config_spectrum` (pooled and per-group normalized spectra and relative eigengaps, plus the pooled
+eigengap over its own permutation draws), the study report stratifies orientation power by it, and the
+pivotality analysis reports its association with the null width. Re-sizing the latent space can now be
+argued from recorded evidence — see
+[Recording the latent configuration spectrum](reports/latent-config-spectrum-2026-09-02.md). The
+group-aware-supervision caution stands: this change only *observes* the spectrum.
+
 ## 4. Choose the Phase 5 design point
 
 Only after items 2–3; item 1 is resolved. The pilot used n = 300 with four stages (75 samples per
@@ -150,6 +164,12 @@ running any design-point power study, or its top cells re-measure the same data.
 item a second lever besides sample size: baseline continuity (plan item P4) — n-scaling shrinks the noise
 term, but the eigengap's lower tail (near-isotropic baseline draws) is what caps the curve, and that tail is
 a property of the independent-indicator baseline, not of n.
+
+**The stratifying covariate is available (P1, 2026-09-02).** The design-point study can measure how the
+`null_summary["angle"]["q95"]` dispersion contracts with samples per group-stage cell *stratified by the
+geometry that governs it*: every record now carries `config_spectrum`, and
+`report/eigengap_stratified_power.csv` reports orientation power within eigengap terciles per cell. See
+[Recording the latent configuration spectrum](reports/latent-config-spectrum-2026-09-02.md).
 
 ## 5. Carry into the Phase 5 report contract
 

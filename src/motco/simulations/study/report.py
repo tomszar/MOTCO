@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
@@ -30,6 +30,10 @@ from motco.simulations.study.phase4 import (
     summarize_pls_selection,
     summarize_realized_geometry,
 )
+from motco.simulations.study.spectrum import (
+    stratify_power_by_eigengap,
+    summarize_config_spectrum,
+)
 from motco.simulations.study.summary import CombinedRuleSummary
 
 
@@ -39,11 +43,19 @@ class StudyReportError(ValueError):
 
 @dataclass(frozen=True)
 class ReportFrames:
-    """Paper-ready tables built from study summaries."""
+    """Paper-ready tables built from study summaries.
+
+    ``config_spectrum`` and ``eigengap_stratified_power`` read the recorded
+    latent configuration spectra; they default to empty frames so a caller
+    reporting a record set written before that field existed still builds every
+    pre-existing table unchanged.
+    """
 
     specificity_matrix: pd.DataFrame
     power_curves: pd.DataFrame
     type_i_table: pd.DataFrame
+    config_spectrum: pd.DataFrame = field(default_factory=pd.DataFrame)
+    eigengap_stratified_power: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 @dataclass(frozen=True)
@@ -293,11 +305,29 @@ def build_type_i_table(
     return frame.sort_values(["trajectory_mode", "varied_axis", "varied_value", "cell_id"]).reset_index(drop=True)
 
 
+def build_report_frames(
+    summaries: Sequence[SimulationSummaryResult],
+    combined: Sequence[CombinedRuleSummary],
+    records: Sequence[SimulationReplicateResult],
+    *,
+    alpha: float = 0.05,
+) -> ReportFrames:
+    """Build every always-on report frame from summaries and merged records."""
+
+    return ReportFrames(
+        specificity_matrix=build_specificity_matrix(summaries, records),
+        power_curves=build_power_curves(summaries, records),
+        type_i_table=build_type_i_table(summaries, combined, records),
+        config_spectrum=summarize_config_spectrum(records),
+        eigengap_stratified_power=stratify_power_by_eigengap(records, alpha=alpha),
+    )
+
+
 def write_report_csvs(
     frames: ReportFrames,
     out_dir: Path,
 ) -> dict[str, Path]:
-    """Write the three report frames as CSVs under ``out_dir``."""
+    """Write the report frames as CSVs under ``out_dir``."""
 
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -305,10 +335,14 @@ def write_report_csvs(
         "specificity_matrix": out_dir / "specificity_matrix.csv",
         "power_curves": out_dir / "power_curves.csv",
         "type_i_table": out_dir / "type_i_table.csv",
+        "config_spectrum": out_dir / "config_spectrum.csv",
+        "eigengap_stratified_power": out_dir / "eigengap_stratified_power.csv",
     }
     frames.specificity_matrix.to_csv(paths["specificity_matrix"], index=False)
     frames.power_curves.to_csv(paths["power_curves"], index=False)
     frames.type_i_table.to_csv(paths["type_i_table"], index=False)
+    frames.config_spectrum.to_csv(paths["config_spectrum"], index=False)
+    frames.eigengap_stratified_power.to_csv(paths["eigengap_stratified_power"], index=False)
     return paths
 
 
@@ -623,6 +657,7 @@ __all__ = [
     "StudyReportError",
     "build_phase4_frames",
     "build_power_curves",
+    "build_report_frames",
     "build_specificity_matrix",
     "build_type_i_table",
     "render_power_curves",
