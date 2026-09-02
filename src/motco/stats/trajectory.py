@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Sequence, Union
+from typing import Any, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -9,6 +9,12 @@ import pandas as pd
 from motco.stats.design import build_ls_means, get_model_matrix
 
 logger = logging.getLogger(__name__)
+
+#: Version of the configuration-spectrum contract produced by
+#: :func:`configuration_spectra`. Bumped whenever the recorded fields or their
+#: definitions change, so a persisted record can never be read under the wrong
+#: contract.
+CONFIG_SPECTRUM_VERSION = 1
 
 
 def estimate_betas(
@@ -167,11 +173,126 @@ def pair_difference(
     return angle, delta
 
 
+def configuration_spectrum(configuration: Union[pd.DataFrame, np.ndarray]) -> dict[str, Any]:
+    """Describe the eigenspectrum of one centered stage configuration.
+
+    The configuration is a ``k x d`` matrix of stage points in the measurement
+    space. It is column-centered, and the squared singular values of the centered
+    matrix — the eigenvalues of its scatter matrix — are normalized by their sum.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``n_points`` / ``n_dimensions`` of the configuration, its
+        ``total_variance`` (the untransformed eigenvalue sum), the normalized
+        ``spectrum``, and the **relative eigengap** ``(l1 - l2) / sum(l)``.
+
+    Notes
+    -----
+    The relative eigengap measures how strongly a single axis dominates the
+    configuration: it is the observable that predicts how well an orientation
+    (PC1) can be resolved from noise, since PC1's estimator variance scales
+    like noise over the eigengap. See ``docs/reports/geometry-audit-2026-09-01.md``.
+
+    Two degeneracies are recorded rather than hidden:
+
+    - A configuration of ``k = 2`` stages has rank at most 1 after centering, so
+      its relative eigengap is identically ``1.0``. It is recorded as computed
+      and is uninformative by construction.
+    - A configuration with zero total variance (every stage at one point, or
+      fewer than two stages) has no defined spectrum. It records an empty
+      ``spectrum`` and ``relative_eigengap = None`` — never a non-finite float,
+      which JSON cannot represent conformingly.
+    """
+
+    X_raw = np.asarray(configuration, dtype=float)
+    if X_raw.ndim != 2:
+        raise ValueError(f"configuration must be a 2-D matrix; got shape {X_raw.shape}.")
+    n_points, n_dimensions = X_raw.shape
+    entry: dict[str, Any] = {
+        "n_points": int(n_points),
+        "n_dimensions": int(n_dimensions),
+    }
+    if n_points == 0 or n_dimensions == 0:
+        entry.update({"total_variance": 0.0, "spectrum": [], "relative_eigengap": None})
+        return entry
+
+    X = X_raw - X_raw.mean(axis=0, keepdims=True)
+    eigenvalues = np.linalg.svd(X, compute_uv=False) ** 2
+    total = float(eigenvalues.sum())
+    if not np.isfinite(total) or total <= 0.0:
+        entry.update({"total_variance": 0.0, "spectrum": [], "relative_eigengap": None})
+        return entry
+
+    normalized = eigenvalues / total
+    second = float(normalized[1]) if normalized.size > 1 else 0.0
+    entry.update(
+        {
+            "total_variance": total,
+            "spectrum": [float(value) for value in normalized],
+            "relative_eigengap": float(normalized[0] - second),
+        }
+    )
+    return entry
+
+
+def configuration_spectra(
+    obs_vect: Union[pd.DataFrame, np.ndarray],
+    contrast: list[list[int]],
+) -> dict[str, Any]:
+    """Spectra of the pooled and per-group stage-mean configurations.
+
+    ``obs_vect`` is the LS-mean matrix the trajectory statistics are measured
+    from (``LS_means @ betas``); ``contrast`` enumerates, per group, the rows
+    belonging to that group's trajectory in stage order.
+
+    The **per-group** configurations are those rows; the **pooled**
+    configuration averages the groups stage by stage. Pooling requires every
+    group to carry the same number of stages — the design the study builds — and
+    is reported as ``None`` when they do not, rather than silently pooling
+    mismatched stages.
+
+    Because the LS-mean rows exist per permutation, this description is
+    computable inside RRPP without a second beta solve. Under a balanced design
+    the pooled LS-mean configuration coincides with the pooled sample stage
+    means.
+    """
+
+    V = np.asarray(obs_vect, dtype=float)
+    groups = [V[np.asarray(levels, dtype=int), :] for levels in contrast]
+    sizes = {group.shape[0] for group in groups}
+    pooled = (
+        configuration_spectrum(np.mean(np.stack(groups, axis=0), axis=0))
+        if groups and len(sizes) == 1
+        else None
+    )
+    return {
+        "version": CONFIG_SPECTRUM_VERSION,
+        "pooled": pooled,
+        "groups": [configuration_spectrum(group) for group in groups],
+    }
+
+
+def pooled_relative_eigengap(spectra: dict[str, Any] | None) -> float | None:
+    """Read the pooled relative eigengap out of a spectrum block, or ``None``."""
+
+    pooled = (spectra or {}).get("pooled")
+    if not pooled:
+        return None
+    value = pooled.get("relative_eigengap")
+    if value is None:
+        return None
+    value = float(value)
+    return value if np.isfinite(value) else None
+
+
 def estimate_difference(
     Y: Union[pd.DataFrame, np.ndarray],
     model_matrix: Union[pd.DataFrame, np.ndarray],
     LS_means: Union[pd.DataFrame, np.ndarray],
     contrast: list[list[int]],
+    *,
+    return_spectra: bool = False,
 ) -> tuple:
     """
     Estimate parameters angle, delta, and shape given an outcome
@@ -189,6 +310,11 @@ def estimate_difference(
     contrast: list[list[int]]
         Indices indicating the groups to compare based on LS means.
         Each list must contain the cohorts that belong to the same group.
+    return_spectra: bool
+        When ``True``, additionally return the pooled and per-group stage-mean
+        configuration spectra (:func:`configuration_spectra`) computed from the
+        LS-mean vectors this call already fits. Off by default: the returned
+        tuple is then exactly the historical three-element one.
 
     Returns
     -------
@@ -200,6 +326,9 @@ def estimate_difference(
         Symmetric matrix (n_groups x n_groups) with Procrustes shape distances
         after removing translation, proper rigid rotation, and uniform scale.
         Reflections are retained as distinct shapes by default.
+    spectra: dict[str, Any]
+        Only when ``return_spectra=True``. A recorded covariate — it enters no
+        statistic and no decision rule.
 
     Notes
     -----
@@ -269,6 +398,8 @@ def estimate_difference(
             angles[i, comp] = angle
             angles[comp, i] = angle
             comp += 1
+    if return_spectra:
+        return deltas, angles, shapes, configuration_spectra(obs_vect, contrast)
     return deltas, angles, shapes
 
 

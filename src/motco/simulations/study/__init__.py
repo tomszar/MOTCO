@@ -30,9 +30,11 @@ from motco.simulations.study.phase4 import (
 )
 from motco.simulations.study.report import (
     Phase4ReportFrames,
+    ReportFrames,
     StudyReportError,
     build_phase4_frames,
     build_power_curves,
+    build_report_frames,
     build_specificity_matrix,
     build_type_i_table,
     render_attribution_stability,
@@ -50,6 +52,10 @@ from motco.simulations.study.sharding import (
     enumerate_units,
     partition_unit,
     run_shard,
+)
+from motco.simulations.study.spectrum import (
+    stratify_power_by_eigengap,
+    summarize_config_spectrum,
 )
 from motco.simulations.study.summary import (
     CombinedRuleSummary,
@@ -73,6 +79,7 @@ __all__ = [
     "Phase4GateDecision",
     "Phase4ReportFrames",
     "Phase4SummaryError",
+    "ReportFrames",
     "PowerMonotonicityTarget",
     "SpecificityTarget",
     "StudyConfig",
@@ -85,6 +92,7 @@ __all__ = [
     "build_operating_frame",
     "build_phase4_frames",
     "build_power_curves",
+    "build_report_frames",
     "build_specificity_matrix",
     "build_type_i_table",
     "dump_study_config",
@@ -104,8 +112,10 @@ __all__ = [
     "render_specificity_matrix",
     "render_type_i_plot",
     "run_shard",
+    "stratify_power_by_eigengap",
     "summarize_attribution",
     "summarize_combined_rule",
+    "summarize_config_spectrum",
     "summarize_pls_selection",
     "summarize_realized_geometry",
     "summarize_study",

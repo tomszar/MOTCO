@@ -18,6 +18,7 @@ from motco.simulations.pivotality import (
     cell_key,
     rejection_split_table,
     replicate_z,
+    spectrum_association_table,
     standardized_counterfactual_table,
     write_pivotality_tables,
 )
@@ -36,6 +37,7 @@ def make_record(
     phase: str = "power_primary",
     effect_size: float = 1.0,
     statistic: str = "angle",
+    eigengap: float | None = None,
 ) -> SimulationReplicateResult:
     return SimulationReplicateResult(
         cell_id=cell_id,
@@ -60,6 +62,17 @@ def make_record(
                 "q95": null_q95,
                 "q99": null_q95 * 1.1,
             }
+        },
+        config_spectrum={} if eigengap is None else {
+            "version": 1,
+            "pooled": {
+                "n_points": 4,
+                "n_dimensions": 5,
+                "total_variance": 3.0,
+                "spectrum": [0.5, 0.5 - eigengap, eigengap],
+                "relative_eigengap": eigengap,
+            },
+            "groups": {},
         },
     )
 
@@ -395,7 +408,7 @@ def test_failed_records_are_excluded_from_every_table() -> None:
     assert rows_for(rows, mode="orientation", null_target="mean").n_replicates == 5
 
 
-def test_write_pivotality_tables_emits_three_csvs(tmp_path) -> None:
+def test_write_pivotality_tables_emits_every_csv(tmp_path) -> None:
     import csv
 
     records = null_control_cell(n=10) + tracking_cell(n=10)
@@ -404,6 +417,7 @@ def test_write_pivotality_tables_emits_three_csvs(tmp_path) -> None:
     assert set(paths) == {
         "pivotality_association",
         "pivotality_rejection_split",
+        "pivotality_spectrum",
         "pivotality_standardized",
     }
     for path in paths.values():
@@ -415,3 +429,120 @@ def test_write_pivotality_tables_emits_three_csvs(tmp_path) -> None:
         standardized = list(csv.DictReader(handle))
     assert any(row["trajectory_mode"] == "none" for row in standardized)
     assert all(math.isfinite(float(row["z_threshold"])) for row in standardized)
+
+
+# --- eigengap covariate ------------------------------------------------------
+
+
+def eigengap_cell(cell_id: str = "orientation", mode: str = "orientation", n: int = 40):
+    """The audit's shape: a narrow configuration carries a wide null.
+
+    The eigengap contracts as the index rises and the null width grows with it,
+    so the association is negative and near-perfect on ranks by construction.
+    """
+
+    records = []
+    for index in range(n):
+        eigengap = 0.12 - 0.002 * index
+        null_q95 = 10.0 * (0.12 / eigengap) ** 2
+        records.append(
+            make_record(
+                cell_id=cell_id,
+                trajectory_mode=mode,
+                observed=45.0,
+                null_mean=null_q95 * 0.6,
+                null_sd=null_q95 * 0.2,
+                null_q95=null_q95,
+                p_value=0.01 if null_q95 < 45.0 else 0.40,
+                replicate_index=index,
+                eigengap=eigengap,
+            )
+        )
+    return records
+
+
+def test_eigengap_association_is_negative_when_narrow_geometry_widens_the_null() -> None:
+    rows = spectrum_association_table(eigengap_cell(), statistics=("angle",), null_targets=("q95",))
+    row = rows_for(rows, mode="orientation", null_target="q95")
+
+    assert row.status == "ok"
+    assert row.n_replicates == 40
+    assert row.spearman == pytest.approx(-1.0)
+    assert row.log_log_pearson is not None and row.log_log_pearson < -0.99
+    # The construction sets q95 proportional to eigengap^-2.
+    assert row.log_log_slope == pytest.approx(-2.0, rel=1e-6)
+    assert row.mean_eigengap == pytest.approx(
+        float(np.mean([0.12 - 0.002 * index for index in range(40)]))
+    )
+
+
+def test_eigengap_association_is_near_zero_when_the_null_does_not_track_geometry() -> None:
+    """A null width drawn independently of the geometry shows no association."""
+
+    rng = np.random.default_rng(4)
+    records = [
+        make_record(
+            cell_id="flat",
+            trajectory_mode="magnitude",
+            observed=45.0,
+            null_mean=20.0,
+            null_sd=6.0,
+            null_q95=float(30.0 + 5.0 * rng.standard_normal()),
+            p_value=0.01,
+            replicate_index=index,
+            eigengap=0.05 + 0.001 * index,
+        )
+        for index in range(60)
+    ]
+
+    row = rows_for(
+        spectrum_association_table(records, statistics=("angle",), null_targets=("q95",)),
+        mode="magnitude",
+        null_target="q95",
+    )
+
+    assert row.status == "ok"
+    assert abs(row.spearman) < 0.25
+    assert row.spearman_ci_low < 0.0 < row.spearman_ci_high
+
+
+def test_eigengap_association_is_unavailable_without_recorded_spectra() -> None:
+    row = rows_for(
+        spectrum_association_table(tracking_cell(), statistics=("angle",), null_targets=("q95",)),
+        mode="orientation",
+        null_target="q95",
+    )
+
+    assert row.status == "unavailable"
+    assert row.n_replicates == 0
+    assert row.n_records_with_spectrum == 0
+    assert row.spearman is None and row.log_log_pearson is None
+
+
+def test_degenerate_eigengaps_are_dropped_from_the_log_log_fit_only() -> None:
+    records = eigengap_cell(n=10)
+    records.append(
+        make_record(
+            cell_id="orientation",
+            trajectory_mode="orientation",
+            observed=45.0,
+            null_mean=30.0,
+            null_sd=9.0,
+            null_q95=60.0,
+            p_value=0.40,
+            replicate_index=99,
+            eigengap=0.0,
+        )
+    )
+
+    row = rows_for(
+        spectrum_association_table(records, statistics=("angle",), null_targets=("q95",)),
+        mode="orientation",
+        null_target="q95",
+    )
+
+    # The rank correlation keeps all 11 replicates; only the logarithm cannot
+    # take the degenerate one.
+    assert row.n_replicates == 11
+    assert row.spearman is not None
+    assert row.log_log_pearson is not None

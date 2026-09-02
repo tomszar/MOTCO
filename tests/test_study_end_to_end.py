@@ -32,10 +32,7 @@ from motco.simulations.study import (
 )
 from motco.simulations.study.merge import discover_shard_paths, merge_shards
 from motco.simulations.study.report import (
-    ReportFrames,
-    build_power_curves,
-    build_specificity_matrix,
-    build_type_i_table,
+    build_report_frames,
     write_report_csvs,
 )
 from motco.simulations.study.sharding import run_shard
@@ -119,11 +116,7 @@ def test_end_to_end_smoke(tmp_path: Path) -> None:
 
     per_stat = summarize_study(records, alpha=config.alpha)
     combined = summarize_combined_rule(records, alpha=config.alpha)
-    frames = ReportFrames(
-        specificity_matrix=build_specificity_matrix(per_stat, records),
-        power_curves=build_power_curves(per_stat, records),
-        type_i_table=build_type_i_table(per_stat, combined, records),
-    )
+    frames = build_report_frames(per_stat, combined, records, alpha=config.alpha)
     report_dir = tmp_path / "report"
     csv_paths = write_report_csvs(frames, report_dir)
     for path in csv_paths.values():

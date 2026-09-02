@@ -9,7 +9,7 @@ statistic inflates its own critical value with it.
 
 Reads a merged JSONL record set (records must carry the per-replicate null
 summary; see ``motco.simulations.grid.SimulationReplicateResult``) and writes
-three tables:
+four tables:
 
 1. ``pivotality_association.csv`` — per cell and statistic, the correlation and
    slope of the null's mean, spread, and q95 against the observed statistic,
@@ -18,6 +18,10 @@ three tables:
    value split by rejection outcome, flagging the Phase 4 inversion.
 3. ``pivotality_standardized.csv`` — the as-specified rejection rate beside the
    cross-replicate standardized rate, for every cell including the controls.
+4. ``pivotality_spectrum.csv`` — per cell and statistic, the association between
+   the recorded latent configuration eigengap and the width of that replicate's
+   own null. Reported as ``status='unavailable'`` for records predating the
+   spectrum field.
 
 The standardized counterfactual is a **diagnostic, not a deployable test**: it
 borrows a reference ``z`` distribution from the null-control cells, which does
@@ -42,6 +46,7 @@ from motco.simulations.pivotality import (
     STATISTICS,
     association_table,
     group_by_cell,
+    spectrum_association_table,
     write_pivotality_tables,
 )
 
@@ -105,6 +110,25 @@ def main(argv: list[str] | None = None) -> int:
         )
         slope = "n/a" if row.slope is None else f"{row.slope:+.3f}"
         print(f"  {row.cell.label:<38} {row.statistic:<6} r={correlation}{interval}  slope={slope}")
+
+    print("\neigengap vs its own null width (q95), per cell:")
+    for row in spectrum_association_table(
+        completed, statistics=tuple(args.statistics), null_targets=("q95",)
+    ):
+        if row.status != "ok":
+            print(f"  {row.cell.label:<38} {row.statistic:<6} unavailable (no spectrum recorded)")
+            continue
+        spearman = "n/a" if row.spearman is None else f"{row.spearman:+.3f}"
+        interval = (
+            ""
+            if row.spearman_ci_low is None or row.spearman_ci_high is None
+            else f" [{row.spearman_ci_low:+.3f}, {row.spearman_ci_high:+.3f}]"
+        )
+        pearson = "n/a" if row.log_log_pearson is None else f"{row.log_log_pearson:+.3f}"
+        print(
+            f"  {row.cell.label:<38} {row.statistic:<6} spearman={spearman}{interval}"
+            f"  log-log r={pearson}  n={row.n_replicates}"
+        )
 
     print(
         "\nThe standardized counterfactual is a diagnostic, not a deployable test: it borrows a\n"

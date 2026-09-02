@@ -24,7 +24,7 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 from time import perf_counter
-from typing import Any, Literal, Mapping
+from typing import Any, Literal, Mapping, Sequence
 
 import numpy as np
 import pandas as pd
@@ -158,6 +158,15 @@ class SimulationEvaluationResult:
     # record can locate its own observed statistic against its own critical
     # value without retaining the full draw vectors.
     null_summary: dict[str, dict[str, float]] = field(default_factory=dict)
+    # Eigenspectrum of the centered stage-mean configuration in the *evaluated
+    # latent space*, pooled and per contrast group, plus — whenever permutations
+    # ran — a summary of the pooled relative eigengap over the permutation draws.
+    # A recorded covariate: the geometry audit
+    # (``docs/reports/geometry-audit-2026-09-01.md``) found the relative eigengap
+    # predicts how wide a replicate's own ``angle`` permutation null will be, and
+    # therefore whether its orientation is resolvable at all. It qualifies
+    # reporting; it enters no statistic and no decision rule.
+    config_spectrum: dict[str, Any] = field(default_factory=dict)
 
 
 def evaluate_semisynthetic_trajectory(
@@ -184,12 +193,14 @@ def evaluate_semisynthetic_trajectory(
         stage_col=params.stage_col,
     )
 
-    observed_deltas, observed_angles, observed_shapes = estimate_difference(
+    observed_deltas, observed_angles, observed_shapes, observed_spectra = estimate_difference(
         Y=latent.matrix,
         model_matrix=design.model_full,
         LS_means=design.ls_means,
         contrast=design.contrast,
+        return_spectra=True,
     )
+    config_spectrum = _config_spectrum_block(observed_spectra, design.group_levels)
     shape_available = len(design.stage_levels) >= 3
     pair_statistics = _extract_pair_statistics(
         observed_deltas,
@@ -202,7 +213,7 @@ def evaluate_semisynthetic_trajectory(
     null_distributions: dict[str, list[float]] | None = None
     null_summary: dict[str, dict[str, float]] = {}
     if params.permutations > 0:
-        dist_delta, dist_angle, dist_shape = RRPP(
+        dist_delta, dist_angle, dist_shape, dist_eigengap = RRPP(
             latent.matrix,
             design.model_full,
             design.model_reduced,
@@ -212,6 +223,7 @@ def evaluate_semisynthetic_trajectory(
             n_jobs=params.n_jobs,
             progress=params.progress,
             seed=params.seed,
+            return_eigengaps=True,
         )
         null_values = _extract_null_distributions(
             dist_delta,
@@ -225,6 +237,11 @@ def evaluate_semisynthetic_trajectory(
             if statistic in null_values and np.isfinite(observed)
         }
         null_summary = _summarize_null_distributions(null_values)
+        # Only the summary survives: the per-permutation eigengaps are discarded
+        # here, exactly as the per-permutation statistics are.
+        config_spectrum["permutation_pooled_eigengap"] = _summarize_permutation_eigengaps(
+            dist_eigengap
+        )
         if params.include_null_distributions:
             null_distributions = null_values
 
@@ -270,6 +287,7 @@ def evaluate_semisynthetic_trajectory(
         realized_geometry=realized_geometry,
         attribution_diagnostics=attribution_diagnostics,
         null_summary=null_summary,
+        config_spectrum=config_spectrum,
     )
 
 
@@ -781,3 +799,57 @@ def _summarize_null_distributions(
             entry["sd"] = float(retained.std(ddof=1))
         summary[statistic] = entry
     return summary
+
+
+def _config_spectrum_block(
+    spectra: Mapping[str, Any],
+    group_levels: Sequence[str],
+) -> dict[str, Any]:
+    """Name the per-group spectra by group level and keep the block JSON-safe.
+
+    ``configuration_spectra`` returns groups positionally, in contrast order;
+    the contrast is built group-major from ``group_levels``, so the two line up
+    and the persisted record can be read without knowing the contrast layout.
+    """
+
+    groups = list(spectra.get("groups") or [])
+    if len(groups) != len(group_levels):
+        raise SimulationEvaluationError(
+            f"Spectrum block has {len(groups)} group configurations but the design carries "
+            f"{len(group_levels)} groups."
+        )
+    return {
+        "version": int(spectra["version"]),
+        "pooled": spectra.get("pooled"),
+        "groups": {str(level): entry for level, entry in zip(group_levels, groups)},
+    }
+
+
+#: Quantiles retained for the pooled eigengap over the permutation draws. The
+#: observed eigengap is located against this distribution, so the tails matter.
+_EIGENGAP_SUMMARY_QUANTILES: tuple[tuple[str, float], ...] = (
+    ("q05", 0.05),
+    ("q50", 0.50),
+    ("q95", 0.95),
+)
+
+
+def _summarize_permutation_eigengaps(values: Sequence[float | None]) -> dict[str, float]:
+    """Summarize the pooled relative eigengap across the permutation draws.
+
+    Draws whose configuration had no defined eigengap are dropped and ``count``
+    reports how many survived, matching the null-summary convention: an
+    exclusion stays visible rather than being folded into the moments. Only this
+    summary is retained — the per-permutation values never reach the result.
+    """
+
+    draws = np.asarray([np.nan if value is None else float(value) for value in values], dtype=float)
+    retained = draws[np.isfinite(draws)] if draws.size else draws
+    entry: dict[str, float] = {"count": float(retained.size)}
+    if retained.size >= 1:
+        entry["mean"] = float(retained.mean())
+        for name, q in _EIGENGAP_SUMMARY_QUANTILES:
+            entry[name] = float(np.quantile(retained, q))
+    if retained.size >= 2:
+        entry["sd"] = float(retained.std(ddof=1))
+    return entry

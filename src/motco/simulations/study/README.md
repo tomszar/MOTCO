@@ -299,6 +299,8 @@ results/
     ├── power_curves.png
     ├── type_i_table.csv           per-statistic + combined-rule on null cells
     ├── type_i.png
+    ├── config_spectrum.csv        recorded latent eigengaps per cell × configuration
+    ├── eigengap_stratified_power.csv  orientation power by eigengap tercile
     ├── acceptance_report.csv      acceptance target evaluation
     └── acceptance_report.json
 ```
@@ -324,6 +326,50 @@ diagnostics:
   permutation behavior — so records written before it existed still load (with an
   empty summary) and remain resumable. A record from a `permutations = 0` run is
   told apart from a pre-field record by `runtime_metadata["permutations"]`.
+
+- `config_spectrum` — the eigenspectrum of the centered **stage-mean
+  configuration in the evaluated latent space**, written on every run. It carries
+  `pooled` (stages averaged across groups) and `groups` (one entry per group
+  level), each with `n_points`, `n_dimensions`, `total_variance`, the normalized
+  `spectrum`, and the **relative eigengap** `(l1 − l2) / Σl`. With
+  `permutations > 0` it also carries `permutation_pooled_eigengap` — `count`,
+  `mean`, `sd`, `q05`/`q50`/`q95` of the pooled eigengap over the permutation
+  draws — so a replicate can be located against its own permutation
+  distribution. Full per-permutation spectra are never retained.
+
+  The eigengap is the covariate the [geometry
+  audit](../../../../docs/reports/geometry-audit-2026-09-01.md) found predicts how
+  wide a replicate's own `angle` permutation null will be, and therefore whether
+  its orientation is resolvable at all. It is **recorded and reported only** — it
+  enters no statistic, no p-value, and no decision rule. A configuration with
+  zero total variance records `relative_eigengap: null` and an empty `spectrum`
+  rather than a non-finite float; a two-stage configuration's eigengap is
+  identically `1.0` and uninformative by construction.
+
+  Unlike `null_summary`, the spectrum **is** signature-bearing:
+  `parameter_signature` includes `config_spectrum_version`. A shard written
+  before this field existed therefore **refuses resume** with the usual
+  signature-mismatch error, rather than producing a merged set in which only some
+  records carry the covariate — a missing covariate and a degenerate one are
+  indistinguishable at analysis time. Already-merged pre-change record sets still
+  *load* (the block is empty) and their committed reports are unaffected; only
+  resuming *into* an old shard is refused.
+
+### Eigengap reporting
+
+`motco_study.py report` writes two spectrum tables beside the existing ones,
+from recorded values only — no dataset is regenerated and no spectrum
+recomputed:
+
+- `config_spectrum.csv` — one row per (cell, configuration ∈ {`pooled`, group
+  levels}) with `n_replicates` / `n_recorded` / `n_available` and the eigengap
+  mean, sd, quartiles, min and max. `n_recorded` counts records carrying the
+  block at all and `n_available` those whose eigengap is defined, so pre-field
+  records and degenerate configurations stay separately visible.
+- `eigengap_stratified_power.csv` — for orientation-mode power cells, rejection
+  rates within **within-cell terciles** of the recorded pooled eigengap, with
+  per-stratum counts and Monte Carlo SEs. A cell whose records carry no spectrum
+  is emitted with `status = unavailable` rather than dropped.
 
 ### Angle-pivotality diagnostic
 
@@ -351,8 +397,12 @@ overriding it changes the permutation draws and breaks resume.
 It writes `pivotality_association.csv` (correlation and slope of the null's
 mean/sd/q95 against the observed statistic, with a Fisher-z interval),
 `pivotality_rejection_split.csv` (observed statistic and critical value split by
-rejection outcome), and `pivotality_standardized.csv` (as-specified vs
-cross-replicate standardized rejection rate, controls included).
+rejection outcome), `pivotality_standardized.csv` (as-specified vs
+cross-replicate standardized rejection rate, controls included), and
+`pivotality_spectrum.csv` (per cell and statistic, the Spearman and log–log
+Pearson association between the *recorded* pooled eigengap and the width of that
+replicate's own null, with Fisher-z intervals; `status = unavailable` for record
+sets predating the spectrum field).
 
 The standardized counterfactual is a **diagnostic, not a deployable test** — it
 borrows a reference `z` distribution from the null-control cells. Within-replicate
