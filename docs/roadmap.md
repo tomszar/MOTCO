@@ -211,6 +211,14 @@ truth is 0.15 while the observed component's is 1.00 — driver reports must use
 Component selection saturates at `n_stages - 1` because supervision is on the stage label, so a space sized
 for stage separation is not sized to preserve group orientation contrast.
 
+**Update 2026-09-02** ([note](reports/latent-config-spectrum-2026-09-02.md)): the quantity the pivotality
+report could not name — what makes one replicate resolvable and another not — is now **recorded on every
+replicate**. Each record carries the eigenspectrum of its centered latent stage-mean configuration (pooled
+and per group) and, when permutations run, the pooled relative eigengap over its own permutation draws. The
+study report stratifies orientation power by that eigengap and the pivotality analysis reports its
+association with the null width. It is a recorded covariate only: no statistic, p-value, permutation draw,
+or decision rule changed.
+
 Before Phase 5, see the [Phase 5 readiness worklist](phase5-readiness.md). Its blocking item — diagnosing
 the orientation shortfall — was **resolved on 2026-09-01** by
 [`diagnose-angle-null-pivotality`](reports/angle-null-pivotality-2026-09-01.md): the co-variation
