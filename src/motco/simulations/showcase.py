@@ -74,6 +74,12 @@ def generate_showcase_datasets(
     feature-surgery transform. ``none`` always gets a zero effect size (the
     null), regardless of ``effect_size``.
 
+    The showcase deliberately opts into ``surgery_censoring="clamp"``: it renders
+    the *largest* version of each transform for illustration, and at the default
+    ``effect_size = 1.0`` the pool-limited surgeries saturate. Nothing here is
+    measured, so a partial surgery is acceptable — a power study must not copy
+    this and should keep the fail-loud default.
+
     Returns a dict mapping mode name → dataset, preserving the order of ``modes``.
     """
     if not modes:
@@ -90,6 +96,7 @@ def generate_showcase_datasets(
             group_effect_size=0.0 if mode == "none" else effect_size,
             group_ratio=group_ratio,
             p_dmp=p_dmp,
+            surgery_censoring="clamp",
         )
         datasets[mode] = generate_semisynthetic_trajectory(params, reference=ref)
     return datasets

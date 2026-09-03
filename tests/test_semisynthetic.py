@@ -119,16 +119,18 @@ def test_magnitude_extremes_scales_only_endpoint_indicators(reference) -> None:
 
 
 def test_orientation_preserves_methylation_cardinality_per_stage(reference) -> None:
-    dataset = generate_semisynthetic_trajectory(
-        make_params("orientation", group_effect_size=1.0), reference=reference
-    )
+    # e = 0.6 is inside the destination-pool headroom at p_dmp = 0.2 and three
+    # stages, so the relocation is realized in full under the default policy.
+    dataset = generate_semisynthetic_trajectory(make_params("orientation"), reference=reference)
     counts = dataset.truth["indicator_counts"]
     # relocation preserves per-stage methylation cardinality (same number of sites)
     assert counts["A"]["methylation"] == counts["B"]["methylation"]
     # but the sites moved, so the actual indicators differ
     ind = dataset.truth["indicators"]
     assert not np.array_equal(ind["A"]["methylation"], ind["B"]["methylation"])
-    assert dataset.truth["transform"]["orientation_relocated"] > 0
+    transform = dataset.truth["transform"]
+    assert transform["orientation_relocated"] == transform["orientation_nominal"] > 0
+    assert transform["censored"] is False
 
 
 def test_shape_fixes_endpoints_and_perturbs_interior(reference) -> None:
@@ -170,6 +172,7 @@ def test_none_mode_has_empty_transform(reference) -> None:
     [
         ({"trajectory_mode": "bogus"}, "Unknown trajectory_mode"),
         ({"magnitude_kind": "bogus"}, "Unknown magnitude_kind"),
+        ({"surgery_censoring": "bogus"}, "Unknown surgery_censoring"),
         ({"group_labels": ("A", "A")}, "two distinct labels"),
         ({"group_ratio": 1.5}, "group_ratio"),
         ({"group_effect_size": -1.0}, "non-negative"),

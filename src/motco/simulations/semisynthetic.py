@@ -37,6 +37,18 @@ methylation ``rev.logit`` nonlinearity) is *expected and reported*, not
 engineered away — how well MOTCO separates the modes is an open question the
 study characterizes. Generation runs entirely on the numpy generator and cached
 reference data — no R at runtime.
+
+**Pool-limited surgeries and censoring.** ``orientation``, ``translation``, and
+``shape`` with ``shape_kind='relocate'`` each draw their surgery from a finite
+destination/candidate pool, so a large ``e`` can request more sites than the
+pool holds. ``surgery_censoring`` makes that explicit: ``"error"`` (the default)
+raises rather than realize a partial surgery, ``"clamp"`` realizes as much as
+the pool allows. The pools depend on the per-replicate baseline draw, so whether
+the limit binds is a property of the dataset, not of the config alone — which is
+why the default fails loudly and truth metadata always records the nominal size,
+the realized size, and a ``censored`` flag. Silent clamping made distinct
+requested effects produce identical datasets and was reported as independent
+evidence; see ``docs/reports/geometry-audit-2026-09-01.md`` finding F2.
 """
 
 from __future__ import annotations
@@ -60,11 +72,13 @@ OmicsLayer = Literal["methylation", "expression", "proteomics"]
 TrajectoryMode = Literal["none", "translation", "magnitude", "orientation", "shape"]
 ShapeKind = Literal["relocate", "magnitude"]
 MagnitudeKind = Literal["all", "extremes"]
+SurgeryCensoring = Literal["error", "clamp"]
 
 _OMICS_LAYERS: tuple[OmicsLayer, ...] = ("methylation", "expression", "proteomics")
 _MODES = frozenset({"none", "translation", "magnitude", "orientation", "shape"})
 _SHAPE_KINDS = frozenset({"relocate", "magnitude"})
 _MAGNITUDE_KINDS = frozenset({"all", "extremes"})
+_SURGERY_CENSORINGS = frozenset({"error", "clamp"})
 
 
 class SemiSyntheticTrajectoryError(ValueError):
@@ -86,6 +100,12 @@ class SemiSyntheticTrajectoryParams:
     selects whether ``magnitude`` scales group B's methylation effect at *all*
     stages (the default, a uniform δ scale) or only at the *extreme* stages
     (first and last), leaving interior stages at the baseline effect.
+    ``surgery_censoring`` is the policy for pool-limited surgeries described in
+    the module docstring: ``"error"`` (default) refuses to realize a partial
+    surgery, ``"clamp"`` realizes the largest surgery the pool allows. Use
+    ``"clamp"`` only to reproduce a historical run or for exploratory work where
+    a partial surgery is acceptable — under it the requested effect no longer
+    labels the realized construction.
     """
 
     seed: int
@@ -101,6 +121,7 @@ class SemiSyntheticTrajectoryParams:
     delta_protein: float = 2.0
     shape_kind: ShapeKind = "relocate"
     magnitude_kind: MagnitudeKind = "all"
+    surgery_censoring: SurgeryCensoring = "error"
     stage_sample_prop: tuple[float, ...] | None = None
 
 
@@ -188,6 +209,11 @@ def _validate_params(params: SemiSyntheticTrajectoryParams) -> None:
         raise SemiSyntheticTrajectoryError(f"Unknown shape_kind: {params.shape_kind}")
     if params.magnitude_kind not in _MAGNITUDE_KINDS:
         raise SemiSyntheticTrajectoryError(f"Unknown magnitude_kind: {params.magnitude_kind}")
+    if params.surgery_censoring not in _SURGERY_CENSORINGS:
+        raise SemiSyntheticTrajectoryError(
+            f"Unknown surgery_censoring: {params.surgery_censoring}; "
+            f"expected one of {sorted(_SURGERY_CENSORINGS)}."
+        )
     if len(params.group_labels) != 2 or params.group_labels[0] == params.group_labels[1]:
         raise SemiSyntheticTrajectoryError("group_labels must contain two distinct labels.")
     if not (0 < params.group_ratio < 1):
@@ -312,13 +338,28 @@ def _translation_methyl(
     cpg_gene = ref.incidence_cpg_gene.argmax(1)  # each CpG's mapped gene
     fresh = (~stage_active) & (~used_genes[cpg_gene])  # stage-inactive CpGs on fresh genes
     candidates = np.where(fresh)[0]
-    n_extra = int(round(params.group_effect_size * params.p_dmp * ref.n_cpg))
-    n_extra = min(n_extra, len(candidates))
+    requested = params.p_dmp * ref.n_cpg
+    nominal = int(round(params.group_effect_size * requested))
+    n_extra = _resolve_surgery_size(
+        policy=params.surgery_censoring,
+        surgery="translation",
+        nominal=nominal,
+        pool=len(candidates),
+        saturating_effect=len(candidates) / requested if requested else 0.0,
+    )
     if n_extra >= 1:
         u = rng.choice(candidates, size=n_extra, replace=False)
         methyl_b[u, :] = 1.0  # differential at every B stage, none of A's
     deltas = (params.delta_methyl, params.delta_expr, params.delta_protein)
-    return methyl_b, deltas, {"translation_set_size": int(n_extra)}
+    return (
+        methyl_b,
+        deltas,
+        {
+            "translation_set_size": int(n_extra),
+            "translation_nominal": nominal,
+            "censored": bool(n_extra < nominal),
+        },
+    )
 
 
 def _magnitude_methyl(
@@ -348,18 +389,61 @@ def _magnitude_methyl(
     return methyl_a.copy(), scaled, {"magnitude_kind": "all", "delta_methyl_scale": 1.0 + e}
 
 
-def _relocate_rows(
-    rng: np.random.Generator, src_pool: np.ndarray, dst_pool: np.ndarray, fraction: float
-) -> tuple[np.ndarray, np.ndarray]:
-    """Pick ``fraction`` of ``src_pool`` and an equal number from ``dst_pool``."""
+def _resolve_surgery_size(
+    *,
+    policy: SurgeryCensoring,
+    surgery: str,
+    nominal: int,
+    pool: int,
+    saturating_effect: float,
+) -> int:
+    """Resolve a requested surgery size against its pool under the censoring policy.
 
-    k = int(round(min(max(fraction, 0.0), 1.0) * len(src_pool)))
-    k = min(k, len(dst_pool))
+    Reads pool sizes only and consumes no randomness, so the RNG call sequence
+    under ``"clamp"`` is identical to the pre-policy generator's at every seed.
+    """
+
+    if nominal <= pool:
+        return nominal
+    if policy == "clamp":
+        return pool
+    raise SemiSyntheticTrajectoryError(
+        f"trajectory_mode={surgery!r} requested a surgery of {nominal} site(s) but only {pool} "
+        f"are available in the destination pool, so the requested effect cannot be realized in "
+        f"full: this draw saturates at group_effect_size={saturating_effect:.4f}. Lower "
+        "group_effect_size (or p_dmp), or set surgery_censoring='clamp' to accept a partial "
+        "surgery whose realized size no longer matches the requested effect."
+    )
+
+
+def _relocate_rows(
+    rng: np.random.Generator,
+    src_pool: np.ndarray,
+    dst_pool: np.ndarray,
+    fraction: float,
+    *,
+    policy: SurgeryCensoring,
+    surgery: str,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Pick ``fraction`` of ``src_pool`` and an equal number from ``dst_pool``.
+
+    Returns the source rows, the destination rows, and the *nominal* (requested)
+    size; the realized size is ``src.size``.
+    """
+
+    nominal = int(round(min(max(fraction, 0.0), 1.0) * len(src_pool)))
+    k = _resolve_surgery_size(
+        policy=policy,
+        surgery=surgery,
+        nominal=nominal,
+        pool=len(dst_pool),
+        saturating_effect=len(dst_pool) / len(src_pool) if len(src_pool) else 0.0,
+    )
     if k < 1:
-        return np.empty(0, dtype=int), np.empty(0, dtype=int)
+        return np.empty(0, dtype=int), np.empty(0, dtype=int), nominal
     src = rng.choice(src_pool, size=k, replace=False)
     dst = rng.choice(dst_pool, size=k, replace=False)
-    return src, dst
+    return src, dst, nominal
 
 
 def _orientation_methyl(
@@ -372,13 +456,23 @@ def _orientation_methyl(
 
     active = np.where(methyl_a.sum(1) > 0)[0]
     inactive = np.where(methyl_a.sum(1) == 0)[0]
-    src, dst = _relocate_rows(rng, active, inactive, e)
+    src, dst, nominal = _relocate_rows(
+        rng, active, inactive, e, policy=params.surgery_censoring, surgery="orientation"
+    )
     methyl_b = methyl_a.copy()
     if src.size:
         methyl_b[dst, :] = methyl_a[src, :]  # move whole rows → same relocation per stage
         methyl_b[src, :] = 0.0
     deltas = (params.delta_methyl, params.delta_expr, params.delta_protein)
-    return methyl_b, deltas, {"orientation_relocated": int(src.size)}
+    return (
+        methyl_b,
+        deltas,
+        {
+            "orientation_relocated": int(src.size),
+            "orientation_nominal": nominal,
+            "censored": bool(src.size < nominal),
+        },
+    )
 
 
 def _shape_methyl(
@@ -400,11 +494,15 @@ def _shape_methyl(
     else:  # relocate this stage's sites to globally-inactive CpGs → bends the vertex
         active_here = np.where(methyl_a[:, stage] > 0)[0]
         global_inactive = np.where(methyl_a.sum(1) == 0)[0]
-        src, dst = _relocate_rows(rng, active_here, global_inactive, e)
+        src, dst, nominal = _relocate_rows(
+            rng, active_here, global_inactive, e, policy=params.surgery_censoring, surgery="shape"
+        )
         if src.size:
             methyl_b[dst, stage] = methyl_a[src, stage]
             methyl_b[src, stage] = 0.0
         meta["shape_relocated"] = int(src.size)
+        meta["shape_nominal"] = nominal
+        meta["censored"] = bool(src.size < nominal)
     deltas = (params.delta_methyl, params.delta_expr, params.delta_protein)
     return methyl_b, deltas, meta
 
@@ -500,6 +598,7 @@ def _build_truth(
         "p_dmp": params.p_dmp,
         "shape_kind": params.shape_kind,
         "magnitude_kind": params.magnitude_kind,
+        "surgery_censoring": params.surgery_censoring,
         "seed": params.seed,
         "stage_assumption": "clusters-as-stages",
         "deltas": {label_a: list(deltas_a), label_b: list(deltas_b)},
@@ -564,6 +663,126 @@ def _build_population_trajectories(
 # --------------------------------------------------------------------------- #
 # Convenience helpers consumed downstream
 # --------------------------------------------------------------------------- #
+
+
+#: Trajectory modes whose surgery size is limited by a destination/candidate pool.
+POOL_LIMITED_MODES: frozenset[str] = frozenset({"orientation", "translation", "shape"})
+
+#: Guard band, in standard deviations of the destination pool, applied by
+#: :func:`expected_surgery_headroom`. The pools are random per replicate, so a
+#: config that fits only *in expectation* would still fail loudly at runtime on
+#: unlucky draws; three SDs is conservative and cheap.
+HEADROOM_GUARD_SIGMAS: float = 3.0
+
+
+@dataclass(frozen=True)
+class SurgeryHeadroom:
+    """Expected pool headroom for one cell's pool-limited surgery.
+
+    All sizes are *expectations* over the baseline indicator draw, in CpG counts.
+    ``available`` is the expected pool less the guard band, and
+    ``saturating_effect`` is the ``group_effect_size`` at which the requested
+    surgery would exactly consume it. ``fits`` is the enumeration-time verdict.
+    """
+
+    trajectory_mode: str
+    group_effect_size: float
+    nominal: float
+    pool: float
+    guard_band: float
+    available: float
+    saturating_effect: float
+    fits: bool
+
+
+def expected_surgery_headroom(
+    params: SemiSyntheticTrajectoryParams,
+    *,
+    reference: IntersimReference | None = None,
+) -> SurgeryHeadroom | None:
+    """Expected destination-pool headroom for ``params``'s pool-limited surgery.
+
+    Returns ``None`` for modes that perform no pool-limited surgery (``none``,
+    ``magnitude``, and ``shape`` with ``shape_kind='magnitude'``), and for a
+    zero effect, where the transform short-circuits to group A's baseline.
+
+    Orientation and shape use the binomial expectation of the stage-active
+    fraction, ``a = 1 − (1 − p_dmp)^n_stages``. Translation's candidate pool
+    depends on the CpG→gene incidence — a CpG qualifies only if it is
+    stage-inactive *and* every CpG mapped to its gene is too — so it is computed
+    from the cached reference maps rather than approximated.
+    """
+
+    _validate_params(params)
+    mode = params.trajectory_mode
+    effect = float(params.group_effect_size)
+    if mode not in POOL_LIMITED_MODES or effect == 0.0:
+        return None
+    if mode == "shape" and params.shape_kind != "relocate":
+        return None
+
+    ref = reference if reference is not None else load_reference()
+    n = float(ref.n_cpg)
+    active_fraction = 1.0 - (1.0 - params.p_dmp) ** params.n_stages
+
+    if mode == "translation":
+        pool = _expected_translation_pool(ref, active_fraction)
+        source = params.p_dmp * n
+    else:
+        pool = (1.0 - active_fraction) * n
+        # orientation draws from every stage-active CpG; shape from one stage's.
+        source = active_fraction * n if mode == "orientation" else params.p_dmp * n
+
+    band = HEADROOM_GUARD_SIGMAS * _pool_sd(pool, n)
+    available = max(pool - band, 0.0)
+    nominal = effect * source
+    saturating = available / source if source > 0 else 0.0
+    return SurgeryHeadroom(
+        trajectory_mode=mode,
+        group_effect_size=effect,
+        nominal=nominal,
+        pool=pool,
+        guard_band=band,
+        available=available,
+        saturating_effect=saturating,
+        fits=nominal <= available,
+    )
+
+
+def _pool_sd(pool: float, n_cpg: float) -> float:
+    """Binomial SD of a pool of expected size ``pool`` drawn over ``n_cpg`` CpGs."""
+
+    if n_cpg <= 0:
+        return 0.0
+    p = min(max(pool / n_cpg, 0.0), 1.0)
+    return float(np.sqrt(n_cpg * p * (1.0 - p)))
+
+
+def _expected_translation_pool(ref: IntersimReference, active_fraction: float) -> float:
+    """Expected size of translation's fresh-CpG candidate pool.
+
+    A CpG qualifies when it is stage-inactive *and* its mapped gene carries no
+    stage-active CpG — i.e. when every CpG incident to that gene is inactive.
+    Stage-activity is independent across CpGs, so the probability for CpG ``i``
+    is ``(1 − a)`` raised to the size of that CpG's gene neighbourhood
+    (including ``i`` itself, which the generator's ``argmax`` mapping may leave
+    outside the incidence column for a CpG mapped to no gene).
+
+    The *mean* this returns is exact. Note that the candidate indicators are
+    positively correlated through shared genes, so the binomial guard band
+    :func:`expected_surgery_headroom` puts around it is a slight under-estimate
+    of this pool's spread — a translation cell sitting exactly on the headroom
+    boundary can still censor on an unlucky draw, which the runtime policy then
+    reports.
+    """
+
+    incidence = ref.incidence_cpg_gene
+    mapped_gene = incidence.argmax(1)
+    gene_sizes = incidence.sum(0)
+    rows = np.arange(incidence.shape[0])
+    # +1 wherever the CpG is not itself incident to the gene argmax selected.
+    neighbourhood = gene_sizes[mapped_gene] + (1.0 - incidence[rows, mapped_gene])
+    return float(np.sum((1.0 - active_fraction) ** neighbourhood))
 
 
 def affected_omics_layers() -> tuple[OmicsLayer, ...]:

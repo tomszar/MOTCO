@@ -14,6 +14,8 @@ from motco.simulations.grid import (
     enumerate_type_i_grid,
     make_simulation_cell,
 )
+from motco.simulations.reference import IntersimReference, load_reference
+from motco.simulations.semisynthetic import expected_surgery_headroom
 from motco.simulations.study.config import StudyConfig, StudyConfigError
 
 # trajectory modes treated as Type I negative controls
@@ -42,6 +44,7 @@ def enumerate_study(config: StudyConfig) -> SimulationGrid:
         cells = _assign_seed_families(cells, config)
 
     _require_unique_ids(cells)
+    _require_surgery_headroom(cells)
     grid_metadata: dict[str, Any] = {
         "grid_type": "study",
         "study_config_metadata": dict(config.metadata),
@@ -206,6 +209,49 @@ def _require_unique_ids(cells: list[SimulationCell]) -> None:
     if len(cells) < 2:
         return
     _require_distinct_primary_datasets(cells)
+
+
+def _require_surgery_headroom(cells: list[SimulationCell]) -> None:
+    """Reject cells whose requested effect exceeds the expected surgery headroom.
+
+    A pool-limited surgery (orientation, translation, shape/relocate) that
+    cannot be realized in full turns distinct requested effects into the same
+    realized construction. The runtime policy catches it per replicate; this
+    catches it at configuration time, before any cluster compute is spent.
+
+    Cells that explicitly opt into ``surgery_censoring="clamp"`` are exempt —
+    they have accepted partial surgeries, and their records carry the censored
+    flag for the summaries to surface.
+    """
+
+    reference: IntersimReference | None = None
+    offenders: list[str] = []
+    for cell in cells:
+        params = cell.generator_params
+        if getattr(params, "surgery_censoring", "error") != "error":
+            continue
+        if reference is None:
+            reference = load_reference()
+        headroom = expected_surgery_headroom(params, reference=reference)
+        if headroom is None or headroom.fits:
+            continue
+        offenders.append(
+            f"  - cell {cell.cell_id!r}: trajectory_mode={headroom.trajectory_mode!r} at "
+            f"group_effect_size={headroom.group_effect_size:g} requests ~{headroom.nominal:.0f} "
+            f"site(s), but the expected destination pool is ~{headroom.pool:.0f} less a "
+            f"{headroom.guard_band:.0f}-site guard band (~{headroom.available:.0f} available); "
+            f"it saturates at group_effect_size≈{headroom.saturating_effect:.2f}"
+        )
+    if not offenders:
+        return
+    raise StudyConfigError(
+        f"{len(offenders)} cell(s) request more surgery than the expected pool headroom, so "
+        "their realized constructions would be censored and near-identical across effects "
+        "instead of independent measurements:\n"
+        + "\n".join(offenders)
+        + "\nLower the requested effects (or p_dmp), or set generator.surgery_censoring='clamp' "
+        "to accept partial surgeries."
+    )
 
 
 def _require_distinct_primary_datasets(cells: list[SimulationCell]) -> None:

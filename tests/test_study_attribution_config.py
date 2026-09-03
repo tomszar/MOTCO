@@ -30,7 +30,12 @@ _PLS_EVALUATION = SimulationEvaluationParams(integration_method="pls", permutati
 
 def _config(**overrides) -> StudyConfig:
     defaults: dict = {
-        "generator": SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", n_samples=60),
+        # Attribution selection, not the effect axis, is under test here: clamp
+        # so the top effects stay enumerable without reshaping the grid around
+        # the surgery headroom.
+        "generator": SemiSyntheticTrajectoryParams(
+            seed=2, trajectory_mode="magnitude", n_samples=60, surgery_censoring="clamp"
+        ),
         "evaluation": _PLS_EVALUATION,
         "trajectory_modes": ("magnitude", "orientation", "shape", "translation"),
         "effect_sizes": (0.0, 0.5, 1.0),

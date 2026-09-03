@@ -137,6 +137,44 @@ class SimulationSummaryResult:
     unavailable_replicates: int
 
 
+#: Truth-metadata keys carrying each pool-limited surgery's realized size.
+_SURGERY_KEYS: dict[str, tuple[str, str]] = {
+    # trajectory mode -> (realized-size key, nominal-size key)
+    "orientation": ("orientation_relocated", "orientation_nominal"),
+    "translation": ("translation_set_size", "translation_nominal"),
+    "shape": ("shape_relocated", "shape_nominal"),
+}
+
+
+@dataclass(frozen=True)
+class RealizedSurgerySummary:
+    """Requested-vs-realized surgery for one cell, read from replicate truth.
+
+    Populated only for modes that perform a pool-limited surgery (``orientation``,
+    ``translation``, and ``shape`` with ``shape_kind='relocate'``); for every
+    other mode the size fields are ``None`` rather than zero, because "no surgery
+    of this kind exists" and "a surgery of size zero" are different statements.
+
+    ``nominal_size`` is the mean *requested* size across replicates. It varies
+    between replicates wherever the request is a fraction of a random pool
+    (orientation and shape scale with the baseline draw); it is constant for
+    translation, whose request is a fraction of ``p_dmp * n_cpg``.
+    """
+
+    cell_id: str
+    phase: str
+    trajectory_mode: str
+    effect_size: float | None
+    completed_replicates: int
+    surgery_replicates: int
+    nominal_size: float | None
+    realized_mean: float | None
+    realized_min: int | None
+    realized_max: int | None
+    censored_replicates: int | None
+    censored_fraction: float | None
+
+
 @dataclass(frozen=True)
 class SimulationRunConfig:
     """Runtime options for local grid execution."""
@@ -559,6 +597,79 @@ def summarize_rejection_rates(
                 )
             )
     return summaries
+
+
+def summarize_realized_surgery(
+    records: Sequence[SimulationReplicateResult],
+) -> list[RealizedSurgerySummary]:
+    """Summarize requested-vs-realized pool-limited surgery per cell.
+
+    Reads the ``transform`` block of each completed replicate's truth metadata,
+    so a censored construction is auditable from the record set alone — no
+    regeneration, and no access to the generator.
+    """
+
+    groups: dict[tuple[str, str], list[SimulationReplicateResult]] = {}
+    for record in records:
+        if record.status != "completed":
+            continue
+        groups.setdefault((record.cell_id, record.phase), []).append(record)
+
+    summaries: list[RealizedSurgerySummary] = []
+    for (cell_id, phase), group_records in sorted(groups.items()):
+        first = group_records[0]
+        mode = _record_trajectory_mode(first)
+        effect_size = first.cell_metadata.get("effect_size")
+        keys = _SURGERY_KEYS.get(mode)
+
+        nominals: list[float] = []
+        realized: list[int] = []
+        censored = 0
+        if keys is not None:
+            realized_key, nominal_key = keys
+            for record in group_records:
+                transform = dict((record.truth_metadata or {}).get("transform") or {})
+                if realized_key not in transform:
+                    continue  # e.g. shape_kind='magnitude', or a zero effect
+                realized_size = int(transform[realized_key])
+                realized.append(realized_size)
+                # Records written before the nominal key existed report the
+                # realized size as its own request rather than a missing one.
+                nominal = transform.get(nominal_key)
+                nominals.append(float(realized_size if nominal is None else nominal))
+                censored += bool(transform.get("censored", False))
+
+        has_surgery = bool(realized)
+        summaries.append(
+            RealizedSurgerySummary(
+                cell_id=cell_id,
+                phase=phase,
+                trajectory_mode=mode,
+                effect_size=None if effect_size is None else float(effect_size),
+                completed_replicates=len(group_records),
+                surgery_replicates=len(realized),
+                nominal_size=sum(nominals) / len(nominals) if has_surgery else None,
+                realized_mean=sum(realized) / len(realized) if has_surgery else None,
+                realized_min=min(realized) if has_surgery else None,
+                realized_max=max(realized) if has_surgery else None,
+                censored_replicates=censored if has_surgery else None,
+                censored_fraction=censored / len(realized) if has_surgery else None,
+            )
+        )
+    return summaries
+
+
+def _record_trajectory_mode(record: SimulationReplicateResult) -> str:
+    """The trajectory mode a record was generated under.
+
+    Cell metadata is authoritative where present; Type I baseline cells carry
+    none, so fall back to the generator's own truth and finally to ``none``.
+    """
+
+    mode = record.cell_metadata.get("trajectory_mode")
+    if mode is None:
+        mode = (record.truth_metadata or {}).get("trajectory_mode")
+    return str(mode) if mode is not None else "none"
 
 
 def rejection_indicator(p_value: float | None, *, alpha: float = 0.05) -> bool | None:
