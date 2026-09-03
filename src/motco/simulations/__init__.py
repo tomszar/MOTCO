@@ -47,6 +47,7 @@ from .generator import (
     omic_population_means,
 )
 from .grid import (
+    RealizedSurgerySummary,
     SimulationCell,
     SimulationGrid,
     SimulationGridError,
@@ -63,6 +64,7 @@ from .grid import (
     rejection_indicator,
     run_simulation_grid,
     run_simulation_replicate,
+    summarize_realized_surgery,
     summarize_rejection_rates,
 )
 from .intersim import (
@@ -104,10 +106,14 @@ from .reference import (
     load_reference,
 )
 from .semisynthetic import (
+    HEADROOM_GUARD_SIGMAS,
+    POOL_LIMITED_MODES,
     PopulationTrajectories,
     SemiSyntheticTrajectoryDataset,
     SemiSyntheticTrajectoryError,
     SemiSyntheticTrajectoryParams,
+    SurgeryHeadroom,
+    expected_surgery_headroom,
     generate_semisynthetic_trajectory,
 )
 from .showcase import (
@@ -142,10 +148,15 @@ __all__ = [
     "SemiSyntheticTrajectoryDataset",
     "SemiSyntheticTrajectoryError",
     "SemiSyntheticTrajectoryParams",
+    "SurgeryHeadroom",
+    "POOL_LIMITED_MODES",
+    "HEADROOM_GUARD_SIGMAS",
+    "expected_surgery_headroom",
     "AttributionDiagnosticSettings",
     "SimulationEvaluationError",
     "SimulationEvaluationParams",
     "SimulationEvaluationResult",
+    "RealizedSurgerySummary",
     "SimulationCell",
     "SimulationGrid",
     "SimulationGridError",
@@ -211,5 +222,6 @@ __all__ = [
     "summarize_phase2_characterization",
     "monotonicity_summary",
     "flatten_geometry_diagnostics",
+    "summarize_realized_surgery",
     "summarize_rejection_rates",
 ]

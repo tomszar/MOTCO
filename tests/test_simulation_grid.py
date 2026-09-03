@@ -451,8 +451,8 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     ``null_summary`` itself never enters the signature — the resume below, which
     skips a record written without the field, is what pins that. The digest is
     pinned separately so *any* signature change has to be a deliberate edit
-    here; it last moved when ``config_spectrum_version`` entered the payload
-    (``record-latent-config-spectrum``), which was the point of that change.
+    here; it last moved when ``surgery_censoring`` joined the generator params
+    (``fix-effect-axis-censoring``), which was the point of that change.
     """
 
     cell = make_simulation_cell(
@@ -462,7 +462,7 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
         n_replicates=2,
         cell_id="pinned",
     )
-    assert parameter_signature(cell) == "cab61a54f07c0420ba811b3a372cf81c96b60710f722e4aa486071f5f050ac9e"
+    assert parameter_signature(cell) == "4b0bf9aaa8286d1437966ba3d3607f617d8b415e9377fb316fe00f07b1f2aefe"
 
     # Resume against a record written without the field must skip, not overwrite.
     import json

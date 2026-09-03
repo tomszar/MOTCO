@@ -157,13 +157,25 @@ study should measure how the **dispersion** of `null_summary["angle"]["q95"]` co
 group-stage cell, not only how the rejection rate moves. In the pilot's orientation cell that dispersion
 spans 5.0°–176.6°, and it — not the observed angle — decides the outcome.
 
-**Preconditioned by the [geometry audit](reports/geometry-audit-2026-09-01.md) (findings F2, F5):** the
-orientation effect axis is censored — the relocation clamp saturates the surgery at e ≈ 0.69, and 80 of 100
-replicate pairs at e = 0.75 and e = 1.00 are byte-identical datasets. Fix the axis (plan item P2) before
-running any design-point power study, or its top cells re-measure the same data. The audit also hands this
-item a second lever besides sample size: baseline continuity (plan item P4) — n-scaling shrinks the noise
-term, but the eigengap's lower tail (near-isotropic baseline draws) is what caps the curve, and that tail is
-a property of the independent-indicator baseline, not of n.
+**The censored effect axis is fixed (P2, 2026-09-03).** The
+[geometry audit](reports/geometry-audit-2026-09-01.md) finding F2 — the relocation clamp saturating the
+orientation surgery at e ≈ 0.69, leaving 80 of 100 replicate pairs at e = 0.75 and e = 1.00 byte-identical —
+was the precondition on this item. The generator now applies an explicit censoring policy
+(`generator.surgery_censoring`, default `"error"`): a surgery that cannot be realized in full fails loudly
+instead of clamping, truth metadata records nominal-vs-realized size and a `censored` flag, study
+enumeration rejects over-headroom cells before any compute is spent, and `report/realized_surgery.csv`
+flags duplicated constructions from the records alone.
+
+**What this item must now decide:** which effect axis replaces the censored one. Enumeration reports the
+saturating effect per cell — at the pilot's `p_dmp = 0.2` with four stages that is **e ≈ 0.56 for
+orientation and e ≈ 0.29 for translation** (3σ guard band included). A Phase 5 axis must sit under those
+bounds, or move them: lower `p_dmp`, use fewer stages, or change the surgery so its destination pool is not
+the complement of the stage program. Every config in `examples/trajectory_power_study/` predates the policy
+and carries `"surgery_censoring": "clamp"` as a historical record — **new configs must not copy it.**
+
+The audit also hands this item a second lever besides sample size: baseline continuity (plan item P4) —
+n-scaling shrinks the noise term, but the eigengap's lower tail (near-isotropic baseline draws) is what caps
+the curve, and that tail is a property of the independent-indicator baseline, not of n.
 
 **The stratifying covariate is available (P1, 2026-09-02).** The design-point study can measure how the
 `null_summary["angle"]["q95"]` dispersion contracts with samples per group-stage cell *stratified by the

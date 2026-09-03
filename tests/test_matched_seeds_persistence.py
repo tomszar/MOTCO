@@ -37,7 +37,12 @@ from motco.simulations.study import (
     enumerate_study,
 )
 
-_GENERATOR = SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", n_samples=60, n_stages=4)
+# These tests exercise seed derivation and cell identity, not the effect axis:
+# they opt into clamping so the top effects stay enumerable without the grid
+# having to be reshaped around the surgery headroom.
+_GENERATOR = SemiSyntheticTrajectoryParams(
+    seed=2, trajectory_mode="magnitude", n_samples=60, n_stages=4, surgery_censoring="clamp"
+)
 _PLS_EVALUATION = SimulationEvaluationParams(integration_method="pls", permutations=0, seed=3)
 
 

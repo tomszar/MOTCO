@@ -6,7 +6,8 @@
     "n_stages": 4,
     "group_effect_size": 0.0,
     "group_ratio": 0.5,
-    "p_dmp": 0.2
+    "p_dmp": 0.2,
+    "surgery_censoring": "clamp"
   },
   "evaluation": {
     "integration_method": "concat",

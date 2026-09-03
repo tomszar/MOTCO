@@ -83,9 +83,35 @@ guard (parameter signature) skips already-completed replicates.
 | `acceptance.gate` | Phase 4 gate parameters (see below); omit for pre-Phase-4 configs |
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
+| `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
 
 `none` is always present as the Type I baseline (enforced by enumeration);
 `translation` is added explicitly as a second negative control.
+
+### `generator.surgery_censoring` — why every committed config sets `"clamp"`
+
+`orientation`, `translation`, and `shape` with `shape_kind="relocate"` draw
+their surgery from a finite pool of CpGs, so a large `group_effect_size` can
+request more sites than the pool holds. The generator's default policy,
+`"error"`, refuses to realize a partial surgery, and enumeration rejects any
+cell whose requested effect exceeds the expected pool headroom before compute
+is spent.
+
+**Every config in this directory predates that policy** and was run under the
+old silent clamping, so each one carries an explicit
+`"surgery_censoring": "clamp"` to stay loadable and enumerable as the record of
+what was actually run. At `p_dmp = 0.2` with four stages the axis saturates at
+roughly `e ≈ 0.56` for `orientation` and `e ≈ 0.29` for `translation` — above
+those, distinct requested effects produced near-identical realized datasets
+(see [the geometry audit](../../docs/reports/geometry-audit-2026-09-01.md),
+finding F2). Their top cells are therefore **not** independent power
+measurements, and `realized_surgery.csv` in the study report flags the affected
+pairs.
+
+**A new config must not copy the flag.** Leave `surgery_censoring` at its
+default and choose an effect axis that respects the headroom — lower the axis
+top, lower `p_dmp`, or use fewer stages. Enumeration reports the saturating
+effect for the offending cell, which is the number to design against.
 
 ## Phase 4 pilot
 

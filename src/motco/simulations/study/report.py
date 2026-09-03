@@ -11,8 +11,10 @@ import numpy as np
 import pandas as pd
 
 from motco.simulations.grid import (
+    SEED_FAMILY_KEY,
     SimulationReplicateResult,
     SimulationSummaryResult,
+    summarize_realized_surgery,
 )
 from motco.simulations.study.config import Phase4GateConfig
 from motco.simulations.study.phase4 import (
@@ -48,7 +50,8 @@ class ReportFrames:
     ``config_spectrum`` and ``eigengap_stratified_power`` read the recorded
     latent configuration spectra; they default to empty frames so a caller
     reporting a record set written before that field existed still builds every
-    pre-existing table unchanged.
+    pre-existing table unchanged. ``realized_surgery`` does the same for the
+    requested-vs-realized surgery recorded in truth metadata.
     """
 
     specificity_matrix: pd.DataFrame
@@ -56,6 +59,7 @@ class ReportFrames:
     type_i_table: pd.DataFrame
     config_spectrum: pd.DataFrame = field(default_factory=pd.DataFrame)
     eigengap_stratified_power: pd.DataFrame = field(default_factory=pd.DataFrame)
+    realized_surgery: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 @dataclass(frozen=True)
@@ -214,9 +218,19 @@ def build_power_curves(
     summaries: Sequence[SimulationSummaryResult],
     records: Sequence[SimulationReplicateResult],
 ) -> pd.DataFrame:
-    """One row per (mode, statistic, effect_size) over baseline (non-OFAT) cells."""
+    """One row per (mode, statistic, effect_size) over baseline (non-OFAT) cells.
+
+    Each row carries its cell's ``censored_fraction`` and
+    ``duplicate_construction`` flag, so a curve point built on a censored — or
+    duplicated — construction can be annotated rather than plotted as if the
+    requested effect were the realized one.
+    """
 
     cell_meta = _cell_metadata_index(records)
+    surgery = {
+        summary.cell_id: summary for summary in summarize_realized_surgery(records)
+    }
+    duplicates = find_duplicate_constructions(records)
     rows: list[dict] = []
     for summary in summaries:
         meta = cell_meta.get(summary.cell_id)
@@ -239,6 +253,12 @@ def build_power_curves(
                 "monte_carlo_se": summary.monte_carlo_se,
                 "available_replicates": summary.available_replicates,
                 "completed_replicates": summary.completed_replicates,
+                "censored_fraction": (
+                    surgery[summary.cell_id].censored_fraction
+                    if summary.cell_id in surgery
+                    else None
+                ),
+                "duplicate_construction": summary.cell_id in duplicates,
             }
         )
     frame = pd.DataFrame(
@@ -253,6 +273,8 @@ def build_power_curves(
             "monte_carlo_se",
             "available_replicates",
             "completed_replicates",
+            "censored_fraction",
+            "duplicate_construction",
         ],
     )
     if frame.empty:
@@ -260,6 +282,130 @@ def build_power_curves(
     return frame.sort_values(
         ["trajectory_mode", "statistic", "effect_size"]
     ).reset_index(drop=True)
+
+
+#: A same-family cell pair sharing more than this fraction of identical realized
+#: constructions is reported as a duplicated construction, not two measurements.
+DUPLICATE_CONSTRUCTION_THRESHOLD = 0.05
+
+
+def build_realized_surgery(records: Sequence[SimulationReplicateResult]) -> pd.DataFrame:
+    """Per-cell requested-vs-realized surgery, with duplicate-construction flags.
+
+    One row per cell: the nominal (requested) surgery size, the realized size
+    (mean/min/max), and the fraction of replicates whose surgery was censored.
+    Cells whose mode performs no pool-limited surgery carry ``NA`` in those
+    columns rather than zeros.
+
+    ``duplicate_of`` names the same-family cell this one shares its realized
+    construction with, when more than
+    ``DUPLICATE_CONSTRUCTION_THRESHOLD`` of replicate indices censored to the
+    same realized size — the condition under which matched-seed cells generate
+    byte-identical datasets and must not be read as independent measurements.
+    """
+
+    rows = [
+        {
+            "cell_id": summary.cell_id,
+            "phase": summary.phase,
+            "trajectory_mode": summary.trajectory_mode,
+            "effect_size": summary.effect_size,
+            "completed_replicates": summary.completed_replicates,
+            "nominal_size": summary.nominal_size,
+            "realized_mean": summary.realized_mean,
+            "realized_min": summary.realized_min,
+            "realized_max": summary.realized_max,
+            "censored_replicates": summary.censored_replicates,
+            "censored_fraction": summary.censored_fraction,
+        }
+        for summary in summarize_realized_surgery(records)
+    ]
+    frame = pd.DataFrame(
+        rows,
+        columns=[
+            "cell_id",
+            "phase",
+            "trajectory_mode",
+            "effect_size",
+            "completed_replicates",
+            "nominal_size",
+            "realized_mean",
+            "realized_min",
+            "realized_max",
+            "censored_replicates",
+            "censored_fraction",
+        ],
+    )
+    duplicates = find_duplicate_constructions(records)
+    frame["duplicate_of"] = frame["cell_id"].map(
+        lambda cell_id: ", ".join(sorted(duplicates.get(cell_id, ()))) or None
+    )
+    frame["duplicate_construction"] = frame["duplicate_of"].notna()
+    if frame.empty:
+        return frame
+    return frame.sort_values(["trajectory_mode", "effect_size", "cell_id"]).reset_index(drop=True)
+
+
+def find_duplicate_constructions(
+    records: Sequence[SimulationReplicateResult],
+    *,
+    threshold: float = DUPLICATE_CONSTRUCTION_THRESHOLD,
+) -> dict[str, set[str]]:
+    """Cell pairs whose realized constructions coincide too often to be independent.
+
+    Two cells in one matched-seed family draw the *same* generator seed at a
+    given replicate index, and the generator's draw sequence depends only on that
+    seed and the realized surgery size. So "both replicates censored to the same
+    realized size" is exactly the condition for byte-identical datasets — it can
+    be read straight off the records, with no regeneration.
+
+    Returns a symmetric ``cell_id -> {cell_id, ...}`` map of the pairs whose
+    coinciding fraction exceeds ``threshold``.
+    """
+
+    # (seed family, replicate index) -> [(cell_id, realized size), ...]
+    by_slot: dict[tuple[str, int], list[tuple[str, int]]] = {}
+    replicate_counts: dict[str, int] = {}
+    for record in records:
+        if record.status != "completed":
+            continue
+        transform = dict((record.truth_metadata or {}).get("transform") or {})
+        if not transform.get("censored", False):
+            continue
+        realized = _realized_size(transform)
+        if realized is None:
+            continue
+        family = str(record.cell_metadata.get(SEED_FAMILY_KEY) or record.cell_id)
+        by_slot.setdefault((family, record.replicate_index), []).append(
+            (record.cell_id, realized)
+        )
+        replicate_counts[record.cell_id] = replicate_counts.get(record.cell_id, 0) + 1
+
+    coincidences: dict[tuple[str, str], int] = {}
+    for entries in by_slot.values():
+        for i, (cell_a, size_a) in enumerate(entries):
+            for cell_b, size_b in entries[i + 1 :]:
+                if cell_a == cell_b or size_a != size_b:
+                    continue
+                key = (cell_a, cell_b) if cell_a < cell_b else (cell_b, cell_a)
+                coincidences[key] = coincidences.get(key, 0) + 1
+
+    duplicates: dict[str, set[str]] = {}
+    for (cell_a, cell_b), shared in coincidences.items():
+        # denominator: the replicates the smaller cell could have shared
+        available = min(replicate_counts[cell_a], replicate_counts[cell_b])
+        if available == 0 or shared / available <= threshold:
+            continue
+        duplicates.setdefault(cell_a, set()).add(cell_b)
+        duplicates.setdefault(cell_b, set()).add(cell_a)
+    return duplicates
+
+
+def _realized_size(transform: dict) -> int | None:
+    for key in ("orientation_relocated", "translation_set_size", "shape_relocated"):
+        if key in transform:
+            return int(transform[key])
+    return None
 
 
 def build_type_i_table(
@@ -320,6 +466,7 @@ def build_report_frames(
         type_i_table=build_type_i_table(summaries, combined, records),
         config_spectrum=summarize_config_spectrum(records),
         eigengap_stratified_power=stratify_power_by_eigengap(records, alpha=alpha),
+        realized_surgery=build_realized_surgery(records),
     )
 
 
@@ -337,12 +484,14 @@ def write_report_csvs(
         "type_i_table": out_dir / "type_i_table.csv",
         "config_spectrum": out_dir / "config_spectrum.csv",
         "eigengap_stratified_power": out_dir / "eigengap_stratified_power.csv",
+        "realized_surgery": out_dir / "realized_surgery.csv",
     }
     frames.specificity_matrix.to_csv(paths["specificity_matrix"], index=False)
     frames.power_curves.to_csv(paths["power_curves"], index=False)
     frames.type_i_table.to_csv(paths["type_i_table"], index=False)
     frames.config_spectrum.to_csv(paths["config_spectrum"], index=False)
     frames.eigengap_stratified_power.to_csv(paths["eigengap_stratified_power"], index=False)
+    frames.realized_surgery.to_csv(paths["realized_surgery"], index=False)
     return paths
 
 
@@ -652,14 +801,17 @@ def _resolve_mode(meta: dict) -> str:
 
 
 __all__ = [
+    "DUPLICATE_CONSTRUCTION_THRESHOLD",
     "Phase4ReportFrames",
     "ReportFrames",
     "StudyReportError",
     "build_phase4_frames",
     "build_power_curves",
+    "build_realized_surgery",
     "build_report_frames",
     "build_specificity_matrix",
     "build_type_i_table",
+    "find_duplicate_constructions",
     "render_power_curves",
     "render_specificity_matrix",
     "render_attribution_stability",
