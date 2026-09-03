@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 #: contract.
 CONFIG_SPECTRUM_VERSION = 1
 
+#: Version of the trajectory ``shape`` statistic contract implemented by
+#: :func:`_estimate_shape`. Bumped whenever the statistic's definition changes,
+#: so records produced under different contracts can never be mixed (the study
+#: parameter signature carries this key; see ``simulations/grid.py``).
+#: 1 = proper-rotation alignment (reflections retained where the configuration
+#: spanned the ambient space, aligned away otherwise);
+#: 2 = full orthogonal alignment at every ambient dimension.
+SHAPE_STATISTIC_VERSION = 2
+
 
 def estimate_betas(
     X: Union[pd.DataFrame, np.ndarray], Y: Union[pd.DataFrame, np.ndarray]
@@ -324,8 +333,10 @@ def estimate_difference(
         Symmetric matrix (n_groups x n_groups) with differences in direction (degrees).
     shapes: np.ndarray
         Symmetric matrix (n_groups x n_groups) with Procrustes shape distances
-        after removing translation, proper rigid rotation, and uniform scale.
-        Reflections are retained as distinct shapes by default.
+        after removing translation, uniform scale, and any orthogonal
+        transformation. Reflections are aligned away at every ambient
+        dimension; a mirror difference is an orientation difference and
+        surfaces in ``angles``.
     spectra: dict[str, Any]
         Only when ``return_spectra=True``. A recorded covariate — it enters no
         statistic and no decision rule.
@@ -552,8 +563,16 @@ def _estimate_shape(
     Estimate pairwise trajectory shape distances after Procrustes alignment.
 
     Each group trajectory is centered and scaled to unit centroid size, then
-    each pair is aligned by a proper orthogonal rotation. Mirror reflections
-    are not aligned away by default.
+    each pair is aligned over the full orthogonal group: reflections are
+    aligned away, at every ambient dimension, so a mirror pair has zero shape
+    distance and the statistic never depends on whether the stage
+    configuration spans the ambient space. A trajectory of ``k`` stages has
+    rank at most ``k - 1``, so at every pre-integration checkpoint the
+    configuration is rank-deficient and a proper-rotation constraint would be
+    vacuous anyway (it could be satisfied for free in the null space); this
+    policy makes the statistic identical across checkpoints by construction.
+    A genuine mirror difference is an orientation difference and surfaces in
+    ``angle`` instead. See ``SHAPE_STATISTIC_VERSION``.
 
     Parameters
     ----------
@@ -594,51 +613,17 @@ def _center_scale_unit(A: np.ndarray) -> np.ndarray:
 
 
 def _proper_procrustes_distance(reference: np.ndarray, target: np.ndarray) -> float:
-    """Return residual norm after aligning target to reference with a proper rotation."""
+    """
+    Return the residual norm after aligning ``target`` to ``reference``.
+
+    The alignment optimizes over the full orthogonal group ``O(k)``, not the
+    rotation subgroup ``SO(k)``: reflections are aligned away rather than
+    retained. This is the single reflection policy of the ``shape`` statistic
+    and it holds at every ambient dimension, so the returned distance does not
+    depend on whether the configuration spans the ambient space. See
+    :func:`_estimate_shape` and ``SHAPE_STATISTIC_VERSION``.
+    """
     H = target.T @ reference
     U, _, Vt = np.linalg.svd(H, full_matrices=False)
     R = U @ Vt
-    if np.linalg.det(R) < 0:
-        U[:, -1] *= -1
-        R = U @ Vt
     return float(np.linalg.norm(reference - target @ R))
-
-
-def _OPA(M1: np.ndarray, M2: np.ndarray) -> np.ndarray:
-    """
-    Given two matrices, rotate M2 to perfectly align with M1
-    using Orthogonal Procrustes Analysis [1]_.
-
-    Parameters
-    ----------
-    M1: np.ndarray
-        Reference matrix to use.
-    M2: np.ndarray
-        Target matrix to change.
-
-    Returns
-    -------
-    Mp2: np.ndarray
-        Target matrix rotated.
-
-    References
-    ----------
-    .. [1] Rohlf, F. James, and Dennis Slice.
-           "Extensions of the Procrustes method for the optimal superimposition
-           of landmarks." Systematic biology 39.1 (1990): 40-59.
-           https://doi.org/10.2307/2992207
-    """
-    # Minimal Kabsch implementation with reflection correction
-    # Compute covariance
-    H = M1.T @ M2
-    # SVD of covariance
-    U, _, Vt = np.linalg.svd(H, full_matrices=False)
-    # Rotation
-    R = Vt.T @ U.T
-    # Ensure a proper rotation (no reflection)
-    if np.linalg.det(R) < 0:
-        Vt[-1, :] *= -1
-        R = Vt.T @ U.T
-    # Rotate M2
-    Mp2 = M2 @ R
-    return Mp2

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -88,6 +90,53 @@ def test_snf_integration_uses_existing_helpers_and_records_resolved_params() -> 
     assert result.metadata["integration_method"] == "snf"
     assert result.metadata["integration_params"]["spectral_components"] == 2
     assert result.metadata["fused_shape"] == (12, 12)
+
+
+def _pls_params(**integration_params: Any) -> SimulationEvaluationParams:
+    # ``max_components`` is held below the fixture's inner-fold rank so the CV
+    # path is exercisable on this deliberately small dataset.
+    params: dict[str, Any] = {
+        "stage_col": "stage",
+        "n_repeats": 1,
+        "max_components": 4,
+        **integration_params,
+    }
+    return SimulationEvaluationParams(integration_method="pls", integration_params=params)
+
+
+def test_pls_integration_selects_components_by_cross_validation_by_default() -> None:
+    result = integrate_semisynthetic_dataset(make_dataset(), _pls_params())
+
+    assert result.metadata["component_selection"] == "cv"
+    assert result.metadata["cv_repeats_completed"] > 0
+    assert result.metadata["cv_mean_auroc"] is not None
+    assert "forced_components" not in result.metadata["integration_params"]
+    assert result.matrix.shape[1] == result.metadata["selected_lv"]
+
+
+def test_pls_integration_honors_and_records_a_forced_component_count() -> None:
+    result = integrate_semisynthetic_dataset(make_dataset(), _pls_params(forced_components=5))
+
+    assert result.matrix.shape[1] == 5
+    assert result.metadata["selected_lv"] == 5
+    assert result.metadata["component_selection"] == "forced"
+    assert result.metadata["integration_params"]["forced_components"] == 5
+    # No cross-validation ran, so none of its outputs are reported.
+    assert result.metadata["cv_mean_auroc"] is None
+    assert result.metadata["cv_repeats_completed"] == 0
+
+
+@pytest.mark.parametrize("forced", [1, 10])
+def test_pls_integration_rejects_an_infeasible_forced_component_count(forced: int) -> None:
+    """Rejected, never clamped: a diagnostic that moved its own rank is useless."""
+
+    with pytest.raises(SimulationEvaluationError, match="outside the feasible range"):
+        integrate_semisynthetic_dataset(make_dataset(), _pls_params(forced_components=forced))
+
+
+def test_pls_integration_rejects_a_non_integer_forced_component_count() -> None:
+    with pytest.raises(SimulationEvaluationError, match="must be an integer"):
+        integrate_semisynthetic_dataset(make_dataset(), _pls_params(forced_components=3.5))
 
 
 def test_unsupported_integration_method_is_rejected() -> None:

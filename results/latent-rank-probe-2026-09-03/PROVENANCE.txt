@@ -1,0 +1,64 @@
+# Latent-rank scaling probe provenance
+date_utc: 2026-09-03
+parent_commit: d16432f6337b8fadca94a38b0d5e7889c5b8fa30
+parent_commit_subject: Merge pull request #40 from tomszar/feat/fix-effect-axis-censoring
+code_revision: working tree of the `unify-shape-reflection-policy` change (uncommitted at launch); the
+               tracked-source digests below pin the exact sources that ran
+driver: scripts/latent_rank_probe.py
+command: uv run python scripts/latent_rank_probe.py \
+           --reps 100 --perms 199 --n-samples 300 --n-stages 4 \
+           --effect-size 1.0 --p-dmp 0.2 --base-seed 400 \
+           --ranks 3 4 6 9 12 --modes orientation none \
+           --out-dir results/latent-rank-probe-2026-09-03
+host_cpus: 16
+threads: serial (n_jobs=1); OMP/OPENBLAS/MKL threads pinned to 1
+work_units: 1000 (100 replicates x 2 modes x 5 ranks), 0 failed
+env: NixOS; LD_LIBRARY_PATH extended with the interpreter's own zlib and libstdc++ so the manylinux
+     numpy wheel resolves (same workaround as the 2026-09-02 latent-spectrum run)
+
+## What this is
+
+The readiness item-2 follow-up probe behind `unify-shape-reflection-policy` (plan item P3, geometry
+audit finding F3). It is a rank diagnostic, not a power study: the design point is held at the Phase-4
+pilot's generator settings (`examples/trajectory_power_study/phase4_pilot_100x199.json` — n=300,
+4 stages, p_dmp=0.2, effect 1.00, surgery_censoring=clamp, base_seed=400, 199 permutations) and the
+only thing varied is the retained PLS latent rank, via the diagnostic `forced_components` override
+added by this change.
+
+Every record produced here carries `component_selection: "forced"` in its integration metadata and is
+therefore refused by the study report builder (`assert_production_component_selection`). These runs
+are not persisted as study shards and can never resume into one: `evaluation_params` are hashed into
+the cell parameter signature.
+
+## Design-point note
+
+Seeds are matched across the ladder: rank r and rank r' at replicate i measure the *same* generated
+dataset. The `none` mode is carried as a null control so that any decay generic to rank can be told
+apart from decay specific to the orientation surgery.
+
+The `population shape` column is measured at the `population_standardized.joint` checkpoint — the
+standardized observed space, not the latent space. The two are not on a common scale, so the rank at
+which the latent response crosses the population value is indicative only. The load-bearing evidence
+is the decay itself and the rejection-rate collapse.
+
+## Outcome
+
+The orientation→shape response decays steeply with retained rank — 0.0694 → 0.0136 (−80.4%), monotone
+through rank 9 and flat from 9 to 12 — and its rejection rate collapses alongside it (0.97 at the
+CV-selected rank 3 → 0.09 at rank 12), while the `none` control is flat from rank 4 onward. This
+supports the rank-limited-projection account of the response. See
+`latent_rank_probe.md` for the table and the decay measurement, and `docs/phase5-readiness.md` item 2
+for what it unblocks.
+
+## Tracked-source digests (sha256)
+
+f3e1eaba6ccf34d6bad44b014c4436c178b95f1cac6241ee2dd11bb7f9e1383f  src/motco/stats/trajectory.py
+ec075b5a82e427de546150fc3ffb3ab2862101f7601da5e6e741f9b43ebc2193  src/motco/simulations/evaluation.py
+8c3bcdae7ca0add45d3b2ca205013c1ec7d7896fb4eeb00287a350630365fbe9  src/motco/simulations/grid.py
+a74333f40f9ce35746751709bcc3e6e3d3d82644c1a7557da7b8afbdcedfc203  src/motco/simulations/semisynthetic.py
+51ed8d3a860bca6ffa8dc48c76b6877109144c50c91d7aeabbab66ec2a49d122  src/motco/simulations/diagnostics.py
+d9c5d0cf62d790505954a71bb903881113eae8993245ab3571d6dfe4a97cfc44  src/motco/simulations/generator.py
+2dd4187423ac3463edbed06747129b6bc89dd53b4c39621217a0dee67ba69632  src/motco/simulations/reference.py
+ccda4dae77c3976c920bb6835382021a89084ba4bad0169531d68fe8c49abd56  src/motco/simulations/preprocessing.py
+81f31f99c5890b3b75799a38346ca44577331d3c1524564e8b2f8f674c9503e2  src/motco/stats/pls.py
+79d68fd2ff2e6b1a6fdfe83b014abecc97773822fcdd2d1d43337f29d3e9a3bf  scripts/latent_rank_probe.py

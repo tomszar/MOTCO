@@ -2,6 +2,13 @@
 
 **Date:** 2026-08-04
 
+> **Superseded on the reflection policy (2026-09-03).** The reflection rows below record the
+> contract as it stood on this date. `unify-shape-reflection-policy` (resolving audit finding F3)
+> replaced it: the Procrustes alignment now optimizes over the full orthogonal group, so
+> reflections are aligned away at every ambient dimension and a mirror pair scores **zero**, not
+> positive. Everything else in this audit — the translation, scale, proper-rotation, and interior-bend
+> cases, and the legacy-GPA comparator — still holds.
+
 ## Summary
 
 MOTCO now defines trajectory `shape` as direct pairwise Procrustes residual

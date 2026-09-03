@@ -24,7 +24,7 @@ from motco.simulations.semisynthetic import (
     SemiSyntheticTrajectoryParams,
     generate_semisynthetic_trajectory,
 )
-from motco.stats.trajectory import CONFIG_SPECTRUM_VERSION
+from motco.stats.trajectory import CONFIG_SPECTRUM_VERSION, SHAPE_STATISTIC_VERSION
 
 SimulationPhase = Literal[
     "type_i_baseline",
@@ -423,6 +423,10 @@ def parameter_signature(cell: SimulationCell) -> str:
         "integration_metadata_version": INTEGRATION_METADATA_VERSION,
         "attribution_schema_version": ATTRIBUTION_SCHEMA_VERSION,
         "config_spectrum_version": CONFIG_SPECTRUM_VERSION,
+        # Statistic-contract key: the definition of ``shape`` itself, not just
+        # the shape of the records. A shard written under the proper-rotation
+        # contract must not resume under the orthogonal-alignment one.
+        "shape_statistic_version": SHAPE_STATISTIC_VERSION,
     }
     return _stable_digest(payload)
 

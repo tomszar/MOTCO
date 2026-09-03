@@ -267,7 +267,7 @@ print(obs)
 |--------|---------|
 | `deltas` | Absolute difference in trajectory magnitude (total path length) between group pairs. Larger = one group changed more than the other. |
 | `angles` | Angle in degrees between trajectory orientations. 0° = same direction; 90° = orthogonal; 180° = exactly opposite. |
-| `shapes` | Procrustes distance between trajectory shapes after removing size and orientation differences. 0 = identical shape. |
+| `shapes` | Procrustes distance between trajectory shapes after removing location, uniform scale, and any orthogonal transformation. Reflections are aligned away, at every ambient dimension, so a mirror pair scores 0 — a genuine mirror difference is an orientation difference and shows up in `angles`. 0 = identical shape. |
 
 **P-values via RRPP:** Use a right-tailed test with the add-one correction:
 
