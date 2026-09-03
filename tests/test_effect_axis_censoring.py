@@ -4,6 +4,15 @@ The pinned digests in ``PINNED_CLAMPED`` were recorded against the generator as
 it stood *before* the policy parameter existed (silent clamping). They are the
 contract that ``surgery_censoring="clamp"`` reproduces the old generator
 replicate-for-replicate at the same seed.
+
+They hash the differential **indicators** — what the surgery actually produces —
+rather than the sampled omic matrices. The indicators come from ``rng.choice``
+draws alone, so they are exact and identical on every machine; the sampled
+matrices go through the MVN covariance factorization, whose last bits depend on
+the BLAS in use and therefore differ between a workstation and CI. That the RNG
+stream itself is unchanged is pinned by the realized surgery sizes beside each
+digest, and that the *sampled* data is policy-independent is checked in-process
+by :func:`test_uncensored_generation_is_unchanged_by_the_policy`.
 """
 
 from __future__ import annotations
@@ -55,12 +64,22 @@ def reference():
     return load_reference()
 
 
-def dataset_digest(dataset) -> str:
-    """Stable short digest of the three sampled omic matrices."""
+def indicator_digest(dataset) -> str:
+    """Machine-stable digest of both groups' differential indicators.
+
+    These are integer-valued and produced by RNG draws alone, so the digest is
+    reproducible across platforms — unlike the sampled omic matrices, whose
+    floating-point bits depend on the BLAS behind the MVN sampling.
+    """
 
     hasher = hashlib.sha256()
-    for frame in (dataset.methylation, dataset.expression, dataset.proteomics):
-        hasher.update(np.ascontiguousarray(frame.to_numpy(dtype=float)).tobytes())
+    for group in dataset.truth["group_labels"]:
+        for layer in ("methylation", "expression", "proteomics"):
+            values = np.ascontiguousarray(
+                dataset.truth["indicators"][group][layer], dtype=float
+            )
+            hasher.update(str(values.shape).encode())
+            hasher.update(values.tobytes())
     return hasher.hexdigest()[:16]
 
 
@@ -70,20 +89,20 @@ def clamped_params(**overrides) -> SemiSyntheticTrajectoryParams:
     return SemiSyntheticTrajectoryParams(**base)  # type: ignore[arg-type]
 
 
-#: (params overrides, realized-size truth key, realized size, dataset digest)
+#: (params overrides, realized-size truth key, realized size, indicator digest)
 #: recorded against the pre-policy generator.
 PINNED_CLAMPED: tuple[tuple[dict, str, int, str], ...] = (
     (
         {"trajectory_mode": "orientation", "group_effect_size": 1.0},
         "orientation_relocated",
         151,
-        "4263c5a96adf0286",
+        "505192fed8ce4d7b",
     ),
     (
         {"trajectory_mode": "translation", "group_effect_size": 1.0},
         "translation_set_size",
         41,
-        "cf610a2ac58a5027",
+        "c8a1ed21d8059afe",
     ),
     (
         {
@@ -94,7 +113,7 @@ PINNED_CLAMPED: tuple[tuple[dict, str, int, str], ...] = (
         },
         "shape_relocated",
         25,
-        "bf9035dda9b8a698",
+        "9f4cd2aa13bd3e6d",
     ),
 )
 
@@ -104,13 +123,13 @@ PINNED_UNCENSORED: tuple[tuple[dict, str, int, str], ...] = (
         {"trajectory_mode": "orientation", "group_effect_size": 0.3},
         "orientation_relocated",
         65,
-        "adf1e640a8032d9c",
+        "1cc7c03fa01902ce",
     ),
     (
         {"trajectory_mode": "translation", "group_effect_size": 0.3},
         "translation_set_size",
         22,
-        "afd05443d384095f",
+        "0e3d37ffc640547b",
     ),
 )
 
@@ -122,7 +141,7 @@ def test_clamp_policy_reproduces_the_pre_policy_generator(
     dataset = generate_semisynthetic_trajectory(clamped_params(**overrides), reference=reference)
 
     assert dataset.truth["transform"][key] == realized
-    assert dataset_digest(dataset) == digest
+    assert indicator_digest(dataset) == digest
 
 
 @pytest.mark.parametrize(("overrides", "key", "realized", "digest"), PINNED_UNCENSORED)
@@ -131,13 +150,25 @@ def test_uncensored_generation_is_unchanged_by_the_policy(
 ) -> None:
     """An uncensored surgery samples the same dataset under either policy value."""
 
+    datasets = {}
     for policy in ("error", "clamp"):
         dataset = generate_semisynthetic_trajectory(
             clamped_params(surgery_censoring=policy, **overrides), reference=reference
         )
         assert dataset.truth["transform"][key] == realized
         assert dataset.truth["transform"]["censored"] is False
-        assert dataset_digest(dataset) == digest
+        assert indicator_digest(dataset) == digest
+        datasets[policy] = dataset
+
+    # The sampled matrices are compared in-process rather than against a pinned
+    # constant: they are BLAS-dependent in their last bits, but two runs on one
+    # machine must agree exactly, which is what "the policy changes nothing when
+    # the clamp does not bind" actually asserts.
+    for layer in ("methylation", "expression", "proteomics"):
+        np.testing.assert_array_equal(
+            getattr(datasets["error"], layer).to_numpy(),
+            getattr(datasets["clamp"], layer).to_numpy(),
+        )
 
 
 def test_default_policy_is_error() -> None:
