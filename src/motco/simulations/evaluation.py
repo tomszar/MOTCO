@@ -577,6 +577,15 @@ def _pls_integration(
     of latent variables is selected by ``plsda_doubleCV`` (modal LV across
     repeats, parsimony tie-break) so the molecular space is stable and
     non-overfitted — the space in which trajectory geometry is then measured.
+
+    ``integration_params["forced_components"]`` overrides that selection for
+    rank diagnostics only: cross-validation is skipped entirely and the pooled
+    model is fitted at the requested rank. It is rejected rather than clamped
+    when infeasible — a diagnostic that silently moved the rank it was asked to
+    measure would defeat its purpose — and the metadata records
+    ``component_selection="forced"`` so no consumer can read a forced-rank run
+    as a production evaluation. Absent (the default), behavior is unchanged and
+    the metadata records ``component_selection="cv"``.
     """
     if stage_col not in dataset.metadata.columns:
         raise SimulationEvaluationError(
@@ -595,43 +604,62 @@ def _pls_integration(
             f"got stage counts {stage_counts.to_dict()}."
         )
     min_stage_count = int(stage_counts.min())
+    max_feasible_components = min(n_features, n_samples)
 
-    # Cross-validation knobs (configurable; clamped to a feasible range so the
-    # stratified folds stay valid on small samples). Effective values are
-    # recorded in the result metadata.
-    max_components = _clamp_int(
-        integration_params.get("max_components", 20), minimum=2, maximum=min(n_features, n_samples)
-    )
-    cv2_splits = _clamp_int(integration_params.get("cv2_splits", 4), minimum=2, maximum=min_stage_count)
-    # Samples per stage left after removing one outer test fold (conservative).
-    rest_min_per_stage = min_stage_count - -(-min_stage_count // cv2_splits)
-    if rest_min_per_stage < 2:
-        raise SimulationEvaluationError(
-            "PLS integration cross-validation is infeasible: too few samples per stage "
-            f"(min {min_stage_count}) for cv2_splits={cv2_splits}."
+    forced_components = _forced_components(integration_params, maximum=max_feasible_components)
+    cv_params: dict[str, Any]
+    if forced_components is not None:
+        # Diagnostic path: no cross-validation runs, so none of its knobs are
+        # resolved or recorded.
+        selected_lv = forced_components
+        mean_auroc = None
+        cv_repeats_completed = 0
+        cv_params = {"forced_components": forced_components}
+    else:
+        # Cross-validation knobs (configurable; clamped to a feasible range so the
+        # stratified folds stay valid on small samples). Effective values are
+        # recorded in the result metadata.
+        max_components = _clamp_int(
+            integration_params.get("max_components", 20), minimum=2, maximum=max_feasible_components
         )
-    cv1_splits = _clamp_int(integration_params.get("cv1_splits", 3), minimum=2, maximum=rest_min_per_stage)
-    n_repeats = _clamp_int(integration_params.get("n_repeats", 5), minimum=1, maximum=1000)
-    random_state = int(integration_params.get("random_state", 1203))
-    n_jobs = int(integration_params.get("n_jobs", 1))
+        cv2_splits = _clamp_int(integration_params.get("cv2_splits", 4), minimum=2, maximum=min_stage_count)
+        # Samples per stage left after removing one outer test fold (conservative).
+        rest_min_per_stage = min_stage_count - -(-min_stage_count // cv2_splits)
+        if rest_min_per_stage < 2:
+            raise SimulationEvaluationError(
+                "PLS integration cross-validation is infeasible: too few samples per stage "
+                f"(min {min_stage_count}) for cv2_splits={cv2_splits}."
+            )
+        cv1_splits = _clamp_int(integration_params.get("cv1_splits", 3), minimum=2, maximum=rest_min_per_stage)
+        n_repeats = _clamp_int(integration_params.get("n_repeats", 5), minimum=1, maximum=1000)
+        random_state = int(integration_params.get("random_state", 1203))
+        n_jobs = int(integration_params.get("n_jobs", 1))
 
-    try:
-        cv_result = plsda_doubleCV(
-            X,
-            y,
-            cv1_splits=cv1_splits,
-            cv2_splits=cv2_splits,
-            n_repeats=n_repeats,
-            max_components=max_components,
-            random_state=random_state,
-            n_jobs=n_jobs,
-            progress=False,
-        )
-    except ValueError as exc:
-        raise SimulationEvaluationError(f"PLS integration cross-validation failed: {exc}") from exc
+        try:
+            cv_result = plsda_doubleCV(
+                X,
+                y,
+                cv1_splits=cv1_splits,
+                cv2_splits=cv2_splits,
+                n_repeats=n_repeats,
+                max_components=max_components,
+                random_state=random_state,
+                n_jobs=n_jobs,
+                progress=False,
+            )
+        except ValueError as exc:
+            raise SimulationEvaluationError(f"PLS integration cross-validation failed: {exc}") from exc
 
-    selected_lv = _modal_int_with_parsimony([int(v) for v in cv_result["table"]["LV"].tolist()])
-    mean_auroc = float(cv_result["table"]["AUROC"].mean())
+        selected_lv = _modal_int_with_parsimony([int(v) for v in cv_result["table"]["LV"].tolist()])
+        mean_auroc = float(cv_result["table"]["AUROC"].mean())
+        cv_repeats_completed = int(cv_result["table"].shape[0])
+        cv_params = {
+            "cv1_splits": cv1_splits,
+            "cv2_splits": cv2_splits,
+            "n_repeats": n_repeats,
+            "max_components": max_components,
+            "random_state": random_state,
+        }
 
     # One final pooled fit. Its training scores are the trajectory measurement
     # matrix *and* the same fitted estimator is handed to attribution, so both
@@ -653,14 +681,11 @@ def _pls_integration(
             "integration_params": {
                 "stage_col": stage_col,
                 "selected_lv": selected_lv,
-                "cv1_splits": cv1_splits,
-                "cv2_splits": cv2_splits,
-                "n_repeats": n_repeats,
-                "max_components": max_components,
-                "random_state": random_state,
+                **cv_params,
             },
+            "component_selection": "forced" if forced_components is not None else "cv",
             "cv_mean_auroc": mean_auroc,
-            "cv_repeats_completed": int(cv_result["table"].shape[0]),
+            "cv_repeats_completed": cv_repeats_completed,
             "selected_lv": selected_lv,
             "shape": tuple(latent.shape),
             "n_samples": int(latent.shape[0]),
@@ -701,6 +726,36 @@ def _joint_original_scales(preprocessor: FittedOmicsPreprocessor, columns: pd.In
             f"Fitted scales ({scales.shape[0]}) do not align to the joint feature matrix ({len(columns)})."
         )
     return scales
+
+
+def _forced_components(params: Mapping[str, Any], *, maximum: int) -> int | None:
+    """Resolve the diagnostic ``forced_components`` override, or ``None`` when absent.
+
+    Unlike the cross-validation knobs, an out-of-range value is rejected rather
+    than clamped: the override exists to measure the latent space at a named
+    rank, so silently measuring a different one would be worse than failing.
+    """
+
+    raw = params.get("forced_components")
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+        exact = value == raw
+    except (TypeError, ValueError) as exc:
+        raise SimulationEvaluationError(
+            f"PLS integration: forced_components must be an integer, got {raw!r}."
+        ) from exc
+    if not exact:
+        raise SimulationEvaluationError(
+            f"PLS integration: forced_components must be an integer, got {raw!r}."
+        )
+    if value < 2 or value > maximum:
+        raise SimulationEvaluationError(
+            f"PLS integration: forced_components={value} is outside the feasible range "
+            f"[2, {maximum}] for this sample."
+        )
+    return value
 
 
 def _clamp_int(value: Any, *, minimum: int, maximum: int) -> int:

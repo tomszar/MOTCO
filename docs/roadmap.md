@@ -25,7 +25,7 @@ The roadmap prioritizes interpretability and validation before larger simulation
 
 ### Not yet established
 
-- Shape invariance has been audited and corrected: production `shape` now removes translation, proper rotation, and uniform scale while keeping reflections distinct by default.
+- Shape invariance has been audited and corrected: production `shape` removes translation, uniform scale, and any orthogonal transformation. Reflections are aligned away at every ambient dimension (`unify-shape-reflection-policy`, resolving audit finding F3); the earlier "reflections retained" contract bound only in a full-rank latent space and was vacuous everywhere else.
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration.
 - Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
 - The orientation sign-anchor defect fixed on 2026-08-28 was real but is **not** the cause of the orientation shortfall; corrected power is 0.68 at the top effect ([report](reports/orientation-sign-anchor-2026-08-28.md)).
@@ -89,7 +89,7 @@ Work:
 - Add permanent invariance and regression tests.
 - If necessary, correct the estimator and document any behavioral change; otherwise rename/reinterpret the statistic so its actual invariants are explicit.
 
-**Exit gate:** passed. Rigid translation, scaling, and proper rotation have documented expected outputs enforced by tests; reflection remains positive under the documented default policy.
+**Exit gate:** passed. Rigid translation, scaling, and proper rotation have documented expected outputs enforced by tests. The reflection policy was revisited on 2026-09-03 (`unify-shape-reflection-policy`): reflections are now aligned away at every ambient dimension, and mirror pairs score zero at full rank and above.
 
 ## Phase 2 — Audit orientation and shape constructions before integration
 

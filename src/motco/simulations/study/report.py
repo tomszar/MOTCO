@@ -451,6 +451,35 @@ def build_type_i_table(
     return frame.sort_values(["trajectory_mode", "varied_axis", "varied_value", "cell_id"]).reset_index(drop=True)
 
 
+def assert_production_component_selection(
+    records: Sequence[SimulationReplicateResult],
+) -> None:
+    """Refuse to report records whose latent rank was forced rather than cross-validated.
+
+    ``forced_components`` is a rank diagnostic (see ``scripts/latent_rank_probe.py``);
+    a study report built over such records would present a hand-picked latent
+    dimensionality as the study's operating point. The parameter signature
+    already keeps forced-rank cells out of production shards, so this is the
+    cheap second line: any record that says so explicitly is rejected here.
+    Records written before ``component_selection`` existed carry no marker and
+    pass unchanged.
+    """
+
+    offenders = sorted(
+        {
+            str(record.cell_id)
+            for record in records
+            if str((record.integration_metadata or {}).get("component_selection", "cv")) != "cv"
+        }
+    )
+    if offenders:
+        raise StudyReportError(
+            "Study report requires cross-validated PLS component selection; "
+            f"{len(offenders)} cell(s) recorded a forced latent rank: {', '.join(offenders[:5])}"
+            + (" ..." if len(offenders) > 5 else "")
+        )
+
+
 def build_report_frames(
     summaries: Sequence[SimulationSummaryResult],
     combined: Sequence[CombinedRuleSummary],
@@ -460,6 +489,7 @@ def build_report_frames(
 ) -> ReportFrames:
     """Build every always-on report frame from summaries and merged records."""
 
+    assert_production_component_selection(records)
     return ReportFrames(
         specificity_matrix=build_specificity_matrix(summaries, records),
         power_curves=build_power_curves(summaries, records),
@@ -805,6 +835,7 @@ __all__ = [
     "Phase4ReportFrames",
     "ReportFrames",
     "StudyReportError",
+    "assert_production_component_selection",
     "build_phase4_frames",
     "build_power_curves",
     "build_realized_surgery",

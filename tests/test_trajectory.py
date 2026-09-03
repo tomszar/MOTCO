@@ -102,6 +102,15 @@ def _center_scale_unit_reference(points: np.ndarray) -> np.ndarray:
 
 
 def _direct_pairwise_procrustes_reference(left: np.ndarray, right: np.ndarray) -> float:
+    """Independent implementation of the production policy: full orthogonal alignment."""
+    reference = _center_scale_unit_reference(left)
+    target = _center_scale_unit_reference(right)
+    U, _, Vt = np.linalg.svd(target.T @ reference, full_matrices=False)
+    return float(np.linalg.norm(reference - target @ (U @ Vt)))
+
+
+def _legacy_proper_procrustes_reference(left: np.ndarray, right: np.ndarray) -> float:
+    """Pre-change estimator (SO(k) alignment), kept only to pin the no-op regression."""
     reference = _center_scale_unit_reference(left)
     target = _center_scale_unit_reference(right)
     U, _, Vt = np.linalg.svd(target.T @ reference, full_matrices=False)
@@ -110,6 +119,13 @@ def _direct_pairwise_procrustes_reference(left: np.ndarray, right: np.ndarray) -
         U[:, -1] *= -1
         rotation = U @ Vt
     return float(np.linalg.norm(reference - target @ rotation))
+
+
+def _embed(points: np.ndarray, n_dimensions: int) -> np.ndarray:
+    """Zero-pad a configuration into a higher-dimensional ambient space."""
+    padded = np.zeros((points.shape[0], n_dimensions), dtype=float)
+    padded[:, : points.shape[1]] = points
+    return padded
 
 
 def _estimate_shape_legacy_gpa(vectors: np.ndarray, contrast: list[list[int]]) -> np.ndarray:
@@ -296,10 +312,65 @@ def test_shape_distance_preserves_positive_residual_bend():
     _assert_positive_shape(_shape_distance(fixtures["base"], fixtures["bend"]))
 
 
-def test_shape_distance_keeps_reflections_distinct_by_default():
+def test_shape_distance_aligns_reflections_away_at_full_rank():
+    """Mirror pair is zero even where the configuration spans the ambient space (2-D)."""
     fixtures = _shape_fixture()
 
-    _assert_positive_shape(_shape_distance(fixtures["base"], fixtures["reflected"]))
+    _assert_zero_shape(_shape_distance(fixtures["base"], fixtures["reflected"]))
+
+
+@pytest.mark.parametrize("n_dimensions", [3, 10, 660])
+def test_shape_distance_aligns_reflections_away_above_configuration_rank(n_dimensions: int):
+    """Mirror pair is zero at every ambient dimension exceeding the configuration rank."""
+    fixtures = _shape_fixture()
+    bend = _embed(fixtures["bend"], n_dimensions)
+    mirrored = bend.copy()
+    mirrored[:, 0] *= -1.0
+
+    _assert_zero_shape(_shape_distance(bend, mirrored))
+
+
+@pytest.mark.parametrize("n_dimensions", [3, 10, 660])
+def test_shape_distance_is_invariant_to_embedding_dimension(n_dimensions: int):
+    """The same configuration pair scores identically at native and padded dimension."""
+    fixtures = _shape_fixture()
+    native = _shape_distance(fixtures["base"], fixtures["bend"])
+    embedded = _shape_distance(
+        _embed(fixtures["base"], n_dimensions), _embed(fixtures["bend"], n_dimensions)
+    )
+
+    _assert_positive_shape(native)
+    assert embedded == pytest.approx(native, abs=SHAPE_TOL)
+
+
+def test_shape_distance_is_a_no_op_where_the_optimal_alignment_is_already_proper():
+    """Full-rank 3-D pairs: dropping the SO(k) constraint changes nothing unless it bound.
+
+    The audit found the policy switch to be a numerical no-op on 100/100 real
+    replicates; this pins the mechanism behind that — the only divergence from
+    the pre-change estimator is a pair whose optimal alignment is improper.
+    """
+    rng = np.random.default_rng(20260903)
+    compared = 0
+
+    for _ in range(200):
+        left = rng.standard_normal((4, 3))
+        right = rng.standard_normal((4, 3))
+
+        reference = _center_scale_unit_reference(left)
+        target = _center_scale_unit_reference(right)
+        U, _, Vt = np.linalg.svd(target.T @ reference, full_matrices=False)
+        if np.linalg.det(U @ Vt) < 0:
+            # The constraint binds here: the two policies are expected to differ.
+            assert _shape_distance(left, right) < _legacy_proper_procrustes_reference(left, right)
+            continue
+
+        compared += 1
+        assert _shape_distance(left, right) == pytest.approx(
+            _legacy_proper_procrustes_reference(left, right), abs=SHAPE_TOL
+        )
+
+    assert compared > 0
 
 
 @pytest.mark.parametrize("name", ["translated", "scaled", "rotated", "reflected", "bend"])

@@ -1,8 +1,13 @@
-# trajectory-shape-invariance Specification
+## RENAMED Requirements
 
-## Purpose
-Defines the production contract for MOTCO trajectory shape as a strict geometric-morphometric quantity: the residual trajectory configuration after removing location, orthogonal transformation (rotation or reflection), and uniform size.
-## Requirements
+- FROM: `### Requirement: Shape removes location, proper rotation, and uniform scale`
+- TO: `### Requirement: Shape removes location, orthogonal transformation, and uniform scale`
+
+- FROM: `### Requirement: Reflection policy is explicit`
+- TO: `### Requirement: Reflection policy is uniform across ambient dimensions`
+
+## MODIFIED Requirements
+
 ### Requirement: Shape removes location, orthogonal transformation, and uniform scale
 
 MOTCO SHALL report zero trajectory `shape` distance, within documented numerical tolerance, for any two trajectories whose stage configurations differ only by translation, orthogonal transformation (rotation or reflection), and uniform scale.
@@ -78,18 +83,3 @@ MOTCO SHALL preserve the semantic separation between trajectory magnitude, orien
 
 - **WHEN** two trajectories differ only by an orthogonal transformation
 - **THEN** `angle` may be nonzero and `shape` is zero within numerical tolerance
-
-### Requirement: Shape audit produces reproducible diagnostic evidence
-
-MOTCO SHALL include deterministic diagnostic cases that compare observed `shape` behavior with the strict morphometric invariance contract and record any divergence from legacy GPA behavior.
-
-#### Scenario: Audit records invariant cases
-
-- **WHEN** the shape invariance audit is run
-- **THEN** it records outcomes for translation, uniform scale, proper rotation, reflection, and genuine bend cases
-
-#### Scenario: Legacy divergence is visible
-
-- **WHEN** legacy GPA behavior differs from strict morphometric shape behavior
-- **THEN** the audit output identifies the affected transformation case and the observed distance under each method
-

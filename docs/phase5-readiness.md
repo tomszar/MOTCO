@@ -4,11 +4,11 @@ Work to complete before launching the paper-grade study. Derived from the
 [Phase 4 medium PLS pilot](reports/phase4-medium-pls-pilot-2026-08-27.md) (run 2026-08-27, gate decision
 **HOLD**). Every number below comes from `results/phase4-2026-08-27/report/`.
 
-**Status: item 1 resolved 2026-09-01; items 2–5 open.** Phase 4 is complete; these are its follow-ups.
-The blocking item is closed — `angle` proceeds as specified — and the 0.80 orientation power floor moves to
-item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md). The
-[geometry audit](reports/geometry-audit-2026-09-01.md) (2026-09-01) has since narrowed items 2–4 and added
-preconditions — see its remediation plan (P1–P6).
+**Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03; items 3–5 open.** Phase 4 is complete;
+these are its follow-ups. The blocking item is closed — `angle` proceeds as specified — and the 0.80
+orientation power floor moves to item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md).
+The [geometry audit](reports/geometry-audit-2026-09-01.md) (2026-09-01) has since narrowed items 2–4 and added
+preconditions — see its remediation plan (P1–P6); P3 landed 2026-09-03 and closed item 2.
 
 ## What is already settled — do not re-litigate
 
@@ -66,7 +66,12 @@ permutation draws), and the pivotality analysis reports its association with eac
 width. See [Recording the latent configuration
 spectrum](reports/latent-config-spectrum-2026-09-02.md).
 
-## 2. Investigate orientation → shape at the PLS checkpoint
+## 2. Investigate orientation → shape at the PLS checkpoint — **resolved 2026-09-03**
+
+> **Resolved.** The reflection-policy precondition is closed and the rank-limited-projection account is
+> supported by direct measurement. **Decision: Phase 5 predeclares orientation's `shape` response as a
+> projection artifact of the rank-3 stage-supervised latent space.** See the two bolded findings at the end
+> of this item.
 
 Orientation's `shape` rejection rate is 0.97–1.00, and localization puts it as the **only** response that
 first becomes material at the PLS latent checkpoint (effects 0.75 and 1.00) rather than in the population
@@ -93,8 +98,39 @@ distance still clears the replicate's own shape-null q95 in 99 of 100. What rema
 account: an orientation contrast that lies outside the retained rank-3 subspace re-enters the projection as
 configuration deformation. The audit also found the shape statistic is reflection-*invariant* at every
 pre-integration checkpoint (configuration rank < ambient dimension makes the proper-rotation constraint
-vacuous), so the localization table's rows mix two contracts — resolve the policy (plan item P3) before
-Phase 5 reports cross-checkpoint shape claims.
+vacuous), so the localization table's rows mixed two contracts.
+
+**Reflection-policy precondition: closed on 2026-09-03** by `unify-shape-reflection-policy` (plan item P3).
+The policy is now uniform — the Procrustes alignment optimizes over the full orthogonal group, so reflections
+are aligned away at *every* ambient dimension and `shape` means the same thing at every checkpoint by
+construction. The localization table no longer mixes contracts, and Phase 5 may make cross-checkpoint shape
+claims without a per-row regime annotation. `SHAPE_STATISTIC_VERSION = 2` enters the study parameter
+signature, so pre-change shards refuse to resume under the new estimator; historical committed outputs keep
+their recorded values and comparisons against them must note the contract change. Measured cost, as the audit
+predicted: none on real geometry.
+
+**Rank-limited-projection account: supported** by the follow-up probe
+([`results/latent-rank-probe-2026-09-03/`](../results/latent-rank-probe-2026-09-03/latent_rank_probe.md),
+driver `scripts/latent_rank_probe.py`). Holding the Phase-4 pilot design point fixed with matched seeds
+(n = 300, 4 stages, effect 1.00, 100 replicates, 199 permutations) and varying **only** the retained PLS rank
+via the new diagnostic `forced_components` override, the orientation→shape response decays steeply as rank
+grows — monotone through rank 9, then flat — and its rejection rate collapses with it:
+
+| retained rank | 3 (CV-selected) | 4 | 6 | 9 | 12 |
+|---|---|---|---|---|---|
+| observed `shape` | 0.0694 | 0.0541 | 0.0195 | 0.0135 | 0.0136 |
+| rejection rate | 0.97 | 1.00 | 0.36 | 0.08 | 0.09 |
+
+The response falls by 80% across the ladder and passes through the standardized-observed population value
+(0.0424) between ranks 4 and 6, while the `none` control is flat from rank 4 onward (0.0068 → 0.0065,
+rejection 0.00) — so the decay is specific to the orientation surgery, not generic to rank. The latent and
+population values are not on a common scale, so the crossing rank is indicative; the load-bearing evidence is
+the decay and the rejection-rate collapse.
+
+**Item 2 is therefore resolved for the purpose it was raised:** Phase 5 predeclares orientation's `shape`
+response as a **projection artifact of the rank-3 stage-supervised latent space**, not a finding about the
+constructions. Note this makes item 3 (latent dimensionality) sharper rather than moot — the same evidence
+shows what a rank-3 space costs the group contrast.
 
 ## 3. Reconsider latent dimensionality for group contrasts
 
@@ -137,7 +173,7 @@ group-aware-supervision caution stands: this change only *observes* the spectrum
 
 ## 4. Choose the Phase 5 design point
 
-Only after items 2–3; item 1 is resolved. The pilot used n = 300 with four stages (75 samples per
+Only after item 3; items 1 and 2 are resolved. The pilot used n = 300 with four stages (75 samples per
 group-stage cell) over ~660 standardized features.
 
 **What to establish:** how orientation's operating characteristics scale with samples per group-stage cell

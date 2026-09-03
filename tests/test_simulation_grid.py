@@ -451,8 +451,8 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     ``null_summary`` itself never enters the signature — the resume below, which
     skips a record written without the field, is what pins that. The digest is
     pinned separately so *any* signature change has to be a deliberate edit
-    here; it last moved when ``surgery_censoring`` joined the generator params
-    (``fix-effect-axis-censoring``), which was the point of that change.
+    here; it last moved when ``shape_statistic_version`` joined the payload
+    (``unify-shape-reflection-policy``), which was the point of that change.
     """
 
     cell = make_simulation_cell(
@@ -462,7 +462,7 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
         n_replicates=2,
         cell_id="pinned",
     )
-    assert parameter_signature(cell) == "4b0bf9aaa8286d1437966ba3d3607f617d8b415e9377fb316fe00f07b1f2aefe"
+    assert parameter_signature(cell) == "784fe8acb6cc708db6d0bafd0a63c14f84e1a865ec996a9d424f5ee90dfe9ceb"
 
     # Resume against a record written without the field must skip, not overwrite.
     import json
@@ -593,6 +593,62 @@ def test_resume_against_a_pre_spectrum_signature_is_refused(tmp_path) -> None:
     # A record written under the pre-change contract: no spectrum, and a
     # signature computed without the spectrum schema version.
     payload["parameter_signature"] = "pre-change-signature"
+    path = tmp_path / "results.jsonl"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    with pytest.raises(SimulationGridError, match="different parameter signature"):
+        run_simulation_grid(
+            SimulationGrid(cells=(cell,)),
+            config=SimulationRunConfig(output_path=path),
+            evaluator=lambda generator, evaluation: fake_result(),
+        )
+
+
+def test_shape_statistic_version_enters_the_parameter_signature(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The contract of the statistic itself is signature-bearing, not just the record schema.
+
+    ``shape`` under proper-rotation alignment and under full orthogonal
+    alignment are different statistics; a shard must not mix them.
+    """
+
+    import motco.simulations.grid as grid_module
+
+    cell = make_simulation_cell(
+        phase="type_i_baseline",
+        generator_params=baseline_generator(),
+        n_replicates=2,
+        base_seed=91,
+    )
+    current = parameter_signature(cell)
+    assert parameter_signature(cell) == current  # stable across enumerations
+
+    monkeypatch.setattr(grid_module, "SHAPE_STATISTIC_VERSION", 1)
+    assert parameter_signature(cell) != current
+
+
+def test_resume_against_a_pre_reflection_policy_signature_is_refused(tmp_path) -> None:
+    """A shard written under the proper-rotation ``shape`` contract must refuse resume."""
+
+    import json
+
+    import motco.simulations.grid as grid_module
+
+    cell = make_simulation_cell(
+        phase="power_primary",
+        generator_params=baseline_generator(),
+        evaluation_params=baseline_evaluation(),
+        n_replicates=1,
+        cell_id="reflection-resume-probe",
+    )
+    prior = run_simulation_replicate(
+        cell, 0, evaluator=lambda generator, evaluation: fake_result(truth_seed=7)
+    )
+    payload = prior.__dict__.copy()
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(grid_module, "SHAPE_STATISTIC_VERSION", 1)
+        payload["parameter_signature"] = parameter_signature(cell)
     path = tmp_path / "results.jsonl"
     path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
 

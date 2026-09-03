@@ -25,15 +25,23 @@ API.
 `shape` is a strict geometric-morphometric residual configuration statistic.
 For each group trajectory, MOTCO centers the stage configuration and scales it
 to unit centroid size. Pairwise shape distance is then the residual norm after
-aligning one trajectory to the other with a determinant-positive orthogonal
-rotation.
+aligning one trajectory to the other over the **full orthogonal group** — the
+alignment is unconstrained in determinant, so reflections are aligned away
+rather than retained.
 
-Under this contract, translation, positive uniform scale, and proper rigid
-rotation do not produce nonzero `shape` distance beyond numerical tolerance.
-Genuine configuration changes, such as moving an interior stage so relative
-stage-to-stage distances change after size normalization, remain positive.
-Mirror reflections are kept distinct by default; they are not aligned away as
-proper rotations.
+Under this contract, translation, positive uniform scale, and any orthogonal
+transformation — proper rotation or reflection — do not produce nonzero `shape`
+distance beyond numerical tolerance. Genuine configuration changes, such as
+moving an interior stage so relative stage-to-stage distances change after size
+normalization, remain positive.
+
+The reflection policy is uniform: it does not depend on whether the stage
+configuration spans the ambient space, so the statistic means the same thing at
+every measurement checkpoint. (A trajectory of `k` stages has rank at most
+`k − 1`, so in feature space a proper-rotation constraint would be satisfiable
+for free in the null space and therefore vacuous — the previous "reflections
+retained" contract bound only in a full-rank latent space.) A genuine mirror
+difference is an orientation difference and is reported by `angle`.
 
 ## Interpreting orientation and identifying feature drivers
 

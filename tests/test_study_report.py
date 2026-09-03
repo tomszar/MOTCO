@@ -1,16 +1,20 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import matplotlib
 import pandas as pd
+import pytest
 
 matplotlib.use("Agg")
 
 from motco.simulations import SimulationReplicateResult, SimulationSummaryResult
 from motco.simulations.study.report import (
     ReportFrames,
+    StudyReportError,
     build_power_curves,
+    build_report_frames,
     build_specificity_matrix,
     build_type_i_table,
     render_power_curves,
@@ -184,3 +188,28 @@ def test_figure_renderers_write_png(tmp_path: Path) -> None:
     for path in (a, b, c):
         assert path.exists()
         assert path.stat().st_size > 0
+
+
+def test_report_frames_reject_records_whose_latent_rank_was_forced() -> None:
+    """A rank-diagnostic record must never be reported as a production result."""
+
+    summaries, records = _build_synthetic_summaries()
+    forced = replace(
+        records[2],
+        integration_metadata={"component_selection": "forced", "forced_components": 9},
+    )
+    contaminated = [*records[:2], forced, *records[3:]]
+
+    with pytest.raises(StudyReportError, match="forced latent rank"):
+        build_report_frames(summaries, [], contaminated)
+
+
+def test_report_frames_accept_cross_validated_and_pre_marker_records() -> None:
+    summaries, records = _build_synthetic_summaries()
+    marked = [
+        replace(record, integration_metadata={"component_selection": "cv"}) for record in records[:3]
+    ]
+    # The remaining records predate the marker and carry no key at all.
+    frames = build_report_frames(summaries, [], [*marked, *records[3:]])
+
+    assert not frames.specificity_matrix.empty

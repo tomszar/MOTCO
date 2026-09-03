@@ -280,7 +280,7 @@ stress-test endpoint.
 | D6 | `grid.py:328`, `showcase.py:71–74` | Matched-seed docstrings claim family cells generate "the *same* dataset" / that "the only thing that changes is group B's transform". Only the baseline indicators and group assignment match: the transforms consume different RNG amounts, so all sampled values differ across modes (the sole common-random-numbers pair is none↔magnitude, whose transforms draw nothing). The pivotality config note "the comparison across modes is on the same generator draws" overstates likewise. |
 | D7 | `CLAUDE.md` / `evaluation.py` vs `docs/roadmap.md` | CLAUDE.md and the evaluation docstring call SNF a "production latent-space method" while rung 2 found SNF leaks independently and the roadmap defers SNF pending graph-native statistics (Phase 7). One message should win. |
 | D8 | `evaluation.py:368`, `design.py` | Stage levels sort as strings; ordering silently breaks at n_stages ≥ 10 ("10" < "2"). Latent hazard only, but path length and shape depend on stage order. |
-| D9 | `README.md:270`, shape spec | Shape described as removing "orientation differences" with reflections retained — needs the F3 rank qualifier to be true as stated. |
+| D9 | `README.md:270`, shape spec | Shape described as removing "orientation differences" with reflections retained — needs the F3 rank qualifier to be true as stated. **Resolved 2026-09-03** by `unify-shape-reflection-policy`: rather than adding the qualifier, the policy was unified — reflections are aligned away at every ambient dimension, and README, spec, and docstrings now say so. |
 
 ---
 
@@ -344,6 +344,10 @@ Make the requested-vs-realized surgery relationship explicit and non-degenerate.
 - Note: changes generator semantics → parameter signatures will (correctly) refuse to resume old shards.
 
 ### P3 — `unify-shape-reflection-policy` (F3 → readiness item 2, Phase-5 report contract)
+
+**Landed 2026-09-03**, taking the preferred option below: the determinant correction is gone,
+`SHAPE_STATISTIC_VERSION = 2` guards resume compatibility, and the follow-up probe ships as
+`scripts/latent_rank_probe.py` (results under `results/latent-rank-probe-2026-09-03/`).
 
 Pick one reflection policy that holds at every checkpoint.
 
