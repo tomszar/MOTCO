@@ -33,6 +33,7 @@ from motco.simulations.study.phase4 import (
     summarize_realized_geometry,
 )
 from motco.simulations.study.spectrum import (
+    resolve_orientation_by_continuity,
     stratify_power_by_eigengap,
     summarize_config_spectrum,
 )
@@ -52,6 +53,10 @@ class ReportFrames:
     reporting a record set written before that field existed still builds every
     pre-existing table unchanged. ``realized_surgery`` does the same for the
     requested-vs-realized surgery recorded in truth metadata.
+    ``continuity_resolved_orientation`` is empty — and its CSV is not written —
+    unless the record set actually spans more than one baseline continuity
+    value, so a study that holds the axis fixed reports exactly what it did
+    before the axis existed.
     """
 
     specificity_matrix: pd.DataFrame
@@ -60,6 +65,7 @@ class ReportFrames:
     config_spectrum: pd.DataFrame = field(default_factory=pd.DataFrame)
     eigengap_stratified_power: pd.DataFrame = field(default_factory=pd.DataFrame)
     realized_surgery: pd.DataFrame = field(default_factory=pd.DataFrame)
+    continuity_resolved_orientation: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 @dataclass(frozen=True)
@@ -497,6 +503,7 @@ def build_report_frames(
         config_spectrum=summarize_config_spectrum(records),
         eigengap_stratified_power=stratify_power_by_eigengap(records, alpha=alpha),
         realized_surgery=build_realized_surgery(records),
+        continuity_resolved_orientation=resolve_orientation_by_continuity(records, alpha=alpha),
     )
 
 
@@ -522,6 +529,13 @@ def write_report_csvs(
     frames.config_spectrum.to_csv(paths["config_spectrum"], index=False)
     frames.eigengap_stratified_power.to_csv(paths["eigengap_stratified_power"], index=False)
     frames.realized_surgery.to_csv(paths["realized_surgery"], index=False)
+    # Written only when the study actually swept the continuity axis; its
+    # absence is the report's statement that the axis was held fixed.
+    if not frames.continuity_resolved_orientation.empty:
+        paths["continuity_resolved_orientation"] = out_dir / "continuity_resolved_orientation.csv"
+        frames.continuity_resolved_orientation.to_csv(
+            paths["continuity_resolved_orientation"], index=False
+        )
     return paths
 
 

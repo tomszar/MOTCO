@@ -109,6 +109,47 @@ def bernoulli_indicators(
     return (rng.random((n_feat, n_cell)) < p).astype(float)
 
 
+def markov_indicators(
+    rng: np.random.Generator, n_feat: int, n_cell: int, p: float, rho: float = 0.0
+) -> np.ndarray:
+    """Differential indicators that persist across *ordered* cells with continuity ``rho``.
+
+    Each feature's indicator sequence follows a stationary first-order Markov
+    chain along the cell axis (which the trajectory layer orders as stages)::
+
+        x_1 ~ Bern(p)
+        P(x_t = 1 | x_{t-1} = 1) = p + rho * (1 - p)      # stay differential
+        P(x_t = 1 | x_{t-1} = 0) = p * (1 - rho)          # become differential
+
+    **Stationary-marginal contract:** the chain's stationary distribution is
+    Bernoulli(``p``) and the first cell is drawn from it, so *every* cell's
+    marginal is Bernoulli(``p``) at every ``rho``. Per-cell differential counts,
+    the per-omic effect sizes, and the CpG→gene→protein coupling derivation are
+    therefore invariant along the continuity axis; only the *cross-cell*
+    correlation changes, as ``corr(x_t, x_s) = rho ** abs(t - s)``.
+
+    ``rho = 0`` collapses both transition probabilities to ``p``, and the single
+    uniform block drawn here has the same shape and stream position as
+    :func:`bernoulli_indicators`, so the output is *identical* to that function's
+    on the same fresh generator and nothing drawn afterwards shifts.
+    """
+
+    if not (0.0 <= rho < 1.0):
+        raise GeneratorError(f"rho must be in [0, 1); got {rho}.")
+    uniforms = rng.random((n_feat, n_cell))
+    if n_cell == 0:
+        return uniforms.astype(float)
+    stay = p + rho * (1.0 - p)
+    enter = p * (1.0 - rho)
+    indicators = np.empty((n_feat, n_cell), dtype=float)
+    previous = uniforms[:, 0] < p
+    indicators[:, 0] = previous
+    for cell in range(1, n_cell):
+        previous = uniforms[:, cell] < np.where(previous, stay, enter)
+        indicators[:, cell] = previous
+    return indicators
+
+
 def derive_coupled_indicators(
     indicators_methyl: np.ndarray, reference: IntersimReference
 ) -> tuple[np.ndarray, np.ndarray]:

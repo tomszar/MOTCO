@@ -209,9 +209,26 @@ bounds, or move them: lower `p_dmp`, use fewer stages, or change the surgery so 
 the complement of the stage program. Every config in `examples/trajectory_power_study/` predates the policy
 and carries `"surgery_censoring": "clamp"` as a historical record — **new configs must not copy it.**
 
-The audit also hands this item a second lever besides sample size: baseline continuity (plan item P4) —
-n-scaling shrinks the noise term, but the eigengap's lower tail (near-isotropic baseline draws) is what caps
-the curve, and that tail is a property of the independent-indicator baseline, not of n.
+**The second lever now exists (P4).** Besides sample size, the audit handed this item baseline
+continuity: n-scaling shrinks the noise term, but the eigengap's lower tail (near-isotropic baseline draws)
+is what caps the curve, and that tail is a property of the baseline construction, not of n. The generator
+now exposes it as a declared axis — `generator.baseline_continuity` (ρ ∈ [0, 1)) makes each CpG's per-stage
+differential status follow a stationary first-order Markov chain, so the per-stage Bernoulli(`p_dmp`)
+marginal (and therefore per-stage counts, δ semantics, and the cross-omic coupling) is unchanged along the
+axis while stage means acquire a *trend*: pairwise distances grow with stage separation, giving the
+configuration a dominant PC1. ρ = 0 is the current independent baseline, byte-identical, and remains the
+declared isotropic stress-test endpoint.
+
+Two consequences for the design-point study. First, the surgery headroom moves with ρ: the expected
+stage-active union is `1 − (1 − p_dmp)·(1 − p_dmp·(1 − ρ))^(n_stages − 1)`, so overlapping stage programs
+*enlarge* every pool-limited surgery's destination pool. At `p_dmp = 0.2` with four stages the saturating
+effect moves from **e ≈ 0.56 (orientation) / 0.29 (translation) at ρ = 0** to **e ≈ 2.77 / 1.47 at ρ = 0.9**
+(3σ guard band included), so the usable effect axis this item must choose widens along ρ. Enumeration
+already reads each cell's own ρ, so an effect rejected at ρ = 0 may enumerate at higher ρ. Second, when a study sweeps the axis,
+`report/continuity_resolved_orientation.csv` presents orientation rejection rates, the recorded eigengap
+distribution, and the `null_summary["angle"]["q95"]` dispersion per continuity value — so power differences
+along ρ are read off the recorded geometry, which is the observable that carries the claim to real data,
+rather than off the knob. **Which ρ values Phase 5 sweeps is this item's decision.**
 
 **The stratifying covariate is available (P1, 2026-09-02).** The design-point study can measure how the
 `null_summary["angle"]["q95"]` dispersion contracts with samples per group-stage cell *stratified by the
