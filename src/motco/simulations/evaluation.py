@@ -6,12 +6,16 @@ The trajectory pipeline is **features -> latent (molecular) space -> trajectory
 measurement**. The integration step constructs the low-dimensional *molecular
 latent space*, and trajectory geometry (``delta``/``angle``/``shape``) is
 estimated **within** that space — it is the measurement substrate, not a
-visualization artifact. The two production latent-space methods are:
+visualization artifact. The integration methods are:
 
+- ``pls`` (the production measurement space): the transform of the omic
+  features into the subspace that maximizes covariance with the **stage**
+  label, with latent dimensionality selected by double nested cross-validation
+  (a stable, non-overfitted molecular space).
 - ``snf``: graph-spectral embedding of the fused per-omic similarity networks.
-- ``pls``: the transform of the omic features into the subspace that maximizes
-  covariance with the **stage** label, with latent dimensionality selected by
-  double nested cross-validation (a stable, non-overfitted molecular space).
+  Supported, but its use with the Euclidean trajectory statistics is deferred
+  pending graph-native statistics — ``docs/roadmap.md`` is the authoritative
+  status.
 
 ``concat`` is a **baseline/diagnostic** path only: it standardizes and
 column-binds the omic blocks, leaving the data in rescaled *feature* space, not
@@ -38,7 +42,7 @@ from motco.simulations.preprocessing import (
     fit_omics_preprocessor,
 )
 from motco.simulations.semisynthetic import OmicsLayer, SemiSyntheticTrajectoryDataset
-from motco.stats.design import build_ls_means, get_model_matrix
+from motco.stats.design import _sort_levels, build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
 from motco.stats.pls import _modal_int_with_parsimony, fit_plsda_model, plsda_doubleCV
 from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
@@ -382,8 +386,8 @@ def build_simulation_trajectory_design(
     design_frame = metadata[[group_col, stage_col]].reset_index(drop=True).copy()
     design_frame[group_col] = design_frame[group_col].astype(str)
     design_frame[stage_col] = design_frame[stage_col].astype(str)
-    group_levels = sorted(pd.unique(design_frame[group_col]).tolist())
-    stage_levels = sorted(pd.unique(design_frame[stage_col]).tolist())
+    group_levels = _sort_levels(pd.unique(design_frame[group_col]).tolist())
+    stage_levels = _sort_levels(pd.unique(design_frame[stage_col]).tolist())
     if len(group_levels) != 2:
         raise SimulationEvaluationError(f"Expected exactly two groups, found {len(group_levels)}: {group_levels}.")
     if len(stage_levels) < 2:

@@ -373,9 +373,16 @@ def derive_replicate_seed(cell: SimulationCell, replicate_index: int) -> int:
     By default the seed is keyed on the cell's own identity, so every cell is an
     independent draw. When a cell carries a ``seed_family`` in its metadata — the
     opt-in matched-seed policy — the seed is keyed on that family instead, so
-    every cell in the family generates the *same* dataset at a given replicate
-    index and requested-effect comparisons become paired at the generated
-    reference. Persistence keys stay ``(cell_id, replicate_index)`` either way.
+    every cell in the family starts from the same generator seed at a given
+    replicate index and requested-effect comparisons become paired at the
+    generated reference. Persistence keys stay ``(cell_id, replicate_index)``
+    either way.
+
+    What a shared seed actually shares: group A's baseline indicator draw and the
+    within-stage group assignment. It is *not* the same dataset across cells —
+    the mode transforms consume different amounts of RNG, so every sampled value
+    downstream of the transform differs. The only common-random-numbers pair is
+    ``none``↔``magnitude``, whose transforms draw nothing.
 
     The result is masked into ``[0, 2**31 - 1]`` so it seeds numpy's default RNG
     (and any other downstream RNG) reproducibly.

@@ -49,18 +49,18 @@ motco de \
   --rrpp-permutations 999 \
   --out-json results/de_result.json
 
-# 4. (Optional) Regenerate the toy data — requires R + InterSIM
+# 4. (Optional) Generate a fresh semi-synthetic dataset (numpy generator; no R at runtime)
 motco simulate \
-  --seed 42 --n-samples 90 \
+  --seed 42 --n-samples 90 --n-stages 3 \
   --trajectory-mode orientation --effect-size 1.0 \
-  --prop-affected-features 0.1 \
+  --p-dmp 0.2 \
   --cluster-mean-shift 0.10 \
-  --out-dir examples/data/toy/
+  --out-dir results/simulated/
 ```
 
 The bundled toy data uses moderate InterSIM cluster separation, so `y = stage` classification should be informative but not perfect. The small CV settings above keep the quick start fast; increase them for analysis-grade model selection.
 
-To install InterSIM in R (one-time):
+R and InterSIM are **not** required at runtime — `motco simulate` uses the numpy generator with the cached InterSIM reference. R + InterSIM are only needed to regenerate that cache or the fidelity fixtures (see `src/motco/simulations/FIDELITY.md`). To install InterSIM in R for that one-time step:
 ```r
 install.packages("InterSIM", repos = c("https://cran.r-universe.dev", "https://cloud.r-project.org"))
 ```
@@ -283,35 +283,27 @@ Significance threshold is typically α = 0.05.
 
 MOTCO includes packaged simulation tools for generating semi-synthetic trajectory datasets, evaluating one generated dataset through MOTCO statistics, and orchestrating small Type I error or power grids.
 
-The InterSIM bridge is optional and requires `Rscript` plus the R `InterSIM` package. You can check availability before running R-backed simulations:
-
-```python
-from motco.simulations import check_intersim_available
-
-availability = check_intersim_available()
-if not availability.available:
-    print(availability.message)
-```
+Generation is numpy-native (no R at runtime): the generator samples from the cached InterSIM reference committed at `src/motco/simulations/data/intersim_reference.npz`. The legacy R bridge (`check_intersim_available`) is retained only for the one-time export that builds that cache.
 
 Generate and evaluate one semi-synthetic trajectory dataset:
 
 ```python
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     evaluate_semisynthetic_trajectory,
-    generate_semisynthetic_trajectory_from_intersim,
+    generate_semisynthetic_trajectory,
 )
 
-dataset = generate_semisynthetic_trajectory_from_intersim(
-    InterSIMParams(seed=1203, n_sample=120, cluster_sample_prop=(0.3, 0.3, 0.4)),
+dataset = generate_semisynthetic_trajectory(
     SemiSyntheticTrajectoryParams(
         seed=99,
+        n_samples=120,
+        n_stages=3,
         trajectory_mode="magnitude",
         group_effect_size=0.2,
         group_ratio=0.5,
-        prop_affected_features=0.05,
+        p_dmp=0.2,
     ),
 )
 
@@ -328,7 +320,6 @@ Enumerate and run a small local grid. Results are persisted as JSON Lines, one r
 from pathlib import Path
 
 from motco.simulations import (
-    InterSIMParams,
     SemiSyntheticTrajectoryParams,
     SimulationEvaluationParams,
     SimulationRunConfig,
@@ -338,10 +329,9 @@ from motco.simulations import (
 )
 
 grid = enumerate_type_i_grid(
-    baseline_intersim_params=InterSIMParams(seed=1, n_sample=60),
-    baseline_generator_params=SemiSyntheticTrajectoryParams(seed=2),
+    baseline_generator_params=SemiSyntheticTrajectoryParams(seed=2, n_samples=60),
     evaluation_params=SimulationEvaluationParams(integration_method="concat", permutations=99),
-    axes={"intersim.n_sample": [60, 120], "generator.group_ratio": [0.5, 0.7]},
+    axes={"generator.n_samples": [60, 120], "generator.group_ratio": [0.5, 0.7]},
     n_replicates=3,
     base_seed=2026,
 )

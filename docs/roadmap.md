@@ -22,10 +22,10 @@ The roadmap prioritizes interpretability and validation before larger simulation
 - A 45-degree latent orientation change reconstructed as approximately 42 degrees in feature space with negligible magnitude change.
 - Latent orientation differences represent different relative combinations of stage-associated molecular patterns, usually as dense loading-aligned feature changes.
 - SNF is not intrinsically unsuitable for integration, but its graph-spectral geometry is not naturally aligned with MOTCO's current Euclidean path-length and angle statistics.
+- Shape invariance has been audited and corrected: production `shape` removes translation, uniform scale, and any orthogonal transformation. Reflections are aligned away at every ambient dimension (`unify-shape-reflection-policy`, resolving audit finding F3); the earlier "reflections retained" contract bound only in a full-rank latent space and was vacuous everywhere else.
 
 ### Not yet established
 
-- Shape invariance has been audited and corrected: production `shape` removes translation, uniform scale, and any orthogonal transformation. Reflections are aligned away at every ambient dimension (`unify-shape-reflection-policy`, resolving audit finding F3); the earlier "reflections retained" contract bound only in a full-rank latent space and was vacuous everywhere else.
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration.
 - Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
 - The orientation sign-anchor defect fixed on 2026-08-28 was real but is **not** the cause of the orientation shortfall; corrected power is 0.68 at the top effect ([report](reports/orientation-sign-anchor-2026-08-28.md)).
@@ -295,6 +295,7 @@ These items support every scientific phase:
 - Add CI coverage for core geometry invariants and study-config validation.
 - Prefer structured CSV/JSON outputs plus concise Markdown reports over findings that exist only in notebooks.
 - Keep public documentation synchronized with methodological decisions and archived OpenSpec findings.
+- **Decide the fate of the committed toy fixture** (`examples/data/toy/`, deferred from `docs-sync-audit`, 2026-09-04). The fixture predates the numpy generator: its `truth.json` records `intersim_metadata` and omits `n_stages`, `p_dmp`, and `baseline_continuity`, and running the current `motco simulate` at the same seed produces a different dataset. `docs-sync-audit` corrected the documentation — the `toy-dataset` spec now describes the fixture as pinned rather than regenerable — but did not resolve the underlying question: regenerate the example data with the numpy generator so the tutorial exercises the shipped code path, or keep it pinned as a historical artifact. Regenerating touches committed example data, `examples/motco_example.ipynb`, the `toy-dataset` spec scenarios, and `tests/test_toy_dataset.py`, so it needs its own change.
 
 ## Explicitly deferred
 
