@@ -293,3 +293,146 @@ def test_four_regime_anchor_comparison(regime: str, expected: tuple[float, float
         assert got == pytest.approx(want, abs=1.0)
     # Whatever the other anchors do, net displacement always recovers the truth.
     assert observed[2] == pytest.approx(truth, abs=1.0)
+
+
+# ── Two-stage angle identity ─────────────────────────────────────────────────
+#
+# With exactly two stages the centered configuration is rank one: PC1 *is* the
+# transition direction, and the net-displacement anchor orients it along the
+# progression. The pairwise `angle` must therefore equal the angle between the
+# unit transition vectors as an identity. Asserted on the cosine — arccos is
+# ill-conditioned near 0 and 180 degrees, so the cosine states the identity
+# uniformly across the angle range.
+# See `openspec/changes/two-stage-angle-identity/`.
+
+COS_IDENTITY_ATOL = 1e-12
+
+EXAMPLE1_GROUP_COL = "taxa"
+EXAMPLE1_LEVEL_COL = "Inv"
+
+
+def _unit(vector: np.ndarray) -> np.ndarray:
+    return vector / np.linalg.norm(vector)
+
+
+def _two_stage(start: np.ndarray, transition: np.ndarray) -> np.ndarray:
+    return np.vstack([start, start + transition])
+
+
+def _two_stage_pairs() -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    rng = np.random.default_rng(7)
+    pairs = {
+        "near-zero-3d": (
+            _two_stage(np.array([1.5, -0.5, 2.0]), np.array([1.0, 2.0, 3.0])),
+            _two_stage(np.array([-4.0, 0.5, 1.0]), np.array([1.0, 2.0, 3.001])),
+        ),
+        "obtuse-2d": (
+            _two_stage(np.array([0.5, 0.5]), np.array([1.0, 0.0])),
+            _two_stage(np.array([-2.0, 3.0]), np.array([-1.0, 0.5])),
+        ),
+        "generic-6d": (
+            _two_stage(rng.standard_normal(6), rng.standard_normal(6)),
+            _two_stage(rng.standard_normal(6), rng.standard_normal(6)),
+        ),
+    }
+    for draw in range(3):
+        pairs[f"random-4d-{draw}"] = (
+            _two_stage(rng.standard_normal(4), rng.standard_normal(4)),
+            _two_stage(rng.standard_normal(4), rng.standard_normal(4)),
+        )
+    return pairs
+
+
+@pytest.mark.parametrize("pair_id", sorted(_two_stage_pairs()))
+def test_two_stage_angle_is_the_transition_vector_angle(pair_id: str):
+    """Pairwise `angle` at two stages equals the direct transition-vector angle."""
+    left, right = _two_stage_pairs()[pair_id]
+
+    angle = _angle_between(left, right)
+    expected_cos = float(_unit(left[1] - left[0]) @ _unit(right[1] - right[0]))
+
+    assert np.cos(np.deg2rad(angle)) == pytest.approx(expected_cos, abs=COS_IDENTITY_ATOL)
+
+
+def _example1_angles_and_transitions(data_dir):
+    """Run the example1 pipeline (no RRPP): angles, unit transitions, group order."""
+    import pandas as pd
+    from sklearn.decomposition import PCA
+
+    from motco.stats.design import build_ls_means, get_model_matrix
+    from motco.stats.trajectory import get_observed_vectors
+
+    df = pd.read_csv(data_dir / "evo_649_sm_example1.csv")
+    feature_cols = [
+        c
+        for c in df.select_dtypes(include=[np.number]).columns
+        if c not in {EXAMPLE1_GROUP_COL, EXAMPLE1_LEVEL_COL}
+    ]
+    X = df[[EXAMPLE1_GROUP_COL, EXAMPLE1_LEVEL_COL]].copy()
+    g_levels = sorted(pd.unique(X[EXAMPLE1_GROUP_COL].astype(str)).tolist())
+    l_levels = sorted(pd.unique(X[EXAMPLE1_LEVEL_COL].astype(str)).tolist())
+    assert len(l_levels) == 2, "example1 is the two-stage fixture"
+
+    model_full = get_model_matrix(
+        X, group_col=EXAMPLE1_GROUP_COL, level_col=EXAMPLE1_LEVEL_COL, full=True
+    )
+    ls_means = build_ls_means(g_levels, l_levels, full=True)
+    Y = pd.DataFrame(PCA(n_components=2).fit_transform(df[feature_cols]))
+    contrast = [[2 * gi, 2 * gi + 1] for gi in range(len(g_levels))]
+
+    _, angles, _ = estimate_difference(Y, model_full, ls_means, contrast)
+
+    # Same fitted LS means as the estimate_difference call above.
+    obs_vect = np.asarray(
+        get_observed_vectors(
+            X, Y, group_col=EXAMPLE1_GROUP_COL, level_col=EXAMPLE1_LEVEL_COL, full=True
+        ),
+        dtype=float,
+    )
+    transitions = [_unit(obs_vect[2 * gi + 1] - obs_vect[2 * gi]) for gi in range(len(g_levels))]
+    return angles, transitions, g_levels
+
+
+def test_example1_angles_equal_direct_vector_angles(data_dir):
+    """On the committed two-stage fixture the identity holds pair by pair."""
+    angles, transitions, g_levels = _example1_angles_and_transitions(data_dir)
+
+    for i in range(len(g_levels)):
+        for j in range(i + 1, len(g_levels)):
+            expected_cos = float(transitions[i] @ transitions[j])
+
+            assert np.cos(np.deg2rad(angles[i, j])) == pytest.approx(
+                expected_cos, abs=COS_IDENTITY_ATOL
+            )
+
+    # Coarse sanity: the direct-vector angles are the supplement-side values —
+    # the ones the progression convention reports (see the R-artifact test).
+    assert float(angles[g_levels.index("t1"), g_levels.index("t3")]) == pytest.approx(
+        74.70, abs=0.01
+    )
+    assert float(angles[g_levels.index("t2"), g_levels.index("t3")]) == pytest.approx(
+        76.49, abs=0.01
+    )
+
+
+def test_example1_committed_angles_are_the_sign_anchor_artifact(data_dir):
+    """R's committed angles are the direct-vector angles up to a supplement.
+
+    The reference signs PC1 by the raw first-stage row
+    (`evo_649_sm_suppmat.r:64`), so its sign — and hence whether it reports θ
+    or 180 − θ — depends on where each trajectory sits relative to the PCA
+    origin. Every committed example1 angle must therefore equal the
+    direct-vector angle or its supplement, never anything else.
+    """
+    import pandas as pd
+
+    angles, _, g_levels = _example1_angles_and_transitions(data_dir)
+    committed = pd.read_csv(data_dir / "results_example1.csv")
+
+    for _, row in committed.iterrows():
+        i = g_levels.index(str(row["group 1"]))
+        j = g_levels.index(str(row["group 2"]))
+        theta = float(angles[i, j])
+        expected = float(row["angle"])
+
+        assert min(abs(theta - expected), abs((180.0 - theta) - expected)) < 1e-3

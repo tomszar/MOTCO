@@ -9,7 +9,7 @@ from sklearn.decomposition import PCA
 
 from motco.stats.design import build_ls_means, get_model_matrix
 from motco.stats.permutation import RRPP
-from motco.stats.trajectory import estimate_difference
+from motco.stats.trajectory import estimate_difference, get_observed_vectors
 
 
 def _feature_columns(df: pd.DataFrame, group_col: str, level_col: str) -> list[str]:
@@ -120,6 +120,18 @@ def test_example1_expected_results_match(data_dir):
 
     deltas, angles, _ = estimate_difference(Y, M_full, LS, contrast)
 
+    # Expected angles under the progression convention: with two stages the
+    # pairwise angle is identically the angle between the unit transition
+    # vectors of the same fitted LS means
+    # (openspec/specs/trajectory-orientation-invariance).
+    assert L == 2, "example1 is the two-stage fixture"
+    obs_vect = np.asarray(
+        get_observed_vectors(X, Y, group_col=group_col, level_col=level_col, full=True),
+        dtype=float,
+    )
+    transitions = [obs_vect[2 * gi + 1] - obs_vect[2 * gi] for gi in range(len(g_levels))]
+    units = [t / np.linalg.norm(t) for t in transitions]
+
     dist_delta, dist_angle, _ = RRPP(
         Y, M_full, M_red, LS, contrast, permutations=PERMS, n_jobs=N_JOBS
     )
@@ -144,6 +156,7 @@ def test_example1_expected_results_match(data_dir):
 
         i = g_levels.index(g1)
         j = g_levels.index(g2)
+        exp_direct = float(np.degrees(np.arccos(np.clip(units[i] @ units[j], -1.0, 1.0))))
 
         ang = float(angles[i, j])
         mag = float(deltas[i, j])
@@ -151,17 +164,20 @@ def test_example1_expected_results_match(data_dir):
         p_mag = _pval_right_tailed(dist_delta, mag, i, j)
 
         print(f"\nComparing {g1} vs {g2}:")
-        print(f"  Angle:     {ang:10.5f} (expected: {exp_angle:10.5f} or {180.0 - exp_angle:10.5f})")
+        print(f"  Angle:     {ang:10.5f} (expected: {exp_direct:10.5f}; committed: {exp_angle:10.5f})")
         print(f"  Magnitude: {mag:10.5f} (expected: {exp_mag:10.5f})")
         print(f"  Angle p:   {p_ang:10.4f} (expected: {exp_angle_p:10.4f})")
         print(f"  Mag   p:   {p_mag:10.4f} (expected: {exp_mag_p:10.4f})")
 
-        angle_ok = np.isclose(ang, exp_angle, atol=1e-3) or np.isclose(
-            ang, 180.0 - exp_angle, atol=1e-3
+        # The committed R angle is the direct-vector angle up to a supplement
+        # (raw sign anchor, evo_649_sm_suppmat.r:64). The expectation itself is
+        # the direct-vector angle — a supplement in the output must fail.
+        assert min(abs(exp_angle - exp_direct), abs(exp_angle - (180.0 - exp_direct))) < 1e-3, (
+            f"Committed angle for {g1} vs {g2} is neither the direct-vector angle nor"
+            f" its supplement: committed {exp_angle:.5f}, direct {exp_direct:.5f}"
         )
-        assert angle_ok, (
-            f"Angle mismatch for {g1} vs {g2}: got {ang:.5f}, expected {exp_angle:.5f}"
-            f" (accepting 180-exp as well: {(180.0 - exp_angle):.5f})"
+        assert np.isclose(ang, exp_direct, atol=1e-6), (
+            f"Angle mismatch for {g1} vs {g2}: got {ang:.5f}, expected {exp_direct:.5f}"
         )
         assert np.isclose(mag, exp_mag, atol=1e-3), (
             f"Magnitude mismatch for {g1} vs {g2}: got {mag:.5f}, expected {exp_mag:.5f}"
