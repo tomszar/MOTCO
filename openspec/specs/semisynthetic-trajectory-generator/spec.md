@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Generate MOTCO-ready semi-synthetic trajectory datasets from InterSIM outputs using the clusters-as-stages assumption, reproducible group assignment, trajectory effect injection, and explicit truth metadata.
+Generate MOTCO-ready semi-synthetic trajectory datasets with the numpy generator, sampling from the cached InterSIM reference (no R at runtime), using the clusters-as-stages assumption, reproducible group assignment, trajectory effect injection, and explicit truth metadata.
 
 ## Requirements
 
