@@ -222,6 +222,11 @@ def _require_surgery_headroom(cells: list[SimulationCell]) -> None:
     Cells that explicitly opt into ``surgery_censoring="clamp"`` are exempt —
     they have accepted partial surgeries, and their records carry the censored
     flag for the summaries to surface.
+
+    The headroom is read from each cell's *own* generator parameters, so a study
+    sweeping ``generator.baseline_continuity`` is checked per continuity value:
+    higher continuity shrinks the stage-active union and grows the destination
+    pool, so an effect that fails at ρ = 0 may enumerate at a higher ρ.
     """
 
     reference: IntersimReference | None = None

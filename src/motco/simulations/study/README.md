@@ -301,6 +301,7 @@ results/
     ├── type_i.png
     ├── config_spectrum.csv        recorded latent eigengaps per cell × configuration
     ├── eigengap_stratified_power.csv  orientation power by eigengap tercile
+    ├── continuity_resolved_orientation.csv  only when the grid sweeps baseline continuity
     ├── acceptance_report.csv      acceptance target evaluation
     └── acceptance_report.json
 ```
@@ -357,8 +358,8 @@ diagnostics:
 
 ### Eigengap reporting
 
-`motco_study.py report` writes two spectrum tables beside the existing ones,
-from recorded values only — no dataset is regenerated and no spectrum
+`motco_study.py report` writes up to three spectrum tables beside the existing
+ones, from recorded values only — no dataset is regenerated and no spectrum
 recomputed:
 
 - `config_spectrum.csv` — one row per (cell, configuration ∈ {`pooled`, group
@@ -370,6 +371,16 @@ recomputed:
   rates within **within-cell terciles** of the recorded pooled eigengap, with
   per-stratum counts and Monte Carlo SEs. A cell whose records carry no spectrum
   is emitted with `status = unavailable` rather than dropped.
+- `continuity_resolved_orientation.csv` — **only when the merged set spans more
+  than one `generator.baseline_continuity` value.** One row per (continuity,
+  mode, effect, statistic) with the rejection rate, the recorded pooled-eigengap
+  distribution (mean and terciles), and the dispersion of
+  `null_summary["angle"]["q95"]`. The eigengap is the point of the table: power
+  that rises along ρ should be traceable to a configuration that acquired a
+  dominant axis, which is the observable that carries a continuity-conditioned
+  orientation claim to real data — not the knob itself. A study that holds the
+  axis fixed writes no such file, and records predating the axis are excluded
+  rather than folded into the ρ = 0 bin.
 
 ### Angle-pivotality diagnostic
 

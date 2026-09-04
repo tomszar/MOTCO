@@ -7,9 +7,17 @@ orientation is resolvable: a near-isotropic configuration has no dominant axis
 for PC1 to lock onto, its ``angle`` permutation null is wide, and the replicate
 cannot reject however large its observed angle.
 
-Both tables here read **recorded** values only — they never regenerate a dataset
-or recompute a spectrum from raw data — and they qualify reporting rather than
-changing any statistic or decision.
+The continuity-resolved table extends the same idea along the generator's
+baseline-continuity axis (``semisynthetic.SemiSyntheticTrajectoryParams.
+baseline_continuity``): a baseline whose stage programs persist gives the
+configuration a direction to differ in, and the table pairs the resulting
+orientation power with the eigengap that is supposed to explain it — so a power
+difference along the axis is read off the recorded geometry rather than off the
+knob.
+
+Every table here reads **recorded** values only — they never regenerate a
+dataset or recompute a spectrum from raw data — and they qualify reporting
+rather than changing any statistic or decision.
 """
 
 from __future__ import annotations
@@ -289,6 +297,177 @@ def stratify_power_by_eigengap(
     ).reset_index(drop=True)
 
 
+#: Truth-metadata key recording the baseline stage-program continuity a record
+#: was generated under. Absent from records written before the axis existed.
+CONTINUITY_KEY = "baseline_continuity"
+
+#: Terciles of the recorded eigengap, reported per continuity value.
+_CONTINUITY_QUANTILES: tuple[tuple[str, float], ...] = (
+    ("q33", 1.0 / 3.0),
+    ("median", 0.50),
+    ("q67", 2.0 / 3.0),
+)
+
+
+def record_continuity(record: SimulationReplicateResult) -> float | None:
+    """Baseline continuity the record was generated under, or ``None``.
+
+    ``None`` covers records written before the continuity axis existed; they are
+    a different fact from a recorded ρ of 0 and are excluded from the
+    continuity-resolved view rather than folded into the zero bin.
+    """
+
+    value = (record.truth_metadata or {}).get(CONTINUITY_KEY)
+    if value is None:
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
+def resolve_orientation_by_continuity(
+    records: Sequence[SimulationReplicateResult],
+    *,
+    alpha: float = 0.05,
+    statistics: Sequence[str] = ("delta", "angle", "shape"),
+    modes: Sequence[str] = STRATIFIED_MODES,
+) -> pd.DataFrame:
+    """Orientation operating characteristics resolved by baseline continuity.
+
+    One row per (continuity value, mode, effect size, statistic), pooling the
+    cells that share those coordinates. Alongside the rejection rate each row
+    carries the recorded pooled-eigengap distribution and the dispersion of the
+    per-replicate ``angle`` permutation-null width, because the *eigengap* — not
+    the knob — is the observable expected to carry a continuity-conditioned
+    orientation claim to real data: power that rises along ρ should be traceable
+    to a configuration that acquired a dominant axis.
+
+    Returns an **empty frame** unless the record set spans at least two distinct
+    continuity values, so a study that holds the axis fixed reports exactly what
+    it reported before the axis existed.
+    """
+
+    if not (0 < alpha < 1):
+        raise ValueError("alpha must be between 0 and 1.")
+
+    wanted = set(modes)
+    buckets: dict[tuple[float, str, float | None], list[SimulationReplicateResult]] = {}
+    for record in records:
+        if record.status != "completed" or record.phase not in POWER_PHASES:
+            continue
+        continuity = record_continuity(record)
+        if continuity is None:
+            continue
+        meta = dict(record.cell_metadata)
+        mode = _resolve_mode(meta, record.phase)
+        if mode not in wanted:
+            continue
+        effect = meta.get("effect_size")
+        key = (continuity, mode, None if effect is None else float(effect))
+        buckets.setdefault(key, []).append(record)
+
+    if len({key[0] for key in buckets}) < 2:
+        return pd.DataFrame(columns=list(_CONTINUITY_COLUMNS))
+
+    rows: list[dict[str, Any]] = []
+    for (continuity, mode, effect), group in sorted(buckets.items(), key=_continuity_sort_key):
+        gaps = [gap for gap in (pooled_eigengap(record) for record in group) if gap is not None]
+        widths = [
+            width
+            for width in (_angle_null_width(record) for record in group)
+            if width is not None
+        ]
+        identity = {
+            "baseline_continuity": continuity,
+            "trajectory_mode": mode,
+            "effect_size": effect,
+            "n_cells": len({record.cell_id for record in group}),
+            "n_replicates": len(group),
+        }
+        geometry = {
+            "n_eigengap_available": len(gaps),
+            "mean_eigengap": _mean(gaps),
+            **{
+                f"{name}_eigengap": (float(np.quantile(gaps, q)) if gaps else None)
+                for name, q in _CONTINUITY_QUANTILES
+            },
+            "n_angle_null_available": len(widths),
+            "median_angle_null_q95": (
+                float(np.quantile(widths, 0.5)) if widths else None
+            ),
+            "iqr_angle_null_q95": (
+                float(np.quantile(widths, 0.75) - np.quantile(widths, 0.25))
+                if widths
+                else None
+            ),
+            "sd_angle_null_q95": _sd(widths),
+        }
+        for statistic in statistics:
+            p_values = [
+                float(p)
+                for record in group
+                if (p := record.p_values.get(statistic)) is not None
+                and math.isfinite(float(p))
+            ]
+            rejected = sum(p < alpha for p in p_values)
+            rate = rejected / len(p_values) if p_values else None
+            rows.append(
+                {
+                    **identity,
+                    "statistic": statistic,
+                    "n_available": len(p_values),
+                    "n_rejected": rejected,
+                    "rejection_rate": rate,
+                    "monte_carlo_se": (
+                        math.sqrt(rate * (1.0 - rate) / len(p_values))
+                        if rate is not None
+                        else None
+                    ),
+                    **geometry,
+                }
+            )
+
+    return pd.DataFrame(rows, columns=list(_CONTINUITY_COLUMNS))
+
+
+_CONTINUITY_COLUMNS: tuple[str, ...] = (
+    "baseline_continuity",
+    "trajectory_mode",
+    "effect_size",
+    "statistic",
+    "n_cells",
+    "n_replicates",
+    "n_available",
+    "n_rejected",
+    "rejection_rate",
+    "monte_carlo_se",
+    "n_eigengap_available",
+    "mean_eigengap",
+    "q33_eigengap",
+    "median_eigengap",
+    "q67_eigengap",
+    "n_angle_null_available",
+    "median_angle_null_q95",
+    "iqr_angle_null_q95",
+    "sd_angle_null_q95",
+)
+
+
+def _continuity_sort_key(item: tuple[tuple[float, str, float | None], Any]) -> tuple[Any, ...]:
+    continuity, mode, effect = item[0]
+    return (continuity, mode, math.inf if effect is None else effect)
+
+
+def _angle_null_width(record: SimulationReplicateResult) -> float | None:
+    """Recorded 95th-percentile width of this replicate's ``angle`` null."""
+
+    entry = (record.null_summary or {}).get("angle") or {}
+    value = entry.get("q95")
+    if value is None:
+        return None
+    value = float(value)
+    return value if math.isfinite(value) else None
+
+
 def _stratified_cells(
     records: Iterable[SimulationReplicateResult],
     modes: Sequence[str],
@@ -335,12 +514,15 @@ def _sd(values: Sequence[float]) -> float | None:
 
 
 __all__ = [
+    "CONTINUITY_KEY",
     "DEFAULT_N_STRATA",
     "POWER_PHASES",
     "STRATIFIED_MODES",
     "group_eigengaps",
     "has_spectrum",
     "pooled_eigengap",
+    "record_continuity",
+    "resolve_orientation_by_continuity",
     "stratify_power_by_eigengap",
     "summarize_config_spectrum",
 ]

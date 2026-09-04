@@ -8,9 +8,17 @@ honours the biological cascade (methylation drives expression drives protein)
 and keeps the datasets realistic rather than tailored to MOTCO: we manipulate
 only the original methylation features and never the latent space.
 
-Group A inherits a random baseline trajectory (independent per-stage methylation
-indicators, intentionally *not* forced continuous). Group B is a deterministic
-transform of A's **methylation** indicators:
+Group A inherits a random baseline trajectory whose per-stage methylation
+indicators are drawn along a declared *continuity axis*
+(``baseline_continuity``, ρ ∈ [0, 1)): each CpG's differential status follows a
+stationary first-order Markov chain across stages, so the per-stage Bernoulli
+(``p_dmp``) marginal is preserved at every ρ while the cross-stage correlation
+is ρ^|t−s|. ρ = 0 is the independent, deliberately *not* forced continuous
+endpoint — the isotropic stress test, byte-identical to the pre-axis generator —
+and larger ρ makes stage means *trend*: pairwise distances grow with stage
+separation, giving the configuration a dominant PC1 (a direction to differ in)
+instead of a near-regular simplex with a near-zero eigengap. Group B is a
+deterministic transform of A's **methylation** indicators:
 
 - ``none``        -- identical indicators (null).
 - ``translation`` -- A's stage-changing sites unchanged, plus an extra set ``U``
@@ -61,9 +69,9 @@ import pandas as pd
 
 from motco.simulations.generator import (
     GeneratedOmics,
-    bernoulli_indicators,
     derive_coupled_indicators,
     generate_omics,
+    markov_indicators,
     omic_population_means,
 )
 from motco.simulations.reference import IntersimReference, load_reference
@@ -94,7 +102,11 @@ class SemiSyntheticTrajectoryParams:
     effect knob described in the module docstring (``0`` is null for all modes).
     ``p_dmp`` is the per-stage probability that a methylation feature is
     differential (InterSIM's ``p.DMP``); expression/protein indicators are
-    derived from it via the cross-omic maps. ``delta_*`` are the per-omic
+    derived from it via the cross-omic maps. ``baseline_continuity`` (ρ) is the
+    baseline stage-program continuity described in the module docstring: 0 draws
+    each stage's program independently, higher values make a CpG's differential
+    status persist across adjacent stages with correlation ρ while holding every
+    stage's marginal at ``p_dmp``. ``delta_*`` are the per-omic
     mean-shift sizes (InterSIM's ``delta.*``). ``shape_kind`` selects the
     single-interior-stage perturbation used by ``shape``. ``magnitude_kind``
     selects whether ``magnitude`` scales group B's methylation effect at *all*
@@ -116,6 +128,7 @@ class SemiSyntheticTrajectoryParams:
     group_ratio: float = 0.5
     group_labels: tuple[str, str] = ("A", "B")
     p_dmp: float = 0.2
+    baseline_continuity: float = 0.0
     delta_methyl: float = 2.0
     delta_expr: float = 2.0
     delta_protein: float = 2.0
@@ -222,6 +235,12 @@ def _validate_params(params: SemiSyntheticTrajectoryParams) -> None:
         raise SemiSyntheticTrajectoryError("group_effect_size must be non-negative.")
     if not (0 <= params.p_dmp <= 1):
         raise SemiSyntheticTrajectoryError("p_dmp must be between 0 and 1.")
+    if not (0 <= params.baseline_continuity < 1):
+        raise SemiSyntheticTrajectoryError(
+            "baseline_continuity must be in [0, 1); "
+            f"got {params.baseline_continuity}. (1 is a degenerate constant "
+            "stage program and is excluded.)"
+        )
     if params.n_stages < 2:
         raise SemiSyntheticTrajectoryError("n_stages must be at least 2.")
     if params.trajectory_mode == "shape" and params.n_stages < 3:
@@ -275,9 +294,16 @@ def _baseline_methyl(
     ref: IntersimReference,
     params: SemiSyntheticTrajectoryParams,
 ) -> np.ndarray:
-    """Group A's per-stage methylation differential indicators (binary)."""
+    """Group A's per-stage methylation differential indicators (binary).
 
-    return bernoulli_indicators(rng, ref.n_cpg, params.n_stages, params.p_dmp)
+    Drawn as a stationary Markov chain along the stage axis with persistence
+    ``params.baseline_continuity``; at the default 0 this is exactly the
+    independent per-stage draw (see :func:`~motco.simulations.generator.markov_indicators`).
+    """
+
+    return markov_indicators(
+        rng, ref.n_cpg, params.n_stages, params.p_dmp, params.baseline_continuity
+    )
 
 
 def _derive_group(methyl: np.ndarray, ref: IntersimReference) -> _GroupIndicators:
@@ -596,6 +622,7 @@ def _build_truth(
         "group_ratio": params.group_ratio,
         "n_stages": params.n_stages,
         "p_dmp": params.p_dmp,
+        "baseline_continuity": params.baseline_continuity,
         "shape_kind": params.shape_kind,
         "magnitude_kind": params.magnitude_kind,
         "surgery_censoring": params.surgery_censoring,
@@ -675,6 +702,22 @@ POOL_LIMITED_MODES: frozenset[str] = frozenset({"orientation", "translation", "s
 HEADROOM_GUARD_SIGMAS: float = 3.0
 
 
+def expected_stage_active_fraction(p_dmp: float, n_stages: int, continuity: float = 0.0) -> float:
+    """Probability that a CpG is differential in at least one stage.
+
+    Under the baseline's stationary Markov chain the CpG stays non-differential
+    across every stage with probability ``(1 − p)·(1 − p·(1 − ρ))^(n − 1)``
+    (start non-differential, then take ``n − 1`` non-entering transitions), so
+    the stage-active union is its complement. At ρ = 0 this is the independence
+    union ``1 − (1 − p)^n``.
+    """
+
+    if n_stages <= 0:
+        return 0.0
+    stay_inactive = 1.0 - p_dmp * (1.0 - continuity)
+    return 1.0 - (1.0 - p_dmp) * stay_inactive ** (n_stages - 1)
+
+
 @dataclass(frozen=True)
 class SurgeryHeadroom:
     """Expected pool headroom for one cell's pool-limited surgery.
@@ -706,11 +749,17 @@ def expected_surgery_headroom(
     ``magnitude``, and ``shape`` with ``shape_kind='magnitude'``), and for a
     zero effect, where the transform short-circuits to group A's baseline.
 
-    Orientation and shape use the binomial expectation of the stage-active
-    fraction, ``a = 1 − (1 − p_dmp)^n_stages``. Translation's candidate pool
-    depends on the CpG→gene incidence — a CpG qualifies only if it is
-    stage-inactive *and* every CpG mapped to its gene is too — so it is computed
-    from the cached reference maps rather than approximated.
+    Orientation and shape use the expected stage-active fraction under the
+    baseline's Markov continuity ρ,
+    ``a = 1 − (1 − p_dmp)·(1 − p_dmp·(1 − ρ))^(n_stages − 1)`` — the complement
+    of never visiting the differential state in ``n_stages`` steps — which
+    reduces to the independence union ``1 − (1 − p_dmp)^n_stages`` at ρ = 0.
+    Higher continuity makes stage programs overlap, shrinking the active union
+    and *growing* the destination pool, so headroom improves along the axis.
+    Translation's candidate pool depends on the CpG→gene incidence — a CpG
+    qualifies only if it is stage-inactive *and* every CpG mapped to its gene is
+    too — so it is computed from the cached reference maps rather than
+    approximated.
     """
 
     _validate_params(params)
@@ -723,7 +772,9 @@ def expected_surgery_headroom(
 
     ref = reference if reference is not None else load_reference()
     n = float(ref.n_cpg)
-    active_fraction = 1.0 - (1.0 - params.p_dmp) ** params.n_stages
+    active_fraction = expected_stage_active_fraction(
+        params.p_dmp, params.n_stages, params.baseline_continuity
+    )
 
     if mode == "translation":
         pool = _expected_translation_pool(ref, active_fraction)

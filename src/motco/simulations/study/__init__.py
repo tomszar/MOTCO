@@ -55,6 +55,7 @@ from motco.simulations.study.sharding import (
     run_shard,
 )
 from motco.simulations.study.spectrum import (
+    resolve_orientation_by_continuity,
     stratify_power_by_eigengap,
     summarize_config_spectrum,
 )
@@ -113,6 +114,7 @@ __all__ = [
     "render_selected_components",
     "render_specificity_matrix",
     "render_type_i_plot",
+    "resolve_orientation_by_continuity",
     "run_shard",
     "stratify_power_by_eigengap",
     "summarize_attribution",

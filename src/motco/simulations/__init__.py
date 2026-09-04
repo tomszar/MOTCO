@@ -44,6 +44,7 @@ from .generator import (
     bernoulli_indicators,
     derive_coupled_indicators,
     generate_omics,
+    markov_indicators,
     omic_population_means,
 )
 from .grid import (
@@ -113,6 +114,7 @@ from .semisynthetic import (
     SemiSyntheticTrajectoryError,
     SemiSyntheticTrajectoryParams,
     SurgeryHeadroom,
+    expected_stage_active_fraction,
     expected_surgery_headroom,
     generate_semisynthetic_trajectory,
 )
@@ -151,6 +153,7 @@ __all__ = [
     "SurgeryHeadroom",
     "POOL_LIMITED_MODES",
     "HEADROOM_GUARD_SIGMAS",
+    "expected_stage_active_fraction",
     "expected_surgery_headroom",
     "AttributionDiagnosticSettings",
     "SimulationEvaluationError",
@@ -203,6 +206,7 @@ __all__ = [
     "omic_population_means",
     "load_fidelity_fixture",
     "load_visual_fixture",
+    "markov_indicators",
     "run_fidelity_visual",
     "run_numpy_cell",
     "validate_grid",
