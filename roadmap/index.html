@@ -1,0 +1,1449 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Multi-omics Trajectory Comparison — latent spaces (PLS, SNF) and group differences">
+      
+      
+      
+      
+        <link rel="prev" href="..">
+      
+      
+        <link rel="next" href="../phase5-readiness/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Scientific Roadmap - MOTCO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#motco-scientific-roadmap" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="MOTCO" class="md-header__button md-logo" aria-label="MOTCO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            MOTCO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Scientific Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="teal" data-md-color-accent="teal"  aria-hidden="true"  type="radio" name="__palette" id="__palette_0">
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/tomszar/MOTCO" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tomszar/MOTCO
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="MOTCO" class="md-nav__button md-logo" aria-label="MOTCO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    MOTCO
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/tomszar/MOTCO" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    tomszar/MOTCO
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scientific Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scientific Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#objective" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-position" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current position
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current position">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-yet-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet established
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-close-and-preserve-the-current-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Close and preserve the current baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-resolve-shape-invariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Resolve shape invariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-audit-orientation-and-shape-constructions-before-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Audit orientation and shape constructions before integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-implement-production-orientation-driver-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Implement production orientation-driver attribution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-repeat-the-medium-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Repeat the medium pilot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-paper-grade-pls-operating-characteristic-study" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Paper-grade PLS operating-characteristic study
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-real-data-case-study" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Real-data case study
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-7-optional-snf-native-trajectory-methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7 — Optional SNF-native trajectory methodology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-cutting-engineering-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-cutting engineering work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explicitly-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicitly deferred
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-three-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next three changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../phase5-readiness/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 5 Readiness
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Study Reports
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Study Reports
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reports/phase4-medium-pls-pilot-2026-08-27/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Phase 4 medium PLS pilot (current)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reports/mvalue-pls-pilot-2026-07-30/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    M-value/PLS specificity pilot (historical, superseded)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    API Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/pls/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLS-DA
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/snf/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SNF
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sd/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trajectory Analysis (SD)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/attribution/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Orientation Driver Attribution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/simulations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Simulations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#objective" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Objective
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#current-position" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Current position
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Current position">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Established
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-yet-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not yet established
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority sequence
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-close-and-preserve-the-current-baseline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — Close and preserve the current baseline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-resolve-shape-invariance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Resolve shape invariance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-audit-orientation-and-shape-constructions-before-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Audit orientation and shape constructions before integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-implement-production-orientation-driver-attribution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Implement production orientation-driver attribution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-repeat-the-medium-pilot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Repeat the medium pilot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-paper-grade-pls-operating-characteristic-study" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — Paper-grade PLS operating-characteristic study
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-real-data-case-study" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — Real-data case study
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-7-optional-snf-native-trajectory-methodology" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 7 — Optional SNF-native trajectory methodology
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cross-cutting-engineering-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cross-cutting engineering work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#explicitly-deferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicitly deferred
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#next-three-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Next three changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="motco-scientific-roadmap">MOTCO Scientific Roadmap</h1>
+<h2 id="objective">Objective</h2>
+<p>Develop MOTCO into a scientifically defensible workflow that can:</p>
+<ol>
+<li>detect whether groups follow different multivariate molecular trajectories;</li>
+<li>distinguish progression magnitude and orientation reliably;</li>
+<li>treat shape with an explicitly validated interpretation; and</li>
+<li>identify stable feature and pathway drivers after a global trajectory difference is detected.</li>
+</ol>
+<p>The roadmap prioritizes interpretability and validation before larger simulations or additional integration methods.</p>
+<h2 id="current-position">Current position</h2>
+<h3 id="established">Established</h3>
+<ul>
+<li>Methylation is converted from B values to M values before standardization and PLS integration.</li>
+<li>Under that contract, magnitude is specific and well behaved: the 50-replicate pilot reached delta power 1.00 at the largest effect, with angle and shape rejection rates of 0.02.</li>
+<li>PLS is the preferred production measurement space for MOTCO's Euclidean magnitude and orientation statistics.</li>
+<li>A controlled inverse-PLS study showed that latent interventions reconstruct reproducibly into feature space, with round-trip errors near machine precision.</li>
+<li>A 45-degree latent orientation change reconstructed as approximately 42 degrees in feature space with negligible magnitude change.</li>
+<li>Latent orientation differences represent different relative combinations of stage-associated molecular patterns, usually as dense loading-aligned feature changes.</li>
+<li>SNF is not intrinsically unsuitable for integration, but its graph-spectral geometry is not naturally aligned with MOTCO's current Euclidean path-length and angle statistics.</li>
+<li>Shape invariance has been audited and corrected: production <code>shape</code> removes translation, uniform scale, and any orthogonal transformation. Reflections are aligned away at every ambient dimension (<code>unify-shape-reflection-policy</code>, resolving audit finding F3); the earlier "reflections retained" contract bound only in a full-rank latent space and was vacuous everywhere else.</li>
+</ul>
+<h3 id="not-yet-established">Not yet established</h3>
+<ul>
+<li>The production orientation and shape feature-surgery modes are not geometrically pure before integration.</li>
+<li>Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.</li>
+<li>The orientation sign-anchor defect fixed on 2026-08-28 was real but is <strong>not</strong> the cause of the orientation shortfall; corrected power is 0.68 at the top effect (<a href="../reports/orientation-sign-anchor-2026-08-28/">report</a>).</li>
+<li>The orientation shortfall is <strong>diagnosed</strong> as of 2026-09-01: the RRPP null for <code>angle</code> tracks its own observed statistic almost one-for-one (slope 0.811), which explains the rejection inversion, but the tracking is load-bearing rather than corrigible — <code>angle</code> proceeds as specified and the 0.80 floor becomes a design-point question (<a href="../reports/angle-null-pivotality-2026-09-01/">report</a>).</li>
+<li>A production feature-driver workflow for significant orientation differences is designed conceptually but not implemented.</li>
+<li>The 500-replicate paper-grade grid should not run until the orientation/shape gates below are resolved.</li>
+</ul>
+<h2 id="priority-sequence">Priority sequence</h2>
+<pre><code class="language-text">Close current studies
+        |
+        v
+Audit shape estimator invariance
+        |
+        v
+Audit/correct orientation and shape constructions
+        |
+        v
+Implement orientation-driver attribution
+        |
+        v
+Repeat the medium pilot
+        |
+        v
+Run the paper-grade PLS study
+        |
+        v
+Validate on a real multi-omics case study
+        |
+        v
+Optional graph-native SNF methods
+</code></pre>
+<h2 id="phase-0-close-and-preserve-the-current-baseline">Phase 0 — Close and preserve the current baseline</h2>
+<p><strong>Status:</strong> completed on 2026-08-05. The latent-space metric-compatibility and inverse-PLS studies are archived, and their capability specifications are canonical.</p>
+<p><strong>Purpose:</strong> ensure the conclusions already reached remain reproducible and discoverable.</p>
+<p>Work:</p>
+<ul>
+<li>Archive the completed latent-space metric-compatibility and inverse-PLS OpenSpec changes.</li>
+<li>Sync their capability specifications into the canonical OpenSpec specs.</li>
+<li>Keep the M-value/PLS pilot report, inverse-study findings, configs, and reproduction commands linked from the documentation.</li>
+<li>Record the current production contract: pooled PLS-DA, M-value methylation, fixed shared coordinate system, and per-statistic interpretation boundaries.</li>
+</ul>
+<p><strong>Exit gate:</strong> passed. A new contributor can locate and reproduce the current magnitude, orientation, shape, and inverse-interpretability evidence from the repository documentation.</p>
+<h2 id="phase-1-resolve-shape-invariance">Phase 1 — Resolve shape invariance</h2>
+<p><strong>Status:</strong> resolved on 2026-08-04; see <a href="../reports/procrustes-shape-invariance-audit-2026-08-04/">Procrustes Shape Invariance Audit</a>.</p>
+<p><strong>Purpose:</strong> determine whether the current nonzero shape response to rigid rotation is intended methodology or an estimator defect.</p>
+<p>Work:</p>
+<ul>
+<li>Create minimal two-dimensional configurations with known translation, uniform scaling, rigid rotation, reflection, and genuine bend transformations.</li>
+<li>Compare MOTCO's GPA/Procrustes output against an analytic expectation and independent reference implementations such as SciPy and the original R procedure.</li>
+<li>Isolate whether any discrepancy comes from centering, centroid-size normalization, rotation/reflection handling, iterative GPA, or the final distance calculation.</li>
+<li>Add permanent invariance and regression tests.</li>
+<li>If necessary, correct the estimator and document any behavioral change; otherwise rename/reinterpret the statistic so its actual invariants are explicit.</li>
+</ul>
+<p><strong>Exit gate:</strong> passed. Rigid translation, scaling, and proper rotation have documented expected outputs enforced by tests. The reflection policy was revisited on 2026-09-03 (<code>unify-shape-reflection-policy</code>): reflections are now aligned away at every ambient dimension, and mirror pairs score zero at full rank and above.</p>
+<h2 id="phase-2-audit-orientation-and-shape-constructions-before-integration">Phase 2 — Audit orientation and shape constructions before integration</h2>
+<p><strong>Status:</strong> resolved on 2026-08-05; see <a href="../reports/realized-generator-geometry-2026-08-05/">Realized Generator Geometry — Phase 2 Findings</a>.</p>
+<p><strong>Purpose:</strong> separate generator cross-talk from integration or estimator cross-talk.</p>
+<p>Work:</p>
+<ul>
+<li>Measure every generated mode directly in the standardized pre-integration feature space.</li>
+<li>For orientation, verify that the group trajectories differ primarily in normalized direction while path length and within-trajectory configuration remain controlled.</li>
+<li>For shape, distinguish a free biological bend from a magnitude-matched bend; do not require a free bend to be magnitude- or orientation-neutral.</li>
+<li>Retain magnitude as the positive control because it is already specific under M-value integration.</li>
+<li>Add construction-level diagnostics to study outputs so each replicate records the realized pre-integration delta, angle, and shape—not only its requested mode/effect size.</li>
+<li>Revise acceptance targets so they reflect achievable properties of the chosen constructions rather than an assumed perfectly diagonal specificity matrix.</li>
+</ul>
+<p><strong>Exit gate:</strong> passed. Each study mode has a documented realized geometry before PLS, and evaluation records analytic population, standardized population, observed standardized, and PLS-latent checkpoints. Orientation is pure in native methylation but mixed after biological cascade propagation; both shape constructions are documented as free/mixed bends rather than shape-specific interventions.</p>
+<h2 id="phase-3-implement-production-orientation-driver-attribution">Phase 3 — Implement production orientation-driver attribution</h2>
+<p><strong>Purpose:</strong> turn a significant global orientation test into stable feature- and pathway-level interpretation.</p>
+<p>For two stages, calculate standardized or covariate-adjusted feature transitions</p>
+<pre><code class="language-text">d_A = LSmean(A, stage 2) - LSmean(A, stage 1)
+d_B = LSmean(B, stage 2) - LSmean(B, stage 1)
+</code></pre>
+<p>and isolate direction from magnitude with</p>
+<pre><code class="language-text">q_observed = d_B / ||d_B|| - d_A / ||d_A||.
+</code></pre>
+<p>Work:</p>
+<ul>
+<li>Keep one pooled preprocessing and PLS model fixed for both groups.</li>
+<li>Reconstruct each group-stage PLS displacement through the same fitted loadings and calculate <code>q_PLS</code> from the reconstructed normalized feature transitions.</li>
+<li>Report <code>q_observed</code>, <code>q_PLS</code>, and their residual so users can see which directional difference PLS retained and omitted.</li>
+<li>Attribution reports both decompositions for trajectories with more than two stages: the adjacent transitions, and the signed principal orientations that decompose the tested <code>angle</code> estimand, the latter qualified by a relative-eigengap degeneracy flag.</li>
+<li>Bootstrap subjects within the appropriate design strata to estimate feature sign stability, rank stability, and top-k selection frequency.</li>
+<li>Add correlated-feature module and pathway summaries; individual features should not be presented as stable drivers without bootstrap support.</li>
+<li>Report standardized and original-unit effects separately.</li>
+<li>Treat pooled VIP as supporting context only: VIP measures pooled importance for stage prediction, not group differences in normalized progression effects.</li>
+</ul>
+<p><strong>Exit gate:</strong> a significant orientation result can produce a reproducible driver report containing transition-specific features/modules, captured-versus-residual contrast, and uncertainty measures without refitting separate group latent spaces.</p>
+<h2 id="phase-4-repeat-the-medium-pilot">Phase 4 — Repeat the medium pilot</h2>
+<p><strong>Purpose:</strong> verify the corrected estimator/constructions before spending cluster time on the definitive study.</p>
+<p>Recommended run:</p>
+<ul>
+<li>PLS integration with M-value methylation</li>
+<li>300 samples and 4 stages</li>
+<li>50–100 replicates per cell</li>
+<li>199 permutations</li>
+<li>Effects 0.00, 0.25, 0.50, 0.75, and 1.00</li>
+<li>Modes: magnitude, orientation, shape, and translation</li>
+<li>Matched seeds and construction-level realized-geometry diagnostics</li>
+</ul>
+<p>Evaluate:</p>
+<ul>
+<li>Per-statistic Type I error under <code>none</code> and translation controls</li>
+<li>Magnitude/delta specificity and monotonic power</li>
+<li>Orientation/angle power and monotonicity</li>
+<li>Shape behavior under the interpretation established in Phase 1</li>
+<li>Off-diagonal rejection rates alongside realized pre-integration geometry</li>
+<li>Stability of PLS component count and attribution summaries</li>
+</ul>
+<p><strong>Exit gate:</strong> no unresolved implementation artifact; magnitude remains specific; orientation reaches an agreed power target with an interpretable curve; shape results match its validated invariance contract. If a target fails, revise the method or scientific claim—not merely the Monte Carlo sample size.</p>
+<p><strong>Status: HOLD</strong> (run 2026-08-27, <a href="../reports/phase4-medium-pls-pilot-2026-08-27/">full report</a>). The pilot ran
+1,900 work units with zero failures using <code>examples/trajectory_power_study/phase4_pilot_100x199.json</code>:
+100 replicates, 199 permutations, n=300, four stages, matched seeds with a shared zero-effect anchor, and
+bounded orientation attribution.</p>
+<p>What passed:</p>
+<ul>
+<li>All eighteen predeclared Type I control tests. Translation leaves every statistic at nominal level at
+  every effect size; the largest control rate anywhere was 0.09 against a bound of 0.0936.</li>
+<li>Magnitude: delta power 1.00 throughout, with angle 0.01 and shape 0.00 at the top effect — the estimator
+  is more specific than the construction, whose population angle is already 39.9°.</li>
+<li>Shape: shape power 0.94–1.00, monotone. The corrected Procrustes estimator detects the constructed bend.</li>
+<li>Diagnostics: selected PLS dimensionality was modally 3 in all 19 cells; all 400 eligible orientation
+  replicates produced valid attribution.</li>
+</ul>
+<p>What failed:</p>
+<ul>
+<li>Orientation angle power is 0.65 at the top effect against the 0.80 floor — over three Monte Carlo standard
+  errors short — and the curve is nearly flat across effects (0.59 → 0.65). <strong>The cause is not yet
+  identified.</strong> The construction is strong and survives integration (81° at population, 57° in the latent
+  space, against an 8.9° latent null floor), so a simple underpowered-signal account should not apply; and
+  the records contradict it directly, since replicates that fail to reject have a <em>larger</em> mean observed
+  angle (66.7°) than those that reject (52.5°). Latent dimensionality, weak construction, cross-talk, and
+  Monte Carlo noise are all ruled out. More replicates would not fix it.</li>
+</ul>
+<p><strong>Update 2026-08-28</strong> (<a href="../reports/orientation-sign-anchor-2026-08-28/">report</a>): an orientation sign-anchor
+  defect was found and fixed — PC1's sign was anchored on the centered first-stage row, which flips for bent
+  trajectories. It was a real bug, but it does <strong>not</strong> explain this failure. On byte-identical data corrected
+  power is 0.64/0.64/0.67/0.68 across effects 0.25 → 1.00: ~3 points higher, still flat, still short of 0.80.
+  The near-180° null mass is unchanged at 21/700, and the realized-geometry figures stand (81° population,
+  57° latent). The shortfall survives correction and remains unexplained.</p>
+<p><strong>Update 2026-09-01</strong> (<a href="../reports/angle-null-pivotality-2026-09-01/">report</a>): the shortfall is
+  <strong>explained</strong>. Each replicate's own <code>angle</code> critical value regresses on its own observed angle with slope
+  0.811 — near-unit tracking, specific to <code>angle</code> (the same slope is 0.030 for <code>delta</code> and 0.058 for <code>shape</code>
+  in the cells where those carry signal). That accounts for the inversion completely: the 32 non-rejecting
+  orientation replicates carry a larger mean observed angle (60.8° vs 46.5°) but a 6.6× larger critical
+  value (103.6° vs 15.8°). The tracking is <strong>not</strong> a defect to remove — a fixed threshold drops power from
+  0.68 to 0.01, and cross-replicate standardization gains only 0.02 — so the statistic and its test are
+  sound, and the gap to 0.80 is a design-point property.</p>
+<p>Two findings carry into Phase 5. Orientation→shape is the only response that first becomes material at the
+PLS checkpoint rather than in the population geometry. And the PLS reconstruction retains only ~6% of the
+observed orientation contrast (cosine 0.08), so its captured-component top-20 precision against generator
+truth is 0.15 while the observed component's is 1.00 — driver reports must use the observed component.
+Component selection saturates at <code>n_stages - 1</code> because supervision is on the stage label, so a space sized
+for stage separation is not sized to preserve group orientation contrast.</p>
+<p><strong>Update 2026-09-02</strong> (<a href="../reports/latent-config-spectrum-2026-09-02/">note</a>): the quantity the pivotality
+report could not name — what makes one replicate resolvable and another not — is now <strong>recorded on every
+replicate</strong>. Each record carries the eigenspectrum of its centered latent stage-mean configuration (pooled
+and per group) and, when permutations run, the pooled relative eigengap over its own permutation draws. The
+study report stratifies orientation power by that eigengap and the pivotality analysis reports its
+association with the null width. It is a recorded covariate only: no statistic, p-value, permutation draw,
+or decision rule changed.</p>
+<p>Before Phase 5, see the <a href="../phase5-readiness/">Phase 5 readiness worklist</a>. Its blocking item — diagnosing
+the orientation shortfall — was <strong>resolved on 2026-09-01</strong> by
+<a href="../reports/angle-null-pivotality-2026-09-01/"><code>diagnose-angle-null-pivotality</code></a>: the co-variation
+hypothesis is confirmed, it explains the inversion, no remedy recovers the power, and <code>angle</code> proceeds as
+specified. What remains: investigate orientation→shape at the PLS checkpoint, revisit latent dimensionality
+if orientation is a primary estimand, and then choose the Phase 5 design point — which now also owns the
+0.80 orientation power floor.</p>
+<p>The July pilot (<a href="../reports/mvalue-pls-pilot-2026-07-30/"><code>mvalue-pls-pilot-2026-07-30.md</code></a>) predates the
+corrected shape estimator and realized-geometry diagnostics. It is retained unchanged as historical evidence
+and is superseded for Phase 4 gate purposes.</p>
+<h2 id="phase-5-paper-grade-pls-operating-characteristic-study">Phase 5 — Paper-grade PLS operating-characteristic study</h2>
+<p><strong>Purpose:</strong> produce the definitive evidence for publication and production guidance.</p>
+<p>Planned baseline:</p>
+<ul>
+<li>500 replicates per cell</li>
+<li>999 permutations per test</li>
+<li>Resumable, sharded execution using <code>examples/trajectory_power_study/study.json</code></li>
+<li>Predeclared acceptance targets and parameter signatures</li>
+</ul>
+<p>Deliverables:</p>
+<ul>
+<li>Per-statistic Type I tables and combined-rule Type I results</li>
+<li>Power curves with Monte Carlo uncertainty</li>
+<li>Mode-by-statistic response matrix interpreted against realized input geometry</li>
+<li>Sensitivity analyses for sample size, retained PLS dimensions, signal density, and relevant nuisance settings</li>
+<li>Runtime, failure, and reproducibility report</li>
+<li>Paper-ready figures and a versioned study report tied to the exact code revision and configuration</li>
+</ul>
+<p><strong>Exit gate:</strong> conclusions are stable at paper-grade Monte Carlo precision, all deviations from preregistered targets are explained, and the report distinguishes statistical operating characteristics from biological construction cross-talk.</p>
+<h2 id="phase-6-real-data-case-study">Phase 6 — Real-data case study</h2>
+<p><strong>Purpose:</strong> demonstrate that the validated method answers a meaningful biological question end to end.</p>
+<p>Work:</p>
+<ul>
+<li>Predefine cohorts, stages, covariates, missing-data handling, and preprocessing.</li>
+<li>Fit one pooled, cross-validated PLS representation.</li>
+<li>Report magnitude, orientation, and validated shape results with uncertainty.</li>
+<li>For significant orientation, produce observed and PLS-reconstructed feature contrasts, bootstrap stability, and pathway/module enrichment.</li>
+<li>Include sensitivity to PLS dimensionality and preprocessing choices.</li>
+<li>Make the analysis reproducible from raw-input contracts to final figures.</li>
+</ul>
+<p><strong>Exit gate:</strong> collaborators can trace each global trajectory claim to stable feature/module drivers and reproduce the result from documented inputs and configuration.</p>
+<h2 id="phase-7-optional-snf-native-trajectory-methodology">Phase 7 — Optional SNF-native trajectory methodology</h2>
+<p><strong>Purpose:</strong> use SNF according to graph geometry rather than forcing Euclidean MOTCO statistics onto spectral coordinates.</p>
+<p>This is not on the critical path for the PLS production workflow.</p>
+<p>Candidate work:</p>
+<ul>
+<li>Define group-stage states on one pooled fused graph.</li>
+<li>Evaluate diffusion or resistance path length as a magnitude analogue.</li>
+<li>Compare transition profiles or diffusion flows as an orientation analogue.</li>
+<li>Compare normalized stage-by-stage diffusion-distance matrices as a configuration analogue.</li>
+<li>Design a permutation scheme that rebuilds or conditions on the graph without invalidating exchangeability.</li>
+<li>Validate every proposed graph statistic on controlled nonlinear manifolds before exposing it as production functionality.</li>
+</ul>
+<p><strong>Exit gate:</strong> an SNF-specific statistic has a clear graph-native estimand, calibrated Type I error, controlled power behavior, and no claim of preserving original feature-space Euclidean geometry.</p>
+<h2 id="cross-cutting-engineering-work">Cross-cutting engineering work</h2>
+<p>These items support every scientific phase:</p>
+<ul>
+<li>Preserve fitted preprocessing, PLS model, component count, feature order, and loadings as a versioned analysis artifact.</li>
+<li>Record seeds, configurations, parameter signatures, software versions, and failed replicates in every study.</li>
+<li>Keep fast deterministic invariance tests separate from slow operating-characteristic studies.</li>
+<li>Add CI coverage for core geometry invariants and study-config validation.</li>
+<li>Prefer structured CSV/JSON outputs plus concise Markdown reports over findings that exist only in notebooks.</li>
+<li>Keep public documentation synchronized with methodological decisions and archived OpenSpec findings.</li>
+<li><strong>Decide the fate of the committed toy fixture</strong> (<code>examples/data/toy/</code>, deferred from <code>docs-sync-audit</code>, 2026-09-04). The fixture predates the numpy generator: its <code>truth.json</code> records <code>intersim_metadata</code> and omits <code>n_stages</code>, <code>p_dmp</code>, and <code>baseline_continuity</code>, and running the current <code>motco simulate</code> at the same seed produces a different dataset. <code>docs-sync-audit</code> corrected the documentation — the <code>toy-dataset</code> spec now describes the fixture as pinned rather than regenerable — but did not resolve the underlying question: regenerate the example data with the numpy generator so the tutorial exercises the shipped code path, or keep it pinned as a historical artifact. Regenerating touches committed example data, <code>examples/motco_example.ipynb</code>, the <code>toy-dataset</code> spec scenarios, and <code>tests/test_toy_dataset.py</code>, so it needs its own change.</li>
+</ul>
+<h2 id="explicitly-deferred">Explicitly deferred</h2>
+<ul>
+<li>Expanding SNF use before graph-native metrics are defined</li>
+<li>Running the 500-replicate study before orientation/shape gates pass</li>
+<li>Interpreting pooled VIP scores as orientation drivers</li>
+<li>Fitting separate, unaligned PLS spaces per group</li>
+<li>Claiming that a latent-space reconstruction is a unique or causal molecular inverse</li>
+<li>Optimizing performance before the statistic and construction contracts are settled</li>
+</ul>
+<h2 id="next-three-changes">Next three changes</h2>
+<ol>
+<li><strong>Add orientation-driver attribution.</strong> Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.</li>
+<li><strong>Repeat the medium pilot.</strong> Re-run the PLS operating-characteristic pilot with corrected shape semantics and construction-level diagnostics.</li>
+<li><strong>Run the paper-grade PLS study.</strong> Proceed only if the medium-pilot gates pass.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
