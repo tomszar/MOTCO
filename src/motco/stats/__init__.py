@@ -26,6 +26,7 @@ from .attribution import (  # noqa: F401
     FeatureEffect,
     InterpretationMetadata,
     OrientationAttributionResult,
+    PrincipalOrientationAttribution,
     TransitionAttribution,
     analyze_orientation_attribution,
     attribution_frames,
@@ -36,7 +37,15 @@ from .design import build_ls_means, center_matrix, get_model_matrix  # noqa: F40
 from .permutation import RRPP  # noqa: F401
 from .pls import calculate_vips, fit_plsda_model, fit_plsda_transform, plsda_doubleCV  # noqa: F401
 from .snf import SNF, get_affinity_matrix, get_spectral  # noqa: F401
-from .trajectory import estimate_betas, estimate_difference, get_observed_vectors, pair_difference  # noqa: F401
+from .trajectory import (  # noqa: F401
+    configuration_spectra,
+    configuration_spectrum,
+    estimate_betas,
+    estimate_difference,
+    get_observed_vectors,
+    pair_difference,
+    principal_orientation,
+)
 
 __all__ = [
     # pls
@@ -49,10 +58,13 @@ __all__ = [
     "center_matrix",
     "get_model_matrix",
     # trajectory
+    "configuration_spectra",
+    "configuration_spectrum",
     "estimate_betas",
     "estimate_difference",
     "get_observed_vectors",
     "pair_difference",
+    "principal_orientation",
     # attribution
     "AggregateEffect",
     "AttributionConfig",
@@ -63,6 +75,7 @@ __all__ = [
     "FeatureEffect",
     "InterpretationMetadata",
     "OrientationAttributionResult",
+    "PrincipalOrientationAttribution",
     "TransitionAttribution",
     "analyze_orientation_attribution",
     "attribution_frames",

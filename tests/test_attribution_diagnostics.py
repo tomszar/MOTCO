@@ -292,8 +292,9 @@ def test_bootstrap_summaries_are_recorded_per_component() -> None:
     )
     keys = {(entry["transition_id"], entry["component"]) for entry in record["stability"]}
     assert keys == {
-        (transition, component)
-        for transition in ("0->1", "1->2")
+        (block, component)
+        # the adjacent transitions plus the principal-orientation block
+        for block in ("0->1", "1->2", "principal")
         for component in ("observed", "pls_captured", "residual")
     }
     for entry in record["stability"]:
@@ -319,3 +320,33 @@ def test_flatten_extracts_scalar_fields() -> None:
     assert flat["attribution_selected_components"] == 2
     assert flat["attribution_feature_order_signature"] == "deadbeef"
     assert flat["attribution_seconds"] >= 0.0
+
+
+# --- principal-orientation block ----------------------------------------------
+
+
+def test_principal_orientation_block_is_recorded_beside_the_transitions() -> None:
+    """The record carries both decompositions, keyed by the reserved identifier."""
+
+    dataset, features = _dataset(per_group=6, seed=5)
+    record = _run(
+        dataset,
+        features,
+        settings=AttributionDiagnosticSettings(enabled=True, bootstrap_replicates=4, top_k=3),
+    )
+    # The per-transition block is unchanged: `principal` is not a pseudo-transition.
+    assert [entry["transition_id"] for entry in record["transitions"]] == ["0->1", "1->2"]
+
+    for section in ("top_features", "truth_recovery", "stability"):
+        assert any(entry["transition_id"] == "principal" for entry in record[section])
+
+    # Its truth set is the union over transitions, so the row is scored rather
+    # than left permanently unavailable.
+    principal = [
+        entry
+        for entry in record["truth_recovery"]
+        if entry["transition_id"] == "principal" and entry["component"] == "observed"
+    ]
+    assert len(principal) == 1
+    assert principal[0]["available"] is True
+    assert principal[0]["precision"] is not None

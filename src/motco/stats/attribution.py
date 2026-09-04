@@ -4,6 +4,40 @@ The functions in this module deliberately condition on a fitted PLS estimator.
 They explain an already detected orientation difference; they do not fit a
 model, calculate a significance test, or replace observed features with their
 low-rank reconstruction.
+
+Two decompositions, and what each one explains
+----------------------------------------------
+Every analysis reports both, and they answer different questions:
+
+- The **principal-orientation** block decomposes the *tested* ``angle``
+  estimand — principal-axis divergence, the contrast between the groups' signed
+  leading principal axes. It applies the very functional the statistic is built
+  from (:func:`motco.stats.trajectory.principal_orientation`) to the group
+  stage-mean configurations, so the quantity explained here and the quantity
+  tested upstream cannot drift apart.
+- The **per-adjacent-transition** blocks describe *where along the trajectory*
+  the two groups' step directions diverge. This is a per-step description, not
+  the tested estimand: the two coincide only for a two-stage design, where the
+  configuration is rank one and PC1 is the transition direction.
+
+Both decompositions are reported in the same observed / PLS-captured / residual
+structure, and both appear in the tabular outputs under the ``transition_id``
+column — the transitions under ``from->to`` identifiers, the principal block
+under a reserved identifier validated against them.
+
+Degeneracy qualifier
+--------------------
+A principal axis is defined for any configuration with variance, but it is only
+*resolvable* when one axis dominates. Each contributing configuration's relative
+eigengap is therefore reported, and the principal contrast is flagged
+``degenerate`` when any of them falls below ``eigengap_threshold``. The flagged
+contrast is still returned — degeneracy is a property of the data, so callers
+stratify on the flag rather than lose rows. That flag is distinct from
+*unavailability*: a trajectory whose net displacement vanishes is closed, and
+no direction exists to report at all.
+
+Neither the flag nor the attribution as a whole is an inference. Attribution
+runs after the calling workflow has made its orientation decision.
 """
 
 from __future__ import annotations
@@ -14,6 +48,8 @@ from typing import Any, Mapping, Sequence, cast
 
 import numpy as np
 import pandas as pd
+
+from motco.stats.trajectory import configuration_spectrum, principal_orientation
 
 
 class AttributionError(ValueError):
@@ -39,6 +75,8 @@ class AttributionConfig:
     model_components: int
     label_namespace: str | None
     label_source: str | None
+    eigengap_threshold: float
+    principal_component_id: str
 
 
 @dataclass(frozen=True)
@@ -63,6 +101,41 @@ class TransitionAttribution:
     observed: ComponentAttribution
     pls_captured: ComponentAttribution
     residual: ComponentAttribution
+
+
+@dataclass(frozen=True)
+class PrincipalOrientationAttribution:
+    """Attribution of the tested principal-axis divergence.
+
+    Unlike :class:`TransitionAttribution`, which describes one adjacent stage
+    step, this block describes the whole stage-mean configuration: per group,
+    the leading principal axis of the centered configuration signed by net
+    displacement — the orientation functional the tested ``angle`` statistic is
+    built from (:func:`motco.stats.trajectory.principal_orientation`).
+
+    Each component reuses :class:`ComponentAttribution` with the configuration
+    reading of its fields: ``group_transitions`` are the groups' net
+    displacements (last stage minus first), ``path_lengths`` their norms,
+    ``unit_directions`` the signed principal axes, and ``directional_contrast``
+    the second ordered group's axis minus the first's.
+
+    ``degenerate`` flags a near-isotropic contributing configuration — the axis
+    is defined but unstable — and is distinct from an unavailable orientation,
+    where a vanishing net displacement leaves no direction defined at all.
+    """
+
+    component_id: str
+    from_stage: str
+    to_stage: str
+    observed: ComponentAttribution
+    pls_captured: ComponentAttribution
+    residual: ComponentAttribution
+    observed_eigengaps: tuple[float | None, float | None]
+    reconstructed_eigengaps: tuple[float | None, float | None]
+    eigengap_threshold: float
+    degenerate: bool
+    degeneracy_sources: tuple[str, ...]
+    orientation_available: tuple[bool, bool]
 
 
 @dataclass(frozen=True)
@@ -115,6 +188,7 @@ class InterpretationMetadata:
     reconstruction_boundary: str
     bootstrap_boundary: str
     label_source: str | None
+    decomposition_boundary: str
 
 
 @dataclass(frozen=True)
@@ -125,9 +199,12 @@ class OrientationAttributionResult:
     means: pd.DataFrame
     reconstructed_means: pd.DataFrame
     transitions: tuple[TransitionAttribution, ...]
+    principal_orientation: PrincipalOrientationAttribution
     feature_effects: pd.DataFrame
     transition_summaries: pd.DataFrame
     transition_vectors: pd.DataFrame
+    principal_summaries: pd.DataFrame
+    principal_vectors: pd.DataFrame
     aggregate_effects: pd.DataFrame
     bootstrap_summaries: pd.DataFrame
     interpretation: InterpretationMetadata
@@ -183,9 +260,17 @@ def analyze_orientation_attribution(
     bootstrap_seed: int | None = 0,
     top_k: int = 10,
     zero_tolerance: float = 1e-12,
+    eigengap_threshold: float = 0.05,
+    principal_component_id: str = "principal",
     sample_id_col: str | None = None,
 ) -> OrientationAttributionResult:
-    """Attribute adjacent two-group trajectory orientation differences.
+    """Attribute two-group trajectory orientation differences.
+
+    Reports both decompositions described in the module docstring: the
+    principal-orientation contrast, which decomposes the tested ``angle``
+    estimand and carries a relative-eigengap degeneracy qualifier, and the
+    per-adjacent-transition contrasts, which describe where along the trajectory
+    the group directions diverge. The two coincide only for a two-stage design.
 
     Parameters
     ----------
@@ -209,12 +294,24 @@ def analyze_orientation_attribution(
     feature_groups, group_labels:
         Optional one-to-one caller-supplied feature-to-label mapping. The
         aliases are accepted for readability at call sites.
+    eigengap_threshold:
+        Relative-eigengap level at or above which a stage-mean configuration is
+        treated as having a well-separated principal axis. A contributing
+        configuration below it flags the principal-orientation contrast as
+        degenerate; the contrast is still returned, so callers stratify rather
+        than lose rows. The default (0.05) separates the audit's resolvable
+        replicates from its near-isotropic independent-baseline draws.
+    principal_component_id:
+        Reserved identifier carrying the principal-orientation component in the
+        tabular outputs' ``transition_id`` column. It is validated against the
+        stage-derived transition ids so the two can never collide.
 
     Returns
     -------
     OrientationAttributionResult
-        Frozen typed records and DataFrame views for means, transitions,
-        feature effects, aggregates, and bootstrap stability.
+        Frozen typed records and DataFrame views for means, transitions, the
+        principal-orientation block, feature effects, aggregates, and bootstrap
+        stability.
     """
     if mean_table is not None and precomputed_means is not None:
         raise AttributionError("Provide only one of mean_table and precomputed_means.")
@@ -275,6 +372,7 @@ def analyze_orientation_attribution(
             )
 
     _validate_bootstrap_settings(bootstrap_replicates, top_k, zero_tolerance)
+    _validate_principal_settings(eigengap_threshold, principal_component_id, ordered_stages)
     reconstructed_array = _reconstruct_means(means_array, model, feature_names)
     transitions = _build_transitions(
         means_array,
@@ -282,6 +380,15 @@ def analyze_orientation_attribution(
         ordered_groups,
         ordered_stages,
         zero_tolerance,
+    )
+    principal = _build_principal_orientation(
+        means_array,
+        reconstructed_array,
+        ordered_groups,
+        ordered_stages,
+        zero_tolerance,
+        eigengap_threshold,
+        principal_component_id,
     )
     model_components = _model_components(model)
     config = AttributionConfig(
@@ -300,6 +407,8 @@ def analyze_orientation_attribution(
         model_components=model_components,
         label_namespace=label_namespace if label_values is not None else None,
         label_source="caller-supplied" if label_values is not None else None,
+        eigengap_threshold=float(eigengap_threshold),
+        principal_component_id=principal_component_id,
     )
 
     bootstrap_records = _bootstrap(
@@ -316,12 +425,14 @@ def analyze_orientation_attribution(
         bootstrap_seed,
         top_k,
         zero_tolerance,
+        principal_component_id,
     )
     bootstrap_lookup = {
         (record.transition_id, record.component): record for record in bootstrap_records
     }
     feature_effects, feature_records = _feature_effect_table(
         transitions,
+        principal,
         feature_names,
         scale_values,
         bootstrap_lookup,
@@ -338,6 +449,11 @@ def analyze_orientation_attribution(
     )
     transition_summaries, transition_vectors = _transition_tables(
         transitions,
+        ordered_groups,
+        feature_names,
+    )
+    principal_summaries, principal_vectors = _principal_tables(
+        principal,
         ordered_groups,
         feature_names,
     )
@@ -360,15 +476,25 @@ def analyze_orientation_attribution(
             "Bootstrap stability is conditional on the fitted preprocessing contract and frozen PLS model."
         ),
         label_source="caller-supplied" if label_values is not None else None,
+        decomposition_boundary=(
+            f"The '{principal_component_id}' component decomposes the tested angle estimand — principal-axis "
+            "divergence between the groups' signed leading principal axes — while per-adjacent-transition "
+            "contrasts describe where along the trajectory the group directions diverge; the two coincide only "
+            "for two-stage designs. A degenerate principal contrast is reported with its flag and MUST NOT be "
+            "read as a well-defined orientation."
+        ),
     )
     return OrientationAttributionResult(
         config=config,
         means=means_table,
         reconstructed_means=reconstructed_table,
         transitions=tuple(transitions),
+        principal_orientation=principal,
         feature_effects=feature_effects,
         transition_summaries=transition_summaries,
         transition_vectors=transition_vectors,
+        principal_summaries=principal_summaries,
+        principal_vectors=principal_vectors,
         aggregate_effects=aggregate_effects,
         bootstrap_summaries=bootstrap_table,
         interpretation=interpretation,
@@ -401,6 +527,8 @@ def attribution_frames(result: OrientationAttributionResult) -> dict[str, pd.Dat
             ("model_components", result.config.model_components),
             ("label_namespace", result.config.label_namespace),
             ("label_source", result.config.label_source),
+            ("eigengap_threshold", result.config.eigengap_threshold),
+            ("principal_component_id", result.config.principal_component_id),
         ],
         columns=["setting", "value"],
     )
@@ -412,6 +540,7 @@ def attribution_frames(result: OrientationAttributionResult) -> dict[str, pd.Dat
             ("reconstruction_boundary", result.interpretation.reconstruction_boundary),
             ("bootstrap_boundary", result.interpretation.bootstrap_boundary),
             ("label_source", result.interpretation.label_source),
+            ("decomposition_boundary", result.interpretation.decomposition_boundary),
         ],
         columns=["field", "value"],
     )
@@ -421,6 +550,8 @@ def attribution_frames(result: OrientationAttributionResult) -> dict[str, pd.Dat
         "feature_effects": result.feature_effects.copy(),
         "transition_summaries": result.transition_summaries.copy(),
         "transition_vectors": result.transition_vectors.copy(),
+        "principal_orientation": result.principal_summaries.copy(),
+        "principal_orientation_vectors": result.principal_vectors.copy(),
         "aggregate_effects": result.aggregate_effects.copy(),
         "bootstrap_summaries": result.bootstrap_summaries.copy(),
         "configuration": configuration,
@@ -769,6 +900,136 @@ def _build_transitions(
     return records
 
 
+def _principal_component(
+    name: str,
+    configurations: tuple[np.ndarray, np.ndarray],
+    tolerance: float,
+    contrast: np.ndarray | None = None,
+    derive_contrast: bool = True,
+) -> ComponentAttribution:
+    """One component of the principal-orientation block.
+
+    ``configurations`` are the two groups' ``k x p`` stage-mean configurations
+    for this component. Each group's net displacement (last stage minus first)
+    both anchors the principal axis's sign and decides availability: at or below
+    ``tolerance`` the trajectory is closed and no direction is defined.
+    """
+
+    displacements = tuple(configuration[-1] - configuration[0] for configuration in configurations)
+    lengths: tuple[float, float] = (
+        float(np.linalg.norm(displacements[0])),
+        float(np.linalg.norm(displacements[1])),
+    )
+    axes: tuple[np.ndarray | None, np.ndarray | None] = (
+        principal_orientation(configurations[0]) if lengths[0] > tolerance else None,
+        principal_orientation(configurations[1]) if lengths[1] > tolerance else None,
+    )
+    axes_available = axes[0] is not None and axes[1] is not None
+    if contrast is None and derive_contrast and axes_available:
+        assert axes[0] is not None and axes[1] is not None
+        contrast = axes[1] - axes[0]
+    return ComponentAttribution(
+        component=name,
+        group_transitions=cast("tuple[np.ndarray, np.ndarray]", displacements),
+        path_lengths=lengths,
+        unit_directions=axes,
+        directional_contrast=contrast,
+        contrast_available=contrast is not None,
+    )
+
+
+def _relative_eigengap(configuration: np.ndarray) -> float | None:
+    value = configuration_spectrum(configuration)["relative_eigengap"]
+    return None if value is None else float(value)
+
+
+def _build_principal_orientation(
+    observed: np.ndarray,
+    reconstructed: np.ndarray,
+    groups: tuple[str, str],
+    stages: tuple[str, ...],
+    tolerance: float,
+    eigengap_threshold: float,
+    component_id: str,
+) -> PrincipalOrientationAttribution:
+    """Principal-axis divergence of the two groups' stage-mean configurations.
+
+    The observed and PLS-reconstructed configurations each contribute a signed
+    principal axis per group; the residual component applies the same functional
+    to the residual configuration, with its contrast defined — exactly as for
+    transitions — as observed minus captured.
+    """
+
+    observed_configs = (observed[0], observed[1])
+    captured_configs = (reconstructed[0], reconstructed[1])
+    residual_configs = (observed[0] - reconstructed[0], observed[1] - reconstructed[1])
+
+    observed_component = _principal_component("observed", observed_configs, tolerance)
+    captured_component = _principal_component("pls_captured", captured_configs, tolerance)
+    residual_contrast = None
+    if (
+        observed_component.directional_contrast is not None
+        and captured_component.directional_contrast is not None
+    ):
+        residual_contrast = (
+            observed_component.directional_contrast - captured_component.directional_contrast
+        )
+    residual_component = _principal_component(
+        "residual", residual_configs, tolerance, residual_contrast, derive_contrast=False
+    )
+
+    observed_eigengaps = (_relative_eigengap(observed_configs[0]), _relative_eigengap(observed_configs[1]))
+    reconstructed_eigengaps = (
+        _relative_eigengap(captured_configs[0]),
+        _relative_eigengap(captured_configs[1]),
+    )
+    sources: list[str] = []
+    for label, gaps in (("observed", observed_eigengaps), ("reconstructed", reconstructed_eigengaps)):
+        for group_index, gap in enumerate(gaps):
+            if gap is None or gap < eigengap_threshold:
+                sources.append(f"{label}:{groups[group_index]}")
+    return PrincipalOrientationAttribution(
+        component_id=component_id,
+        from_stage=stages[0],
+        to_stage=stages[-1],
+        observed=observed_component,
+        pls_captured=captured_component,
+        residual=residual_component,
+        observed_eigengaps=observed_eigengaps,
+        reconstructed_eigengaps=reconstructed_eigengaps,
+        eigengap_threshold=float(eigengap_threshold),
+        degenerate=bool(sources),
+        degeneracy_sources=tuple(sources),
+        orientation_available=(
+            observed_component.unit_directions[0] is not None,
+            observed_component.unit_directions[1] is not None,
+        ),
+    )
+
+
+def _validate_principal_settings(
+    eigengap_threshold: float,
+    component_id: str,
+    stages: tuple[str, ...],
+) -> None:
+    if isinstance(eigengap_threshold, bool) or not np.isfinite(eigengap_threshold):
+        raise AttributionError("eigengap_threshold must be a finite number in [0, 1].")
+    if not 0.0 <= float(eigengap_threshold) <= 1.0:
+        raise AttributionError("eigengap_threshold must be a finite number in [0, 1].")
+    if not isinstance(component_id, str) or not component_id.strip():
+        raise AttributionError("principal_component_id must be a non-empty string.")
+    collisions = [
+        f"{stages[index]}->{stages[index + 1]}"
+        for index in range(len(stages) - 1)
+        if f"{stages[index]}->{stages[index + 1]}" == component_id
+    ]
+    if collisions:
+        raise AttributionError(
+            f"principal_component_id='{component_id}' collides with stage-derived transition id(s) "
+            f"{collisions}; choose a different reserved identifier."
+        )
+
+
 def _bootstrap(
     X: pd.DataFrame,
     metadata: pd.DataFrame,
@@ -783,12 +1044,27 @@ def _bootstrap(
     seed: int | None,
     top_k: int,
     tolerance: float,
+    principal_component_id: str,
 ) -> tuple[BootstrapSummary, ...]:
+    """Stratified bootstrap stability for every transition and the principal block.
+
+    Each replicate recomputes the group-by-stage means, rebuilds the transitions
+    and the principal-orientation block, and contributes its directional
+    contrasts. The principal axis is signed by *that replicate's own* net
+    displacement — the shared functional's convention — so resampling noise
+    cannot flip the axis and no post-hoc alignment to the point estimate is
+    needed. A replicate whose net displacement falls at or below ``tolerance``
+    contributes no contrast and counts as invalid, exactly like a replicate with
+    a zero transition.
+    """
+
     del scales  # Bootstrap stability is summarized in the fixed input units.
+    block_ids = [f"{stages[index]}->{stages[index + 1]}" for index in range(len(stages) - 1)]
+    block_ids.append(principal_component_id)
     if replicates == 0:
         return tuple(
             BootstrapSummary(
-                transition_id=f"{stages[index]}->{stages[index + 1]}",
+                transition_id=block_id,
                 component=component,
                 requested_replicates=0,
                 valid_replicates=0,
@@ -799,7 +1075,7 @@ def _bootstrap(
                 top_k_selection_frequency=np.full(len(feature_names), np.nan),
                 nonzero_sign_replicates=np.zeros(len(feature_names), dtype=int),
             )
-            for index in range(len(stages) - 1)
+            for block_id in block_ids
             for component in ("observed", "pls_captured", "residual")
         )
     group_values = metadata[group_col].astype(str).to_numpy()
@@ -818,18 +1094,30 @@ def _bootstrap(
             sampled[cell_index // len(stages), cell_index % len(stages)] = X.iloc[selected].mean(axis=0).to_numpy()
         reconstructed = _reconstruct_means(sampled, model, feature_names)
         transitions = _build_transitions(sampled, reconstructed, groups, stages, tolerance)
-        for record in transitions:
+        # Per-replicate degeneracy flags are not summarized — stability is the
+        # summary — so the threshold argument is inert here.
+        principal = _build_principal_orientation(
+            sampled,
+            reconstructed,
+            groups,
+            stages,
+            tolerance,
+            0.0,
+            principal_component_id,
+        )
+        blocks: list[tuple[str, Any]] = [(record.transition_id, record) for record in transitions]
+        blocks.append((principal.component_id, principal))
+        for block_id, block in blocks:
             for component_name in ("observed", "pls_captured", "residual"):
-                component = getattr(record, component_name)
-                key = (record.transition_id, component_name)
+                component = getattr(block, component_name)
+                key = (block_id, component_name)
                 per_component.setdefault(key, []).append(
                     component.directional_contrast
                     if component.directional_contrast is not None
                     else np.full(len(feature_names), np.nan)
                 )
     summaries: list[BootstrapSummary] = []
-    for transition_index in range(len(stages) - 1):
-        transition_id = f"{stages[transition_index]}->{stages[transition_index + 1]}"
+    for transition_id in block_ids:
         for component_name in ("observed", "pls_captured", "residual"):
             values = np.asarray(per_component[(transition_id, component_name)], dtype=float)
             valid_mask = np.isfinite(values).all(axis=1)
@@ -897,6 +1185,7 @@ def _component_effect(component: ComponentAttribution, p: int) -> np.ndarray:
 
 def _feature_effect_table(
     transitions: Sequence[TransitionAttribution],
+    principal: PrincipalOrientationAttribution,
     feature_names: tuple[str, ...],
     scales: np.ndarray | None,
     bootstrap: Mapping[tuple[str, str], BootstrapSummary],
@@ -904,13 +1193,26 @@ def _feature_effect_table(
     label_namespace: str,
     requested_replicates: int,
 ) -> tuple[pd.DataFrame, list[FeatureEffect]]:
+    """Per-feature signed effects for every transition and the principal block.
+
+    The principal-orientation rows carry the reserved component identifier in
+    ``transition_id`` and the first/last stage in ``from_stage``/``to_stage``,
+    so the frame schema is unchanged and a consumer that groups by
+    ``transition_id`` sees one extra group rather than a new column layout.
+    """
+
     rows: list[dict[str, Any]] = []
     records: list[FeatureEffect] = []
-    for transition in transitions:
+    blocks: list[tuple[str, str, str, Any]] = [
+        (transition.transition_id, transition.from_stage, transition.to_stage, transition)
+        for transition in transitions
+    ]
+    blocks.append((principal.component_id, principal.from_stage, principal.to_stage, principal))
+    for transition_id, from_stage, to_stage, block in blocks:
         for component_name in ("observed", "pls_captured", "residual"):
-            component = getattr(transition, component_name)
+            component = getattr(block, component_name)
             effects = _component_effect(component, len(feature_names))
-            summary = bootstrap[(transition.transition_id, component_name)]
+            summary = bootstrap[(transition_id, component_name)]
             for index, feature in enumerate(feature_names):
                 standardized = float(effects[index])
                 original = (
@@ -919,13 +1221,13 @@ def _feature_effect_table(
                     else float(standardized * scales[index])
                 )
                 records.append(
-                    FeatureEffect(transition.transition_id, component_name, feature, standardized, original)
+                    FeatureEffect(transition_id, component_name, feature, standardized, original)
                 )
                 rows.append(
                     {
-                        "transition_id": transition.transition_id,
-                        "from_stage": transition.from_stage,
-                        "to_stage": transition.to_stage,
+                        "transition_id": transition_id,
+                        "from_stage": from_stage,
+                        "to_stage": to_stage,
                         "component": component_name,
                         "feature": feature,
                         "effect_standardized": standardized,
@@ -1038,6 +1340,81 @@ def _transition_tables(
     return pd.DataFrame(summary_rows), pd.DataFrame(vector_rows)
 
 
+def _principal_tables(
+    principal: PrincipalOrientationAttribution,
+    groups: tuple[str, str],
+    feature_names: tuple[str, ...],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Summary and per-feature-axis views of the principal-orientation block.
+
+    The pair mirrors ``transition_summaries`` / ``transition_vectors``: one
+    summary row per component carrying the degeneracy flag, the per-group
+    relative eigengaps, and the contrast norm; and one long row per component,
+    group, and feature carrying the signed principal axis together with the net
+    displacement it was signed by.
+    """
+
+    summary_rows: list[dict[str, Any]] = []
+    vector_rows: list[dict[str, Any]] = []
+    for component_name in ("observed", "pls_captured", "residual"):
+        component = getattr(principal, component_name)
+        summary_rows.append(
+            {
+                "transition_id": principal.component_id,
+                "from_stage": principal.from_stage,
+                "to_stage": principal.to_stage,
+                "component": component_name,
+                "group_1": groups[0],
+                "group_2": groups[1],
+                "net_displacement_group_1": component.path_lengths[0],
+                "net_displacement_group_2": component.path_lengths[1],
+                "orientation_available_group_1": bool(component.unit_directions[0] is not None),
+                "orientation_available_group_2": bool(component.unit_directions[1] is not None),
+                "contrast_available": component.contrast_available,
+                "contrast_norm": (
+                    float(np.linalg.norm(component.directional_contrast))
+                    if component.directional_contrast is not None
+                    else np.nan
+                ),
+                "relative_eigengap_observed_group_1": _optional_float(principal.observed_eigengaps[0]),
+                "relative_eigengap_observed_group_2": _optional_float(principal.observed_eigengaps[1]),
+                "relative_eigengap_reconstructed_group_1": _optional_float(
+                    principal.reconstructed_eigengaps[0]
+                ),
+                "relative_eigengap_reconstructed_group_2": _optional_float(
+                    principal.reconstructed_eigengaps[1]
+                ),
+                "eigengap_threshold": principal.eigengap_threshold,
+                "degenerate": principal.degenerate,
+                "degeneracy_sources": ";".join(principal.degeneracy_sources),
+            }
+        )
+        for group_index, group in enumerate(groups):
+            axis = component.unit_directions[group_index]
+            for feature_index, feature in enumerate(feature_names):
+                vector_rows.append(
+                    {
+                        "transition_id": principal.component_id,
+                        "from_stage": principal.from_stage,
+                        "to_stage": principal.to_stage,
+                        "component": component_name,
+                        "group": group,
+                        "feature": feature,
+                        "principal_axis": (
+                            float(axis[feature_index]) if axis is not None else np.nan
+                        ),
+                        "net_displacement": float(
+                            component.group_transitions[group_index][feature_index]
+                        ),
+                    }
+                )
+    return pd.DataFrame(summary_rows), pd.DataFrame(vector_rows)
+
+
+def _optional_float(value: float | None) -> float:
+    return np.nan if value is None else float(value)
+
+
 def _bootstrap_table(records: Sequence[BootstrapSummary], feature_names: tuple[str, ...]) -> pd.DataFrame:
     rows: list[dict[str, Any]] = []
     for record in records:
@@ -1095,6 +1472,7 @@ __all__ = [
     "FeatureEffect",
     "InterpretationMetadata",
     "OrientationAttributionResult",
+    "PrincipalOrientationAttribution",
     "TransitionAttribution",
     "analyze_orientation_attribution",
     "attribution_frames",
