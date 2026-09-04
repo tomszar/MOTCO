@@ -23,12 +23,16 @@ from motco.simulations.semisynthetic import generate_semisynthetic_trajectory
 
 pytestmark = pytest.mark.slow
 
+# The orientation surgery is pool-limited: at p_dmp=0.2 over three stages the
+# destination pool saturates just under e = 0.89 (``expected_surgery_headroom``),
+# so a full-size effect would trip ``surgery_censoring="error"``. 0.8 keeps a
+# strong, fully realized orientation effect inside the guard band.
 _GENERATOR = SemiSyntheticTrajectoryParams(
     seed=7,
     trajectory_mode="orientation",
     n_samples=60,
     n_stages=3,
-    group_effect_size=1.0,
+    group_effect_size=0.8,
     p_dmp=0.2,
 )
 
