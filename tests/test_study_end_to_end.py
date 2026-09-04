@@ -205,3 +205,63 @@ def test_motco_study_script_merge_and_report(tmp_path: Path) -> None:
         "acceptance_report.json",
     ):
         assert (report_dir / name).exists(), f"missing {name}"
+
+
+def test_end_to_end_design_grid(tmp_path: Path) -> None:
+    """Shards, merge, resume, and report over a tiny crossed design grid."""
+
+    from motco.simulations.study import DesignGrid, DesignPointDecisionRule, MatchedSeedPolicy
+    from motco.simulations.study.enumerate import DESIGN_PHASE
+    from motco.simulations.study.targets import evaluate_design_point_decision
+
+    config = StudyConfig(
+        generator=SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", n_samples=60, p_dmp=0.1),
+        evaluation=SimulationEvaluationParams(integration_method="concat", permutations=0, seed=3),
+        trajectory_modes=("magnitude", "orientation"),
+        effect_sizes=(0.0, 0.5, 1.0),
+        n_replicates=2,
+        base_seed=7,
+        alpha=0.05,
+        matched_seeds=MatchedSeedPolicy(enabled=True, primary_family="fam"),
+        design_grid=DesignGrid(
+            axes={"generator.baseline_continuity": (0.0, 0.5), "generator.n_samples": (60, 120)}
+        ),
+        acceptance=AcceptanceTargets(
+            type_i=(TypeIControlTarget(alpha=0.05),),
+            design_point=DesignPointDecisionRule(
+                trajectory_mode="orientation",
+                statistic="angle",
+                min_power_at_top=0.5,
+                prefer=("generator.n_samples", "generator.baseline_continuity"),
+            ),
+        ),
+    )
+    grid = enumerate_study(config)
+    assert sum(cell.phase == DESIGN_PHASE for cell in grid.cells) == 3 * (1 + 2 * 2)
+
+    for shard_index in range(2):
+        run_shard(grid, shard_index=shard_index, n_shards=2, out_dir=tmp_path, evaluator=_mock_evaluator)
+    records = merge_shards(discover_shard_paths(tmp_path), out_path=tmp_path / "merged.jsonl")
+    assert len(records) == sum(c.n_replicates for c in grid.cells)
+    assert {r.phase for r in records} >= {"power_primary", DESIGN_PHASE, "type_i_baseline"}
+
+    # Resume: nothing left to do, no duplicates.
+    run_shard(grid, shard_index=0, n_shards=2, out_dir=tmp_path, evaluator=_mock_evaluator)
+    records = merge_shards(discover_shard_paths(tmp_path), out_path=tmp_path / "merged.jsonl")
+    assert len(records) == sum(c.n_replicates for c in grid.cells)
+
+    per_stat = summarize_study(records, alpha=config.alpha)
+    combined = summarize_combined_rule(records, alpha=config.alpha)
+    frames = build_report_frames(per_stat, combined, records, alpha=config.alpha)
+    paths = write_report_csvs(frames, tmp_path / "report")
+    design = pd.read_csv(paths["design_point_operating"])
+    assert set(design["generator.n_samples"]) == {60, 120}
+    assert set(design["generator.baseline_continuity"]) == {0.0, 0.5}
+    # Baseline readers never see design cells (the translation control is a
+    # baseline Type I cell and has always been part of the curves frame).
+    assert DESIGN_PHASE not in set(frames.power_curves["phase"])
+    assert DESIGN_PHASE not in set(frames.specificity_matrix["phase"])
+
+    decision = evaluate_design_point_decision(records, config.acceptance.design_point, alpha=config.alpha)
+    assert decision.verdict in {"chosen", "revise_claim"}
+    assert len(decision.columns) == 4

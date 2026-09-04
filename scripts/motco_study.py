@@ -26,6 +26,7 @@ from motco.simulations.study.merge import discover_shard_paths, merge_shards
 from motco.simulations.study.report import (
     build_phase4_frames,
     build_report_frames,
+    render_design_point_power,
     render_phase4_figures,
     render_power_curves,
     render_specificity_matrix,
@@ -37,7 +38,12 @@ from motco.simulations.study.summary import (
     summarize_combined_rule,
     summarize_study,
 )
-from motco.simulations.study.targets import evaluate_targets, write_target_report
+from motco.simulations.study.targets import (
+    evaluate_design_point_decision,
+    evaluate_targets,
+    write_design_point_decision,
+    write_target_report,
+)
 
 
 def _cmd_merge(args: argparse.Namespace) -> int:
@@ -74,6 +80,18 @@ def _cmd_report(args: argparse.Namespace) -> int:
     evaluations = evaluate_targets(config.acceptance, per_stat, records)
     target_paths = write_target_report(evaluations, report_dir)
 
+    design_paths: dict[str, Path] = {}
+    if not frames.design_point_operating.empty:
+        design_paths["design_point_power"] = render_design_point_power(
+            frames.design_point_operating, report_dir / "design_point_power.png"
+        )
+    if config.acceptance.design_point is not None:
+        decision = evaluate_design_point_decision(
+            records, config.acceptance.design_point, alpha=config.alpha
+        )
+        design_paths.update(write_design_point_decision(decision, report_dir))
+        print(f"Design-point decision: {decision.verdict.upper()} — {decision.rationale}")
+
     phase4_paths: dict[str, Path] = {}
     if config.acceptance.gate.enabled:
         expected_units = sum(cell.n_replicates for cell in enumerate_study(config).cells)
@@ -88,7 +106,7 @@ def _cmd_report(args: argparse.Namespace) -> int:
         for run in frames4.decision.confirmation_runs:
             print(f"  confirmation re-run required: {run['action']}")
 
-    for key, path in {**csv_paths, **figure_paths, **target_paths, **phase4_paths}.items():
+    for key, path in {**csv_paths, **figure_paths, **target_paths, **design_paths, **phase4_paths}.items():
         print(f"  {key}: {path}")
     return 0
 

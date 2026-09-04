@@ -17,10 +17,12 @@ from motco.simulations.grid import (
 )
 from motco.simulations.study.config import (
     AcceptanceTargets,
+    DesignPointDecisionRule,
     PowerMonotonicityTarget,
     SpecificityTarget,
     TypeIControlTarget,
 )
+from motco.simulations.study.spectrum import record_design_point
 
 
 @dataclass(frozen=True)
@@ -265,6 +267,261 @@ def _evaluate_specificity(
     )
 
 
+# ── Design-point decision ─────────────────────────────────────────────────────
+
+#: Per-column classifications, in the order they are reported.
+DESIGN_POINT_STATUSES: tuple[str, ...] = ("meets", "marginal", "fails", "unavailable")
+
+
+@dataclass(frozen=True)
+class DesignPointColumn:
+    """One design point's standing against the predeclared rule."""
+
+    design_point: dict[str, Any]
+    is_baseline: bool
+    top_effect: float | None
+    n_available: int
+    rejection_rate: float | None
+    monte_carlo_se: float | None
+    lower_bound: float | None
+    status: str
+    anchor_rates: dict[str, float | None]
+    anchor_available: int
+
+
+@dataclass(frozen=True)
+class DesignPointDecision:
+    """Outcome of the design-point rule over every enumerated design point.
+
+    ``verdict`` is ``"chosen"`` when a confirmed column exists (``chosen`` names
+    it), ``"revise_claim"`` when none is confirmed, and ``"no_design_grid"``
+    when the records carry no design points at all. Advisory only: it feeds
+    neither the Phase 4 gate nor the acceptance-target report.
+    """
+
+    rule: dict[str, Any]
+    alpha: float
+    verdict: str
+    chosen: dict[str, Any] | None
+    rationale: str
+    columns: tuple[DesignPointColumn, ...]
+
+    def to_frame(self) -> pd.DataFrame:
+        rows = []
+        for column in self.columns:
+            row: dict[str, Any] = {**column.design_point}
+            row.update(
+                {
+                    "is_baseline": column.is_baseline,
+                    "top_effect": column.top_effect,
+                    "n_available": column.n_available,
+                    "rejection_rate": column.rejection_rate,
+                    "monte_carlo_se": column.monte_carlo_se,
+                    "lower_bound": column.lower_bound,
+                    "status": column.status,
+                    "chosen": self.chosen is not None and column.design_point == self.chosen,
+                    "anchor_available": column.anchor_available,
+                }
+            )
+            for statistic, rate in column.anchor_rates.items():
+                row[f"anchor_{statistic}_rate"] = rate
+            rows.append(row)
+        return pd.DataFrame(rows)
+
+
+def evaluate_design_point_decision(
+    records: Sequence[SimulationReplicateResult],
+    rule: DesignPointDecisionRule,
+    *,
+    alpha: float = 0.05,
+    statistics: Sequence[str] = ("delta", "angle", "shape"),
+) -> DesignPointDecision:
+    """Classify every design point against ``rule`` and pick the first confirmed one.
+
+    For each design point the target statistic's rejection rate is taken at the
+    **largest effect enumerated in that column** for the target mode. A column
+    *meets* the floor when ``rate − k·SE ≥ floor`` (``k`` the rule's
+    confirmation threshold), is *marginal* when ``rate ≥ floor`` without
+    confirmation, *fails* below the floor, and is *unavailable* when no target
+    record exists. Columns are ordered by the rule's ``prefer`` axes (ascending,
+    in the declared order) and then by the remaining design axes; the chosen
+    point is the first *meets* column in that order. Every threshold comes from
+    ``rule``; nothing is hard-coded here.
+    """
+
+    if not (0 < alpha < 1):
+        raise ValueError("alpha must be between 0 and 1.")
+
+    by_point: dict[tuple[tuple[str, Any], ...], list[SimulationReplicateResult]] = {}
+    axes: list[str] = []
+    for record in records:
+        if record.status != "completed":
+            continue
+        point = record_design_point(record)
+        if point is None:
+            continue
+        for axis in point:
+            if axis not in axes:
+                axes.append(axis)
+        by_point.setdefault(tuple(point.items()), []).append(record)
+
+    rule_payload = {
+        "trajectory_mode": rule.trajectory_mode,
+        "statistic": rule.statistic,
+        "min_power_at_top": rule.min_power_at_top,
+        "confirmation_se_threshold": rule.confirmation_se_threshold,
+        "prefer": list(rule.prefer),
+    }
+    if not by_point or not any(r.phase == "power_design" for group in by_point.values() for r in group):
+        return DesignPointDecision(
+            rule=rule_payload,
+            alpha=alpha,
+            verdict="no_design_grid",
+            chosen=None,
+            rationale="No design-point records are present; the rule has nothing to evaluate.",
+            columns=(),
+        )
+
+    order_axes = [axis for axis in rule.prefer if axis in axes] + [
+        axis for axis in axes if axis not in rule.prefer
+    ]
+    columns: list[DesignPointColumn] = []
+    for coords, group in by_point.items():
+        point = dict(coords)
+        target = [
+            r
+            for r in group
+            if str(r.cell_metadata.get("trajectory_mode")) == rule.trajectory_mode
+            and r.cell_metadata.get("effect_size") is not None
+            and float(r.cell_metadata["effect_size"]) != 0.0
+        ]
+        anchors = [
+            r
+            for r in group
+            if r.cell_metadata.get("effect_size") is not None
+            and float(r.cell_metadata["effect_size"]) == 0.0
+        ]
+        anchor_rates: dict[str, float | None] = {}
+        anchor_available = 0
+        for statistic in statistics:
+            p_values = _finite_p_values(anchors, statistic)
+            anchor_rates[statistic] = (
+                sum(p < alpha for p in p_values) / len(p_values) if p_values else None
+            )
+            anchor_available = max(anchor_available, len(p_values))
+
+        if not target:
+            columns.append(
+                DesignPointColumn(
+                    design_point=point,
+                    is_baseline=all(r.phase == "power_primary" for r in group),
+                    top_effect=None,
+                    n_available=0,
+                    rejection_rate=None,
+                    monte_carlo_se=None,
+                    lower_bound=None,
+                    status="unavailable",
+                    anchor_rates=anchor_rates,
+                    anchor_available=anchor_available,
+                )
+            )
+            continue
+
+        top_effect = max(float(r.cell_metadata["effect_size"]) for r in target)
+        at_top = [r for r in target if float(r.cell_metadata["effect_size"]) == top_effect]
+        p_values = _finite_p_values(at_top, rule.statistic)
+        if not p_values:
+            rate = se = lower = None
+            status = "unavailable"
+        else:
+            rate = sum(p < alpha for p in p_values) / len(p_values)
+            se = math.sqrt(rate * (1.0 - rate) / len(p_values))
+            lower = rate - rule.confirmation_se_threshold * se
+            if lower >= rule.min_power_at_top:
+                status = "meets"
+            elif rate >= rule.min_power_at_top:
+                status = "marginal"
+            else:
+                status = "fails"
+        columns.append(
+            DesignPointColumn(
+                design_point=point,
+                is_baseline=all(r.phase == "power_primary" for r in group),
+                top_effect=top_effect,
+                n_available=len(p_values),
+                rejection_rate=rate,
+                monte_carlo_se=se,
+                lower_bound=lower,
+                status=status,
+                anchor_rates=anchor_rates,
+                anchor_available=anchor_available,
+            )
+        )
+
+    columns.sort(key=lambda column: tuple(_orderable(column.design_point.get(axis)) for axis in order_axes))
+    chosen = next((column for column in columns if column.status == "meets"), None)
+    if chosen is not None:
+        verdict = "chosen"
+        rationale = (
+            f"First design point in preference order {order_axes} whose {rule.trajectory_mode}/"
+            f"{rule.statistic} power at its top effect ({chosen.top_effect:g}) clears the "
+            f"{rule.min_power_at_top:.2f} floor with {rule.confirmation_se_threshold:g}·SE "
+            f"confirmation: rate {chosen.rejection_rate:.3f}, lower bound {chosen.lower_bound:.3f}."
+        )
+    else:
+        verdict = "revise_claim"
+        counts = {status: sum(c.status == status for c in columns) for status in DESIGN_POINT_STATUSES}
+        rationale = (
+            f"No design point clears the {rule.min_power_at_top:.2f} floor for {rule.trajectory_mode}/"
+            f"{rule.statistic} with {rule.confirmation_se_threshold:g}·SE confirmation "
+            f"({counts['marginal']} marginal, {counts['fails']} failing, {counts['unavailable']} "
+            "unavailable). Per the readiness worklist, revise the method or the claim — not the "
+            "Monte Carlo size."
+        )
+    return DesignPointDecision(
+        rule=rule_payload,
+        alpha=alpha,
+        verdict=verdict,
+        chosen=None if chosen is None else dict(chosen.design_point),
+        rationale=rationale,
+        columns=tuple(columns),
+    )
+
+
+def write_design_point_decision(decision: DesignPointDecision, out_dir: Path) -> dict[str, Path]:
+    """Write the design-point decision as JSON (verdict + columns) and CSV (columns)."""
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    json_path = out_dir / "design_point_decision.json"
+    csv_path = out_dir / "design_point_decision.csv"
+    payload = {
+        "verdict": decision.verdict,
+        "chosen": decision.chosen,
+        "rationale": decision.rationale,
+        "alpha": decision.alpha,
+        "rule": decision.rule,
+        "columns": [asdict(column) for column in decision.columns],
+    }
+    json_path.write_text(json.dumps(payload, indent=2, default=_json_default) + "\n", encoding="utf-8")
+    decision.to_frame().to_csv(csv_path, index=False)
+    return {"design_point_decision": json_path, "design_point_decision_csv": csv_path}
+
+
+def _finite_p_values(records: Sequence[SimulationReplicateResult], statistic: str) -> list[float]:
+    return [
+        float(p)
+        for record in records
+        if (p := record.p_values.get(statistic)) is not None and math.isfinite(float(p))
+    ]
+
+
+def _orderable(value: Any) -> tuple[int, Any]:
+    if isinstance(value, bool | int | float):
+        return (0, float(value))
+    return (1, str(value))
+
+
 def _cell_metadata_index(records: Sequence[SimulationReplicateResult]) -> dict[str, dict]:
     index: dict[str, dict] = {}
     for record in records:
@@ -281,7 +538,12 @@ def _json_default(value: Any) -> Any:
 
 
 __all__ = [
+    "DESIGN_POINT_STATUSES",
+    "DesignPointColumn",
+    "DesignPointDecision",
     "TargetEvaluation",
+    "evaluate_design_point_decision",
     "evaluate_targets",
+    "write_design_point_decision",
     "write_target_report",
 ]

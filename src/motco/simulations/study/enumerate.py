@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -10,6 +11,8 @@ from motco.simulations.evaluation import SimulationEvaluationParams
 from motco.simulations.grid import (
     SimulationCell,
     SimulationGrid,
+    _apply_axis_value,
+    _to_jsonable,
     enumerate_power_grid,
     enumerate_type_i_grid,
     make_simulation_cell,
@@ -23,6 +26,23 @@ NEGATIVE_CONTROL_MODES: tuple[str, ...] = ("none", "translation")
 
 #: Metadata key naming the seed family a cell draws its generator seed from.
 SEED_FAMILY_KEY = "seed_family"
+
+#: Phase of the power cells enumerated at a non-baseline design point.
+DESIGN_PHASE = "power_design"
+
+#: Metadata key carrying a cell's design-grid coordinates (``{axis: value}``).
+#: Stamped on every design-point cell *and* on the primary power cells when a
+#: design grid is declared, so the baseline column is readable from records alone.
+DESIGN_POINT_KEY = "design_point"
+
+#: ``varied_axis`` marker on design-point cells. Every baseline reader (power
+#: curves, specificity matrix, gate, acceptance targets) skips cells whose
+#: ``varied_axis`` is set, which is exactly how design-point cells stay out of
+#: the primary column without those readers learning a new key.
+DESIGN_AXIS_MARKER = "design_grid"
+
+#: Phases whose cells share the primary matched-seed family.
+MATCHED_PHASES: tuple[str, ...] = ("power_primary", DESIGN_PHASE)
 
 
 def enumerate_study(config: StudyConfig) -> SimulationGrid:
@@ -39,6 +59,7 @@ def enumerate_study(config: StudyConfig) -> SimulationGrid:
     cells = list(type_i.cells)
     cells.extend(_negative_control_cells(config))
     cells.extend(_power_cells(config, resolver))
+    cells.extend(_design_point_cells(config, resolver))
 
     if config.matched_seeds.enabled:
         cells = _assign_seed_families(cells, config)
@@ -55,6 +76,12 @@ def enumerate_study(config: StudyConfig) -> SimulationGrid:
             "shared_zero_effect_anchor": config.matched_seeds.shared_zero_effect_anchor,
         },
     }
+    if config.design_grid.enabled:
+        grid_metadata["design_grid"] = {
+            "axes": {axis: list(values) for axis, values in config.design_grid.axes.items()},
+            "n_points": len(config.design_points()),
+            "baseline_point": _to_jsonable(config.baseline_design_point()),
+        }
     return SimulationGrid(cells=tuple(cells), metadata=grid_metadata)
 
 
@@ -75,7 +102,15 @@ def _attribution_resolver(config: StudyConfig):
 
 
 def _power_cells(config: StudyConfig, resolver) -> list[SimulationCell]:
-    """Primary and OFAT power cells, with the shared zero-effect anchor when enabled."""
+    """Primary and OFAT power cells, with the shared zero-effect anchor when enabled.
+
+    When a design grid is declared the primary cells carry the baseline design
+    point in their metadata (``varied_axis`` stays ``None``), so the design-point
+    tables can place the baseline column without consulting the config.
+    """
+
+    baseline_point = config.baseline_design_point() if config.design_grid.enabled else None
+    primary_metadata = {DESIGN_POINT_KEY: baseline_point} if baseline_point is not None else None
 
     if not _uses_shared_anchor(config):
         power = enumerate_power_grid(
@@ -87,6 +122,7 @@ def _power_cells(config: StudyConfig, resolver) -> list[SimulationCell]:
             n_replicates=config.n_replicates,
             base_seed=config.base_seed,
             evaluation_resolver=resolver,
+            cell_metadata=primary_metadata,
         )
         return list(power.cells)
 
@@ -104,11 +140,93 @@ def _power_cells(config: StudyConfig, resolver) -> list[SimulationCell]:
         n_replicates=config.n_replicates,
         base_seed=config.base_seed,
         evaluation_resolver=resolver,
+        cell_metadata=primary_metadata,
     )
-    return [_zero_effect_anchor_cell(config), *power.cells]
+    return [_zero_effect_anchor_cell(config, extra_metadata=primary_metadata), *power.cells]
 
 
-def _zero_effect_anchor_cell(config: StudyConfig) -> SimulationCell:
+def _design_point_cells(config: StudyConfig, resolver) -> list[SimulationCell]:
+    """One anchored power grid per non-baseline design point.
+
+    Every design point except the baseline (served by the primary cells) gets a
+    mode-agnostic zero-effect anchor — when ``0.0`` is among the effect sizes —
+    plus one cell per (mode × nonzero effect), all with the point's coordinates
+    applied to the baseline generator/evaluation parameters. Cells carry the
+    point under ``DESIGN_POINT_KEY`` and ``varied_axis=DESIGN_AXIS_MARKER``.
+    """
+
+    if not config.design_grid.enabled:
+        return []
+    nonzero_effects = tuple(float(value) for value in config.effect_sizes if float(value) != 0.0)
+    has_zero = any(float(value) == 0.0 for value in config.effect_sizes)
+    cells: list[SimulationCell] = []
+    for point in config.design_points():
+        if config.is_baseline_design_point(point):
+            continue
+        if has_zero:
+            cells.append(_design_anchor_cell(config, point))
+        for mode in config.trajectory_modes:
+            for effect in nonzero_effects:
+                generator = replace(
+                    config.generator,
+                    trajectory_mode=mode,  # type: ignore[arg-type]
+                    group_effect_size=effect,
+                )
+                evaluation = config.evaluation if resolver is None else resolver(DESIGN_PHASE, mode, effect)
+                generator, evaluation = _apply_design_point(generator, evaluation, point)
+                cells.append(
+                    make_simulation_cell(
+                        phase=DESIGN_PHASE,
+                        generator_params=generator,
+                        evaluation_params=evaluation,
+                        n_replicates=config.n_replicates,
+                        base_seed=config.base_seed,
+                        metadata={
+                            "trajectory_mode": mode,
+                            "effect_size": effect,
+                            "varied_axis": DESIGN_AXIS_MARKER,
+                            "varied_value": dict(point),
+                            DESIGN_POINT_KEY: dict(point),
+                        },
+                    )
+                )
+    return cells
+
+
+def _design_anchor_cell(config: StudyConfig, point: Mapping[str, Any]) -> SimulationCell:
+    generator = replace(config.generator, trajectory_mode="none", group_effect_size=0.0)
+    generator, evaluation = _apply_design_point(generator, config.evaluation, point)
+    return make_simulation_cell(
+        phase=DESIGN_PHASE,
+        generator_params=generator,
+        evaluation_params=evaluation,
+        n_replicates=config.n_replicates,
+        base_seed=config.base_seed,
+        metadata={
+            "trajectory_mode": "none",
+            "effect_size": 0.0,
+            "varied_axis": DESIGN_AXIS_MARKER,
+            "varied_value": dict(point),
+            DESIGN_POINT_KEY: dict(point),
+            "zero_effect_anchor": True,
+            "resolves_modes": list(config.trajectory_modes),
+        },
+    )
+
+
+def _apply_design_point(
+    generator: Any,
+    evaluation: SimulationEvaluationParams,
+    point: Mapping[str, Any],
+) -> tuple[Any, SimulationEvaluationParams]:
+    for axis, value in point.items():
+        generator, evaluation = _apply_axis_value(generator, evaluation, axis, value)
+    return generator, evaluation
+
+
+def _zero_effect_anchor_cell(
+    config: StudyConfig, *, extra_metadata: Mapping[str, Any] | None = None
+) -> SimulationCell:
     """One mode-agnostic zero-effect primary cell shared by every mode's curve.
 
     At ``group_effect_size == 0`` the generator returns group B's baseline
@@ -135,6 +253,7 @@ def _zero_effect_anchor_cell(config: StudyConfig) -> SimulationCell:
             "varied_axis": None,
             "zero_effect_anchor": True,
             "resolves_modes": list(config.trajectory_modes),
+            **dict(extra_metadata or {}),
         },
     )
 
@@ -180,15 +299,19 @@ def _assign_seed_families(cells: list[SimulationCell], config: StudyConfig) -> l
     """Stamp each cell with the seed family its generator seed is drawn from.
 
     Primary power cells (including the zero-effect anchor) share one family so
-    their datasets are paired at the same replicate index. Every other cell —
-    Type I baselines, negative controls, and OFAT cells — keeps a family of its
-    own so it remains an independent draw.
+    their datasets are paired at the same replicate index. Design-point cells
+    join the same family: at ρ = 0 and ρ > 0 the generator thresholds the same
+    uniform block, so a shared seed pairs comparisons along the continuity axis
+    at the baseline indicator draw, and points that differ in other generator
+    parameters simply diverge. Every other cell — Type I baselines, negative
+    controls, and OFAT cells — keeps a family of its own so it remains an
+    independent draw.
     """
 
     family = str(config.matched_seeds.primary_family)
     out: list[SimulationCell] = []
     for cell in cells:
-        assigned = family if cell.phase == "power_primary" else f"control:{cell.cell_id}"
+        assigned = family if cell.phase in MATCHED_PHASES else f"control:{cell.cell_id}"
         out.append(replace(cell, metadata={**dict(cell.metadata), SEED_FAMILY_KEY: assigned}))
     return out
 
@@ -268,12 +391,15 @@ def _require_distinct_primary_datasets(cells: list[SimulationCell]) -> None:
     evidence as if it were independent.
     """
 
-    seen: dict[tuple[str, tuple[Any, ...]], str] = {}
+    seen: dict[tuple[str, tuple[Any, ...], str], str] = {}
     for cell in cells:
-        if cell.phase != "power_primary":
+        if cell.phase not in MATCHED_PHASES:
             continue
         family = str(cell.metadata.get(SEED_FAMILY_KEY, cell.cell_id))
-        key = (family, _generator_identity(cell))
+        # Design points that differ only in an evaluation-namespace axis share a
+        # dataset on purpose (same data, different measurement), so the
+        # evaluation identity is part of the key.
+        key = (family, _generator_identity(cell), _evaluation_identity(cell))
         previous = seen.get(key)
         if previous is not None:
             raise StudyConfigError(
@@ -310,6 +436,10 @@ def _generator_identity(cell: SimulationCell) -> tuple[Any, ...]:
     return tuple(values)
 
 
+def _evaluation_identity(cell: SimulationCell) -> str:
+    return repr(_to_jsonable(cell.evaluation_params))
+
+
 def _hashable(value: Any) -> Any:
     if isinstance(value, list | tuple):
         return tuple(_hashable(item) for item in value)
@@ -318,4 +448,12 @@ def _hashable(value: Any) -> Any:
     return value
 
 
-__all__ = ["NEGATIVE_CONTROL_MODES", "SEED_FAMILY_KEY", "enumerate_study"]
+__all__ = [
+    "DESIGN_AXIS_MARKER",
+    "DESIGN_PHASE",
+    "DESIGN_POINT_KEY",
+    "MATCHED_PHASES",
+    "NEGATIVE_CONTROL_MODES",
+    "SEED_FAMILY_KEY",
+    "enumerate_study",
+]

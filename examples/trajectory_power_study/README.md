@@ -76,6 +76,7 @@ guard (parameter signature) skips already-completed replicates.
 | `trajectory_modes`| Power-grid modes (e.g. `magnitude`, `orientation`, …)      |
 | `effect_sizes`    | Power-grid effect sizes                                    |
 | `axes`            | OFAT axes, namespaced `intersim.` / `generator.` / `evaluation.` |
+| `design_grid`     | Crossed design points: `{"axes": {...}}`, every axis listing its baseline value (see below) |
 | `n_replicates`    | Replicates per cell                                        |
 | `base_seed`       | Deterministic seed root                                    |
 | `alpha`           | Significance level for rejection rates                     |
@@ -156,14 +157,93 @@ Write the Phase 4 run to a **new** output directory. Its parameter signatures
 include the bumped seed-derivation version and the diagnostic schema versions,
 so July shards can neither be resumed into nor overwritten by it.
 
+## Phase 5 design-point pilot
+
+`phase5_design_point_pilot.json` is the committed Phase 5 design-point pilot
+(readiness item 4). It keeps the Phase 4 integration and evaluation settings but
+changes the baseline to `p_dmp = 0.1` — so the `0.25`–`1.00` effect axis is
+realizable without censoring for every pool-limited mode at every design point,
+including the ρ = 0 stress-test endpoint — and declares a **crossed design
+grid**: baseline continuity ρ ∈ {0.0, 0.5, 0.8} × `n_samples` ∈ {300, 600,
+1200}. Every design point gets its own zero-effect anchor plus `orientation`
+(the estimand in question) and `translation` (the negative control that binds
+the surgery headroom) at effects `0.25`, `0.50`, `1.00`; 100 replicates and 199
+permutations per cell; 6,500 work units, with the `n = 1200` columns
+dominating compute. `magnitude` and `shape` are left to the Phase 5 study at
+the chosen design point — both reached power 1.00 at n = 300 in Phase 4.
+
+A local rehearsal (2026-09-04; 4 replicates, 49 permutations, 14 single-thread
+shards on a 16-core workstation) ran all 65 cells with zero failures and no
+censored surgery. Measured per-unit cost on that machine, PLS fit + RRPP:
+about 30 s + 0.5 s/permutation at n = 300, and 72 s + 2 s/permutation at
+n = 1200 — so at 199 permutations expect roughly 135 s, 250 s, and 460 s per
+unit for n = 300, 600, 1200, or ~500 core-hours for the full pilot on
+comparable cores (Phase 4 ran ~3× faster per core on the cluster). Pin BLAS to
+one thread per shard (`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1`): with the
+default thread pool each shard spawns ~32 threads and 12 parallel shards drove
+the load average past 100.
+
+```bash
+sbatch --array=0-63 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_design_point_pilot.json,STUDY_OUT=$(pwd)/results/phase5-design-point,N_SHARDS=64 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir results/phase5-design-point
+python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/phase5_design_point_pilot.json \
+    --out-dir results/phase5-design-point
+```
+
+The report adds, beside the usual outputs:
+
+- `design_point_operating.csv` — one row per (design point, mode, effect,
+  statistic): rejection rate ± MC SE, the recorded pooled-eigengap distribution,
+  the `angle` null-width (`q95`) dispersion, and the selected-dimensionality
+  distribution. The baseline column and each point's anchor (`none` at `0.0`)
+  are included.
+- `design_point_power.png` — orientation `angle` power at the top effect vs
+  `n_samples`, one line per ρ, annotated with the median eigengap.
+- `continuity_resolved_orientation.csv` — resolved on ρ **and** every other
+  design coordinate, so rows never pool across `n_samples`.
+- `design_point_decision.json` / `.csv` — the predeclared rule
+  (`acceptance.design_point`) evaluated per column: `meets` when
+  `rate − k·SE ≥ floor`, `marginal` when only the point estimate clears it,
+  `fails` otherwise. The verdict names the first `meets` column in the declared
+  preference order (`n_samples` ascending, then ρ ascending) or is
+  `revise_claim`. It is advisory: it never feeds the Phase 4 gate or the
+  acceptance targets.
+
+### `design_grid` — crossed design points
+
+`axes` varies one factor at a time off the baseline; `design_grid.axes` is
+**crossed**. Every combination of the declared values is a *design point*, and
+each non-baseline point enumerates the full power grid (one zero-effect anchor
+when `0.0` is among the effect sizes, plus every mode × nonzero effect) with
+the point's coordinates applied to the baseline generator/evaluation
+parameters. Rules:
+
+- every axis MUST list the baseline value — the baseline point is served by the
+  primary cells (which are stamped with their coordinates) and never
+  re-emitted;
+- an axis is either crossed or OFAT, never both;
+- design cells carry phase `power_design`, `design_point = {axis: value}`, and
+  `varied_axis = "design_grid"`, so the primary power curves, specificity
+  matrix, Type I table, gate, and acceptance targets read the baseline column
+  only, exactly as they would without the grid;
+- design cells join the primary matched-seed family, so columns are paired at
+  the same replicate index; the duplicate-dataset guard and the surgery-headroom
+  check apply to every design cell using its own parameters.
+
+Configs without `design_grid` enumerate and report exactly as before.
+
 ### Matched seeds
 
 `matched_seeds.enabled` makes every **primary** power cell draw its generator
 seed from one shared `(seed family, replicate index)` key, so at a given
 replicate index every mode and effect starts from the same generated reference
 and requested-effect comparisons are paired. Negative-control, Type I, and OFAT
-cells keep their own seed families and stay independent draws. Persistence keys
-remain `(cell_id, replicate_index)`.
+cells keep their own seed families and stay independent draws; design-grid
+cells join the primary family (see above). Persistence keys remain
+`(cell_id, replicate_index)`.
 
 At `group_effect_size = 0` the generator returns group B's baseline unchanged
 and consumes no extra randomness, so per-mode zero-effect cells inside one

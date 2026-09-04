@@ -110,10 +110,11 @@ schema lives in `config.py` (`StudyConfig`). Required top-level keys:
 | `trajectory_modes` | Modes enumerated in the power grid. `none` is always added.            |
 | `effect_sizes`     | Non-negative effect-size sweep (per mode).                             |
 | `axes`             | Optional OFAT axes. Keys must be namespaced `generator.*` or `evaluation.*`. |
+| `design_grid`      | Optional **crossed** axes (`{"axes": {...}}`); every combination is a design point with its own anchored power grid. Each axis must list its baseline value. |
 | `n_replicates`     | Replicates per cell.                                                   |
 | `base_seed`        | Deterministic seed root for replicates.                                |
 | `alpha`            | Significance level for rejection rates.                                |
-| `acceptance`       | Pre-specified targets: `type_i`, `power`, `specificity`.               |
+| `acceptance`       | Pre-specified targets: `type_i`, `power`, `specificity`, optional `gate`, optional `design_point` (advisory design-point rule over a `design_grid`). |
 | `metadata`         | Free-form provenance (name, intent, notes).                            |
 
 Validation enforces:
@@ -121,6 +122,9 @@ Validation enforces:
 - `trajectory_modes` ⊆ `{none, translation, magnitude, orientation, shape}`.
 - `effect_sizes` are non-negative.
 - `axes` keys use a known namespace prefix (`generator.*` or `evaluation.*`).
+- `design_grid.axes` keys use the same namespaces, are not also OFAT axes, and
+  each lists the baseline value; `acceptance.design_point.prefer` names only
+  design-grid axes.
 - `0 < alpha < 1`.
 
 See `examples/trajectory_power_study/smoke.json` for a complete,
@@ -302,6 +306,10 @@ results/
     ├── config_spectrum.csv        recorded latent eigengaps per cell × configuration
     ├── eigengap_stratified_power.csv  orientation power by eigengap tercile
     ├── continuity_resolved_orientation.csv  only when the grid sweeps baseline continuity
+    ├── design_point_operating.csv only when the config declares a design_grid
+    ├── design_point_power.png     (same condition)
+    ├── design_point_decision.json only when acceptance.design_point is declared
+    ├── design_point_decision.csv  (same condition)
     ├── acceptance_report.csv      acceptance target evaluation
     └── acceptance_report.json
 ```
@@ -380,7 +388,36 @@ recomputed:
   dominant axis, which is the observable that carries a continuity-conditioned
   orientation claim to real data — not the knob itself. A study that holds the
   axis fixed writes no such file, and records predating the axis are excluded
-  rather than folded into the ρ = 0 bin.
+  rather than folded into the ρ = 0 bin. When the grid is a `design_grid`, rows
+  are additionally keyed on every other design coordinate (emitted as columns),
+  so a ρ × `n_samples` grid never pools three operating points into one row.
+
+### Design-point reporting
+
+A config with a `design_grid` enumerates one anchored power grid per design
+point (phase `power_design`, metadata `design_point = {axis: value}`,
+`varied_axis = "design_grid"`); the baseline point is the primary grid, stamped
+with its coordinates. Design cells join the primary matched-seed family and are
+invisible to every baseline reader (power curves, specificity matrix, Type I
+table, Phase 4 gate, acceptance targets). The report then writes:
+
+- `design_point_operating.csv` — one row per (design coordinates, mode, effect,
+  statistic), anchors included as `none` at `0.0`: rejection rate ± MC SE, the
+  recorded pooled-eigengap distribution, the `angle` null-width (`q95`)
+  dispersion, and the selected-dimensionality distribution.
+- `design_point_power.png` — the target statistic's power at the top effect per
+  point against the first design axis, one line per value of the second,
+  annotated with the median eigengap.
+- `design_point_decision.json` / `.csv` — when `acceptance.design_point`
+  declares the rule (`trajectory_mode`, `statistic`, `min_power_at_top`,
+  `confirmation_se_threshold`, `prefer`): per column `meets` (`rate − k·SE ≥
+  floor`), `marginal` (point estimate only), `fails`, or `unavailable`, with
+  the anchor's Type I rates beside it, and a verdict — the first `meets` column
+  in preference order, or `revise_claim`. Advisory only.
+
+The committed Phase 5 design-point pilot,
+`examples/trajectory_power_study/phase5_design_point_pilot.json`, crosses
+ρ ∈ {0.0, 0.5, 0.8} with `n_samples` ∈ {300, 600, 1200} at `p_dmp = 0.1`.
 
 ### Angle-pivotality diagnostic
 
