@@ -130,7 +130,7 @@ Work:
 - Keep one pooled preprocessing and PLS model fixed for both groups.
 - Reconstruct each group-stage PLS displacement through the same fitted loadings and calculate `q_PLS` from the reconstructed normalized feature transitions.
 - Report `q_observed`, `q_PLS`, and their residual so users can see which directional difference PLS retained and omitted.
-- Extend attribution to adjacent transitions and signed principal orientations for trajectories with more than two stages.
+- Attribution reports both decompositions for trajectories with more than two stages: the adjacent transitions, and the signed principal orientations that decompose the tested `angle` estimand, the latter qualified by a relative-eigengap degeneracy flag.
 - Bootstrap subjects within the appropriate design strata to estimate feature sign stability, rank stability, and top-k selection frequency.
 - Add correlated-feature module and pathway summaries; individual features should not be presented as stable drivers without bootstrap support.
 - Report standardized and original-unit effects separately.

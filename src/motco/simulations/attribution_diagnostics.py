@@ -14,6 +14,15 @@ complete in-memory result and only their summaries are written, while feature
 identifiers are truncated to the configured ``top_k`` so record size does not
 scale with the feature count.
 
+Decompositions
+--------------
+The bounded record carries both of attribution's decompositions, distinguished by
+the ``transition_id`` field: the adjacent stage transitions (``s -> s+1``), and
+the principal-orientation block under the reserved identifier from
+``result.config.principal_component_id``. The latter decomposes the tested
+``angle`` estimand; its truth-recovery row is scored against the union of
+per-transition drivers, since it summarizes the whole configuration.
+
 Units
 -----
 Feature effects are reported in pooled standardized units and, where the fitted
@@ -40,7 +49,11 @@ from motco.stats.attribution import (
 )
 
 #: Version of the persisted attribution diagnostic record contract.
-ATTRIBUTION_SCHEMA_VERSION = 1
+#: 1 = per-adjacent-transition decompositions only;
+#: 2 = the principal-orientation block is reported beside them, so ``top_features``,
+#: ``truth_recovery``, and ``stability`` each carry one extra identifier — records
+#: written under the two contracts must never be mixed within a shard.
+ATTRIBUTION_SCHEMA_VERSION = 2
 
 #: Original-unit basis per omic layer, recorded so M-values are never read as betas.
 UNIT_BASIS: dict[str, str] = {
@@ -360,10 +373,13 @@ def _truth_recovery_records(
     effects = result.feature_effects
     if effects.empty:
         return []
+    principal_id = result.config.principal_component_id
     records: list[dict[str, Any]] = []
     for (transition_id, component), block in effects.groupby(["transition_id", "component"], sort=False):
         transition_id = str(transition_id)
-        mask = truth.per_transition.get(transition_id)
+        # The principal-orientation contrast summarizes the whole configuration,
+        # so its truth set is the union over transitions, not any single step.
+        mask = truth.global_mask if transition_id == principal_id else truth.per_transition.get(transition_id)
         driver_names = (
             set() if mask is None else {truth.feature_names[index] for index in np.flatnonzero(mask)}
         )

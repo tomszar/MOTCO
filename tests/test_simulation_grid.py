@@ -451,9 +451,10 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     ``null_summary`` itself never enters the signature — the resume below, which
     skips a record written without the field, is what pins that. The digest is
     pinned separately so *any* signature change has to be a deliberate edit
-    here; it last moved when the generator gained ``baseline_continuity``
-    (``add-baseline-continuity-axis``), whose deliberate consequence is that
-    pre-change shards refuse to resume — the params hash *is* the version.
+    here; it last moved when the attribution diagnostic record gained the
+    principal-orientation block (``align-orientation-attribution``, schema
+    version 2), whose deliberate consequence is that pre-change shards refuse to
+    resume — the params hash *is* the version.
     """
 
     cell = make_simulation_cell(
@@ -463,7 +464,7 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
         n_replicates=2,
         cell_id="pinned",
     )
-    assert parameter_signature(cell) == "8f5434345a0ea5eebbc1dd5dd51e7db7371bec137638a10b7345b5ae69626b30"
+    assert parameter_signature(cell) == "50c2c5416fb127b814dd93b781d686b1c132727b32db6474e11910205223e6b9"
 
     # Resume against a record written without the field must skip, not overwrite.
     import json

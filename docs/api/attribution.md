@@ -12,6 +12,41 @@ after PLS score projection and inverse transformation, and the signed residual
 `observed - pls_captured`. Observed feature values remain in the result; the
 reconstruction is a parallel, lossy view rather than a replacement.
 
+## Two decompositions
+
+Attribution reports two decompositions, and they explain different quantities.
+
+The **principal-orientation** block decomposes the tested `angle` estimand:
+principal-axis divergence, the contrast between the groups' signed leading
+principal axes. It applies the same functional the statistic is built from
+(`motco.stats.trajectory.principal_orientation`) to each group's stage-mean
+configuration, observed and PLS-reconstructed, so the explanation and the test
+cannot drift apart.
+
+The **per-adjacent-transition** blocks describe where along the trajectory the
+groups' step directions diverge. They are a per-step description, not the tested
+estimand; the two decompositions coincide only for a two-stage design, where the
+configuration is rank one and PC1 is the transition direction.
+
+Both appear in the tabular outputs under the `transition_id` column — the
+transitions as `from->to`, the principal block under `principal_component_id`
+(default `principal`), which is validated against the stage-derived identifiers
+so the two can never collide.
+
+## Degeneracy and availability
+
+A principal axis exists for any configuration with variance, but it is only
+resolvable when one axis dominates. The result reports each contributing
+configuration's relative eigengap and flags the principal contrast `degenerate`
+when any falls below `eigengap_threshold` (default `0.05`). The flagged contrast
+is still returned: degeneracy is a property of the data, so callers stratify on
+the flag rather than lose rows.
+
+That is distinct from unavailability. A trajectory whose net displacement from
+first stage to last is at or below `zero_tolerance` is closed, and no direction
+is defined at all — that group's principal orientation is marked unavailable,
+exactly as a zero-length transition is.
+
 ## Units and stability
 
 Effects are reported in the input coordinate units, normally pooled
@@ -22,7 +57,10 @@ change PLS geometry.
 Bootstrap resampling is independent within every group-by-stage cell and uses
 the same fitted model and preprocessing contract in every replicate. The
 result records the seed, requested count, valid count, sign stability, and
-top-k selection frequency. Bootstrap is available for arithmetic row-derived
+top-k selection frequency, for the principal-orientation block as well as the
+transitions. Each replicate's principal axis is signed by that replicate's own
+net displacement, so resampling noise cannot flip the axis; a replicate whose
+trajectory closes contributes no contrast and counts as invalid. Bootstrap is available for arithmetic row-derived
 means; precomputed covariate-adjusted mean tables are accepted with stability
 marked unavailable.
 

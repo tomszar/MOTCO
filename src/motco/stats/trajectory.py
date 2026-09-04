@@ -295,6 +295,53 @@ def pooled_relative_eigengap(spectra: dict[str, Any] | None) -> float | None:
     return value if np.isfinite(value) else None
 
 
+def principal_orientation(
+    configuration: Union[pd.DataFrame, np.ndarray],
+    levels: Sequence[int] | None = None,
+) -> np.ndarray:
+    """Signed leading principal axis of one stage configuration.
+
+    This is the public entry point to the orientation functional the tested
+    ``angle`` statistic is built from: PC1 of the column-centered configuration,
+    signed so it points along the net displacement from the first stage row to
+    the last. It is exposed so that any consumer explaining an ``angle`` result
+    — attribution in particular — decomposes *the same* quantity the test
+    measured, rather than a second implementation of the convention.
+
+    Parameters
+    ----------
+    configuration:
+        ``k x d`` matrix of stage points, in stage order, in the measurement
+        space. Rows are the trajectory's stage means.
+    levels:
+        Optional row indices selecting (and ordering) the stages to use. When
+        omitted every row is used in the order given.
+
+    Returns
+    -------
+    np.ndarray
+        Unit vector of length ``d`` along the trajectory's direction of
+        progression.
+
+    Notes
+    -----
+    See :func:`_estimate_orientation` for the sign convention, its deliberate
+    deviation from the reference supplement, and the one accepted degeneracy —
+    a closed trajectory whose net displacement vanishes, for which no direction
+    is defined and the returned sign is arbitrary. Callers that must not report
+    an arbitrary sign SHOULD test the net displacement against a tolerance
+    before calling.
+    """
+
+    values = np.asarray(configuration, dtype=float)
+    if values.ndim != 2:
+        raise ValueError(f"configuration must be a 2-D matrix; got shape {values.shape}.")
+    indices = list(range(values.shape[0])) if levels is None else [int(level) for level in levels]
+    if len(indices) < 2:
+        raise ValueError("configuration must contain at least two stages.")
+    return _estimate_orientation(values, indices)
+
+
 def estimate_difference(
     Y: Union[pd.DataFrame, np.ndarray],
     model_matrix: Union[pd.DataFrame, np.ndarray],
