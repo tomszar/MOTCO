@@ -68,11 +68,13 @@ def generate_showcase_datasets(
 ) -> dict[str, SemiSyntheticTrajectoryDataset]:
     """Generate one dataset per ``trajectory_mode`` from a shared baseline.
 
-    The same ``seed`` is used for every mode so that group A's baseline
-    trajectory and the within-stage group assignment are identical across
-    scenarios; the only thing that changes between datasets is group B's
-    feature-surgery transform. ``none`` always gets a zero effect size (the
-    null), regardless of ``effect_size``.
+    The same ``seed`` is used for every mode, so group A's baseline indicator
+    draw and the within-stage group assignment are shared across scenarios.
+    The datasets are *not* otherwise identical: each mode's feature-surgery
+    transform consumes a different amount of RNG, so sampled values downstream
+    of the transform differ between modes (the sole common-random-numbers pair
+    is ``none``↔``magnitude``, whose transforms draw nothing). ``none`` always
+    gets a zero effect size (the null), regardless of ``effect_size``.
 
     The showcase deliberately opts into ``surgery_censoring="clamp"``: it renders
     the *largest* version of each transform for illustration, and at the default

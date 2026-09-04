@@ -6,6 +6,25 @@ import numpy as np
 import pandas as pd
 
 
+def _sort_levels(labels: Sequence[str]) -> list[str]:
+    """Order factor levels deterministically, numerically when possible.
+
+    When every distinct label parses as an integer, levels are ordered by
+    numeric value — lexicographic order is wrong on its own terms there
+    ("10" < "2"). Otherwise, and when two distinct labels collide numerically
+    (e.g. "01" vs "1", where a numeric key would leave the order ill-defined),
+    levels are sorted by string representation.
+    """
+    unique = sorted(set(labels))
+    try:
+        keys = [int(label) for label in unique]
+    except ValueError:
+        return unique
+    if len(set(keys)) != len(keys):
+        return unique
+    return [label for _, label in sorted(zip(keys, unique))]
+
+
 def center_matrix(
     dat: pd.DataFrame,
     group_col: str,
@@ -72,7 +91,9 @@ def get_model_matrix(
     - If `full=True`, include all interaction terms between group and level
       dummies: (G-1) × (L-1) columns.
 
-    The category order is deterministic: sorted by string representation.
+    The category order is deterministic: numeric when every distinct label of
+    a factor parses as an integer (so 10+ levels order correctly), otherwise
+    sorted by string representation.
 
     Parameters
     ----------
@@ -101,8 +122,8 @@ def get_model_matrix(
                 f"{param}='{col}' has {n_unique} unique value(s); at least 2 are required."
             )
     # Determine deterministic category order
-    g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
-    l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
+    g_levels = _sort_levels(pd.unique(X[group_col].astype(str)).tolist())
+    l_levels = _sort_levels(pd.unique(X[level_col].astype(str)).tolist())
     # Wrap in Series to preserve X.index; pd.get_dummies on a bare Categorical
     # returns integer-indexed DataFrames, which causes pd.concat to outer-join with
     # the string-indexed Intercept part and double the row count.

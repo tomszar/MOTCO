@@ -50,7 +50,7 @@
     "derives_from": "examples/trajectory_power_study/phase4_pilot_100x199.json",
     "notes": [
       "This is a one-question diagnostic, not a power study. Acceptance targets and the Phase 5 gate are disabled: the deliverable is the pivotality analysis over the per-replicate null summaries, not a rejection-rate verdict.",
-      "Only effect 1.00 is enumerated, so there is no zero-effect anchor to share; matched seeds still pair the three primary cells at each replicate index so the comparison across modes is on the same generator draws.",
+      "Only effect 1.00 is enumerated, so there is no zero-effect anchor to share; matched seeds still pair the three primary cells at each replicate index, sharing group A's baseline indicator draw and the within-stage group assignment. The cells are not otherwise identical draws: each mode's transform consumes a different amount of RNG, so sampled values downstream of the transform differ across modes.",
       "Attribution diagnostics are off: they answer a different question (which features drive orientation) and cost time this diagnostic does not need.",
       "Everything else is held at the Phase 4 pilot values on purpose — the target of the diagnostic is the Phase 4 behavior itself, so changing the permutation count or sample size would explain a different configuration."
     ]

@@ -6,7 +6,7 @@ from typing import Any, Sequence, Union
 import numpy as np
 import pandas as pd
 
-from motco.stats.design import build_ls_means, get_model_matrix
+from motco.stats.design import _sort_levels, build_ls_means, get_model_matrix
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +136,8 @@ def pair_difference(
     if not feature_cols:
         raise ValueError("No feature columns provided or detected.")
 
-    g_vals = sorted(pd.unique(dat[group_col].astype(str)).tolist())
-    l_vals = sorted(pd.unique(dat[level_col].astype(str)).tolist())
+    g_vals = _sort_levels(pd.unique(dat[group_col].astype(str)).tolist())
+    l_vals = _sort_levels(pd.unique(dat[level_col].astype(str)).tolist())
     if groups is None:
         if len(g_vals) != 2:
             raise ValueError(
@@ -493,8 +493,8 @@ def get_observed_vectors(
     model_full = get_model_matrix(X[[group_col, level_col]], group_col, level_col, full)
     betas = estimate_betas(model_full, Y)
 
-    g_levels = sorted(pd.unique(X[group_col].astype(str)).tolist())
-    l_levels = sorted(pd.unique(X[level_col].astype(str)).tolist())
+    g_levels = _sort_levels(pd.unique(X[group_col].astype(str)).tolist())
+    l_levels = _sort_levels(pd.unique(X[level_col].astype(str)).tolist())
     ls_matrix = build_ls_means(g_levels, l_levels, full)
     means = np.matmul(ls_matrix, np.asarray(betas, dtype=float))
 
