@@ -109,12 +109,12 @@ schema lives in `config.py` (`StudyConfig`). Required top-level keys:
 | `evaluation`       | Integration method, RRPP permutations, `n_jobs`, eval seed.            |
 | `trajectory_modes` | Modes enumerated in the power grid. `none` is always added.            |
 | `effect_sizes`     | Non-negative effect-size sweep (per mode).                             |
-| `axes`             | Optional OFAT axes. Keys must be namespaced `generator.*` or `evaluation.*`. |
+| `axes`             | Optional OFAT axes. Keys must be namespaced `generator.*` or `evaluation.*`, or the one nested form `evaluation.integration_params.<key>` (see below). |
 | `design_grid`      | Optional **crossed** axes (`{"axes": {...}}`); every combination is a design point with its own anchored power grid. Each axis must list its baseline value. |
 | `n_replicates`     | Replicates per cell.                                                   |
 | `base_seed`        | Deterministic seed root for replicates.                                |
 | `alpha`            | Significance level for rejection rates.                                |
-| `acceptance`       | Pre-specified targets: `type_i`, `power`, `specificity`, optional `gate`, optional `design_point` (advisory design-point rule over a `design_grid`). |
+| `acceptance`       | Pre-specified targets: `type_i`, `power`, `specificity`, optional `gate`, optional `design_point` (advisory design-point rule over a `design_grid`), optional `rank_decision` (advisory retained-rank rule over the rank axis). |
 | `metadata`         | Free-form provenance (name, intent, notes).                            |
 
 Validation enforces:
@@ -125,7 +125,34 @@ Validation enforces:
 - `design_grid.axes` keys use the same namespaces, are not also OFAT axes, and
   each lists the baseline value; `acceptance.design_point.prefer` names only
   design-grid axes.
+- `acceptance.rank_decision.axis` is a declared design-grid axis whose values
+  include `null`; its target and protected modes are in `trajectory_modes`; both
+  SE multipliers are non-negative.
 - `0 < alpha < 1`.
+
+### Nested evaluation axes
+
+Both `axes` and `design_grid.axes` accept, besides top-level fields, exactly one
+nested form: `evaluation.integration_params.<key>`. The value is set inside a
+copy of the evaluation integration-parameter mapping (every other key
+unchanged), so it enters the cell's evaluation parameters and therefore the
+parameter signature. JSON `null` is a legal value meaning **key absent**: applying
+it removes the key rather than storing `None`, so the baseline column's cells are
+byte-identical (ids and signatures) to a config without the axis. The baseline
+value of such an axis is the mapping's current value, or `null` when the key is
+not set. Any other nesting (`generator.a.b`, `evaluation.attribution.x`) is
+rejected by name.
+
+The one use today is the retained PLS rank,
+`evaluation.integration_params.forced_components`: `null` is the cross-validated
+column, every other value fits the pooled PLS model at that fixed rank
+(`component_selection = "forced"`, `selected_lv = <rank>` in the record's
+integration metadata). Because the axis lives in the evaluation namespace,
+design columns that differ only in it share the primary matched-seed family
+**and** identical generator parameters — at every replicate index they evaluate
+the same generated dataset under different measurement settings. The
+duplicate-dataset guard accepts them on purpose (it keys on evaluation identity
+too), and the report states the pairing wherever such columns are compared.
 
 See `examples/trajectory_power_study/smoke.json` for a complete,
 minimal example.
@@ -310,6 +337,9 @@ results/
     ├── design_point_power.png     (same condition)
     ├── design_point_decision.json only when acceptance.design_point is declared
     ├── design_point_decision.csv  (same condition)
+    ├── rank_ladder.png            only when the design grid declares the retained-rank axis
+    ├── rank_decision.json         only when acceptance.rank_decision is declared
+    ├── rank_decision.csv          (same condition)
     ├── acceptance_report.csv      acceptance target evaluation
     └── acceptance_report.json
 ```
@@ -418,6 +448,46 @@ table, Phase 4 gate, acceptance targets). The report then writes:
 The committed Phase 5 design-point pilot,
 `examples/trajectory_power_study/phase5_design_point_pilot.json`, crosses
 ρ ∈ {0.0, 0.5, 0.8} with `n_samples` ∈ {300, 600, 1200} at `p_dmp = 0.1`.
+
+Every row of `design_point_operating.csv` also carries `component_selection`
+(`cv` / `forced`, or `mixed` — which cannot arise from a well-formed study and
+flags a configuration error), read from the records' integration metadata.
+
+### Retained-rank ladder reporting
+
+When the design grid declares `evaluation.integration_params.forced_components`
+(see *Nested evaluation axes*), the report additionally writes:
+
+- `rank_ladder.png` — per trajectory mode (the zero-effect anchor first), each
+  statistic's rejection rate at the mode's top effect against the retained rank
+  with MC error bars; the cross-validated column is drawn at its recorded median
+  selected rank with a star marker and a `CV` label so it is never read as a
+  forced rung. Built from `design_point_operating.csv` alone; not written for
+  grids without the rank axis.
+- `rank_decision.json` / `.csv` — when `acceptance.rank_decision` declares the
+  rule (`axis`, `target` pair, `protected` pairs, `type_i_bound`,
+  `gain_se_multiplier`, `loss_se_multiplier`). With the `null` (CV) column as
+  reference, a forced rank *qualifies* when (a) its target power at the top
+  effect exceeds the reference by more than the gain multiplier × pooled MC SE,
+  (b) its zero-effect anchor is within `alpha + se_tolerance·sqrt(alpha(1−alpha)/n)`
+  on every statistic, and (c) no protected power at the top effect falls below
+  the reference by more than the loss multiplier × pooled SE. Verdict `keep_cv`
+  when no rank qualifies, else `adopt_fixed_rank` naming the **smallest**
+  qualifying rank (parsimony predeclared); per column, every criterion's status
+  with the rates, SEs, and thresholds it used, and the failing pairs/statistics
+  by name. Advisory only: it never feeds the Phase 4 gate or the acceptance
+  targets. The JSON states that columns are paired on identical datasets.
+
+The production guard that refuses forced-rank records
+(`assert_production_component_selection`) admits a forced record only when its
+design point declares the rank axis with the same rank the integration recorded;
+any other forced record is still rejected. Forced columns stay invisible to the
+power curves, specificity matrix, Type I table, gate, and acceptance targets.
+
+The committed Phase 5 latent-rank ladder,
+`examples/trajectory_power_study/phase5_latent_rank_ladder.json`, holds the
+chosen design point fixed (ρ = 0, n = 1200, `p_dmp = 0.1`) and varies only the
+rank over {`null`, 3, 4, 6, 9, 12} for all four modes.
 
 ### Angle-pivotality diagnostic
 

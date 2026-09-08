@@ -517,6 +517,40 @@ def record_design_point(record: SimulationReplicateResult) -> dict[str, Any] | N
     return dict(point)
 
 
+#: Design-grid axis name of the retained PLS rank (nested evaluation parameter).
+#: ``null`` on this axis is the cross-validated reference column.
+RANK_AXIS = "evaluation.integration_params.forced_components"
+
+#: Component-selection modes an integration can record.
+COMPONENT_SELECTION_MODES: tuple[str, ...] = ("cv", "forced")
+
+
+def record_component_selection(record: SimulationReplicateResult) -> str | None:
+    """Recorded component-selection mode (``cv``/``forced``), or ``None`` when absent.
+
+    Records written before the marker existed carry no field; they are a
+    different fact from a recorded ``cv`` and are reported as missing rather
+    than assumed.
+    """
+
+    value = (record.integration_metadata or {}).get("component_selection")
+    return None if value is None else str(value)
+
+
+def record_forced_rank(record: SimulationReplicateResult) -> int | None:
+    """Forced retained rank declared at the record's design point, or ``None``.
+
+    Reads the design coordinates rather than the integration metadata, so a
+    forced rank is recognized only when the study *declared* it as a design
+    axis — the condition under which a forced-rank record is a legitimate
+    study measurement rather than a stray diagnostic.
+    """
+
+    point = record_design_point(record) or {}
+    value = point.get(RANK_AXIS)
+    return None if value is None else int(value)
+
+
 def _selected_components(record: SimulationReplicateResult) -> int | None:
     """Recorded selected latent dimensionality, or ``None`` when unavailable."""
 
@@ -614,6 +648,7 @@ def resolve_operating_by_design_point(
             "median_selected_lv": (float(np.median(selected)) if selected else None),
             "min_selected_lv": (min(selected) if selected else None),
             "max_selected_lv": (max(selected) if selected else None),
+            "component_selection": _component_selection_of(group),
         }
         for statistic in statistics:
             p_values = [
@@ -637,6 +672,22 @@ def resolve_operating_by_design_point(
                 }
             )
     return pd.DataFrame(rows, columns=columns)
+
+
+def _component_selection_of(group: Sequence[SimulationReplicateResult]) -> str | None:
+    """``cv``/``forced`` when every record agrees, ``mixed`` otherwise, ``None`` if unrecorded.
+
+    ``mixed`` cannot arise from a well-formed study — one design point has one
+    evaluation configuration — so its appearance flags a configuration error
+    rather than being averaged away.
+    """
+
+    modes = {mode for mode in (record_component_selection(record) for record in group) if mode is not None}
+    if not modes:
+        return None
+    if len(modes) == 1:
+        return next(iter(modes))
+    return "mixed"
 
 
 _DESIGN_POINT_COLUMNS: tuple[str, ...] = (
@@ -664,6 +715,7 @@ _DESIGN_POINT_COLUMNS: tuple[str, ...] = (
     "median_selected_lv",
     "min_selected_lv",
     "max_selected_lv",
+    "component_selection",
 )
 
 
@@ -724,18 +776,22 @@ def _sd(values: Sequence[float]) -> float | None:
 
 
 __all__ = [
+    "COMPONENT_SELECTION_MODES",
     "CONTINUITY_AXIS",
     "CONTINUITY_KEY",
     "DEFAULT_N_STRATA",
     "DESIGN_PHASES",
     "DESIGN_POINT_KEY",
     "POWER_PHASES",
+    "RANK_AXIS",
     "STRATIFIED_MODES",
     "group_eigengaps",
     "has_spectrum",
     "pooled_eigengap",
+    "record_component_selection",
     "record_continuity",
     "record_design_point",
+    "record_forced_rank",
     "resolve_operating_by_design_point",
     "resolve_orientation_by_continuity",
     "stratify_power_by_eigengap",

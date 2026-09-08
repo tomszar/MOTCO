@@ -75,13 +75,15 @@ guard (parameter signature) skips already-completed replicates.
 | `evaluation`      | Integration method, RRPP permutations, n_jobs              |
 | `trajectory_modes`| Power-grid modes (e.g. `magnitude`, `orientation`, …)      |
 | `effect_sizes`    | Power-grid effect sizes                                    |
-| `axes`            | OFAT axes, namespaced `intersim.` / `generator.` / `evaluation.` |
+| `axes`            | OFAT axes, namespaced `generator.` / `evaluation.`, or the nested `evaluation.integration_params.<key>` (`null` = key absent; see the ladder section) |
 | `design_grid`     | Crossed design points: `{"axes": {...}}`, every axis listing its baseline value (see below) |
 | `n_replicates`    | Replicates per cell                                        |
 | `base_seed`       | Deterministic seed root                                    |
 | `alpha`           | Significance level for rejection rates                     |
 | `acceptance`      | Pre-specified Type I, power, and specificity targets       |
 | `acceptance.gate` | Phase 4 gate parameters (see below); omit for pre-Phase-4 configs |
+| `acceptance.design_point` | Advisory design-point rule over a `design_grid` (see the design-point pilot) |
+| `acceptance.rank_decision` | Advisory retained-rank rule over the rank axis (see the latent-rank ladder) |
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 | `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
@@ -223,6 +225,88 @@ The report adds, beside the usual outputs:
   preference order (`n_samples` ascending, then ρ ascending) or is
   `revise_claim`. It is advisory: it never feeds the Phase 4 gate or the
   acceptance targets.
+
+## Phase 5 latent-rank ladder
+
+`phase5_latent_rank_ladder.json` is the committed Phase 5 latent-rank ladder
+(readiness item 3). It derives from the design-point pilot and holds the chosen
+design point fixed — ρ = 0, `n_samples = 1200`, four stages, `p_dmp = 0.1`,
+default fail-loud censoring — and varies **only the retained PLS rank** through
+a one-axis design grid over the nested evaluation parameter
+`evaluation.integration_params.forced_components` ∈ {`null`, 3, 4, 6, 9, 12}.
+`null` means "key absent": that column runs the production stage-supervised
+double CV and is the reference; every other column fits the pooled PLS model at
+that fixed rank (`component_selection = "forced"`). All four modes
+(`magnitude`, `orientation`, `shape`, `translation`) at effects
+`0.25`/`0.50`/`1.00` plus one zero-effect anchor per column; 100 replicates and
+199 permutations; 6 × 13 = 78 power cells plus the two baseline Type I
+controls, **8,000 work units**.
+
+**Same data, different measurement.** The rank axis is an evaluation-namespace
+axis, so every column shares the primary matched-seed family and identical
+generator parameters with the baseline: at every replicate index the six
+columns evaluate the *same* generated dataset at different ranks. Differences
+between columns are measurement differences, not sampling differences (the
+duplicate-dataset guard keys on evaluation identity and accepts this by
+design). Forced 3 is included so CV-selection variability (recorded range 2–4,
+median 3 = `n_stages − 1`) is separated from the rank itself, and because
+"fixed `n_stages − 1`" is itself a candidate group-blind rule. 12 is the top
+rung because the 2026-09-03 latent-rank probe saw no change from 9 to 12.
+
+**Predeclared decision** (`acceptance.rank_decision`, advisory): against the
+`null` column, a forced rank qualifies when it raises orientation `angle`
+power at the top effect by more than 2 pooled MC SEs, keeps every statistic's
+anchor within `alpha + 2·SE`, and lowers neither magnitude `delta` nor shape
+`shape` power at the top effect by more than 2 pooled SEs. Verdict `keep_cv`,
+or `adopt_fixed_rank` with the **smallest** qualifying rank. Only group-blind
+rules are candidates — the geometry audit's caution stands: group-aware sizing
+would void the fixed-latent-space RRPP conditioning.
+
+**Run 2026-09-08** — see the
+[findings report](../../docs/reports/latent-rank-ladder-2026-09-08.md) and the
+committed outputs under `results/phase5-latent-rank-2026-09-08/` (`report/` and
+`PROVENANCE.txt`). All 8,000 units completed with zero failures and no censored
+surgery on a SLURM array of 100 single-CPU shards (20 min wall; CV units median
+57 s, forced units 0.2 s; 24.5 core-hours). Verdict: **`keep_cv`** — no fixed
+rank raised orientation `angle` power (0.79–0.86 vs 0.85 at CV) and every rank
+above 3 lost shape `shape` power (1.00 → 0.57). Phase 5 keeps stage-supervised
+double CV, which selects rank 3 = `n_stages − 1` there.
+
+Cost: the CV column measured 55.8 s per unit on an EPYC 7662 core in the
+design-point pilot (n = 1200, 199 permutations); forced columns skip the double
+CV and are cheaper. Budget ~120 EPYC core-hours; 100 single-CPU shards finish
+in roughly 1.5 h wall. **Pin BLAS** and **do not pass `--n-jobs`** (it enters the
+parameter signature and changes the permutation draws).
+
+```bash
+# SLURM (partition/resource flags are cluster-specific).
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+RUN=results/phase5-latent-rank-$(date -u +%F)
+sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_latent_rank_ladder.json,STUDY_OUT=$(pwd)/$RUN,N_SHARDS=100 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir $RUN
+python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/phase5_latent_rank_ladder.json \
+    --out-dir $RUN
+
+# Locally, in K resumable shards (each shard is one process; pin BLAS first):
+for i in $(seq 0 $((K-1))); do
+  python scripts/run_study_shard.py \
+      --config examples/trajectory_power_study/phase5_latent_rank_ladder.json \
+      --out-dir $RUN --shard-index $i --n-shards $K --error-policy record &
+done; wait
+```
+
+The report adds, beside the design-point outputs above:
+
+- `design_point_operating.csv` gains `component_selection` (`cv`/`forced`) per
+  row; `median_selected_lv` equals the forced rank on forced rows.
+- `rank_ladder.png` — per mode (anchor first), each statistic's rate at the top
+  effect vs rank with MC error bars; the CV column sits at its median selected
+  rank with a star marker and a `CV` label.
+- `rank_decision.json` / `.csv` — the verdict, the chosen rank, and every
+  column's per-criterion status with the rates, SEs, and thresholds used.
 
 ### `design_grid` — crossed design points
 
