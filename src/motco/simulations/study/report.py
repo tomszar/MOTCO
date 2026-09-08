@@ -33,6 +33,9 @@ from motco.simulations.study.phase4 import (
     summarize_realized_geometry,
 )
 from motco.simulations.study.spectrum import (
+    RANK_AXIS,
+    record_component_selection,
+    record_forced_rank,
     resolve_operating_by_design_point,
     resolve_orientation_by_continuity,
     stratify_power_by_eigengap,
@@ -463,29 +466,39 @@ def build_type_i_table(
 def assert_production_component_selection(
     records: Sequence[SimulationReplicateResult],
 ) -> None:
-    """Refuse to report records whose latent rank was forced rather than cross-validated.
+    """Refuse to report records whose latent rank was forced without being declared.
 
     ``forced_components`` is a rank diagnostic (see ``scripts/latent_rank_probe.py``);
     a study report built over such records would present a hand-picked latent
     dimensionality as the study's operating point. The parameter signature
     already keeps forced-rank cells out of production shards, so this is the
     cheap second line: any record that says so explicitly is rejected here.
-    Records written before ``component_selection`` existed carry no marker and
-    pass unchanged.
+
+    The one legitimate exception is a study that *declares* the retained rank
+    as a design-grid axis (``evaluation.integration_params.forced_components``):
+    its forced columns are predeclared measurements of the same datasets at
+    other ranks, sit at a design point carrying that rank, and are invisible to
+    every baseline reader. Such a record passes only when its design point's
+    rank equals the rank it recorded. Records written before
+    ``component_selection`` existed carry no marker and pass unchanged.
     """
 
-    offenders = sorted(
-        {
-            str(record.cell_id)
-            for record in records
-            if str((record.integration_metadata or {}).get("component_selection", "cv")) != "cv"
-        }
-    )
+    offenders: set[str] = set()
+    for record in records:
+        mode = record_component_selection(record)
+        if mode is None or mode == "cv":
+            continue
+        declared = record_forced_rank(record)
+        recorded = (record.integration_metadata or {}).get("selected_lv")
+        if declared is not None and recorded is not None and int(recorded) == declared:
+            continue
+        offenders.add(str(record.cell_id))
     if offenders:
+        names = sorted(offenders)
         raise StudyReportError(
-            "Study report requires cross-validated PLS component selection; "
-            f"{len(offenders)} cell(s) recorded a forced latent rank: {', '.join(offenders[:5])}"
-            + (" ..." if len(offenders) > 5 else "")
+            "Study report requires cross-validated PLS component selection unless the retained rank "
+            f"is a declared design axis; {len(names)} cell(s) recorded an undeclared forced latent rank: "
+            f"{', '.join(names[:5])}" + (" ..." if len(names) > 5 else "")
         )
 
 
@@ -719,6 +732,18 @@ def render_design_point_power(
     ]
     if sub.empty or not x_axis:
         return _empty_figure(out_path, f"Design-point power ({trajectory_mode}/{statistic}: no rows)")
+    # Axis values are plotted as numbers; a coordinate that is not numeric (the
+    # ``null`` of a nested evaluation axis, say) has no position and is dropped
+    # rather than crashing the figure. A rank-only grid thus draws its forced
+    # columns and simply omits the cross-validated one — the rank ladder is the
+    # figure that reads that column.
+    sub = sub.assign(**{x_axis: pd.to_numeric(sub[x_axis], errors="coerce")}).dropna(subset=[x_axis])
+    if line_axis:
+        sub = sub.assign(**{line_axis: pd.to_numeric(sub[line_axis], errors="coerce")}).dropna(
+            subset=[line_axis]
+        )
+    if sub.empty:
+        return _empty_figure(out_path, f"Design-point power ({trajectory_mode}/{statistic}: no numeric axis)")
     group_keys = [x_axis] + ([line_axis] if line_axis else [])
     top = sub.loc[sub.groupby(group_keys)["effect_size"].idxmax()]
 
@@ -758,6 +783,94 @@ def render_design_point_power(
     return out_path
 
 
+def render_rank_ladder(
+    frame: pd.DataFrame,
+    out_path: Path,
+    *,
+    axis: str = RANK_AXIS,
+    statistics: Sequence[str] = ("delta", "angle", "shape"),
+) -> Path | None:
+    """Plot each statistic's rejection rate against the retained rank, per mode.
+
+    Built from the design-point operating frame alone. One panel per trajectory
+    mode (the zero-effect anchor first, as ``none``); within a panel each
+    statistic's rate at the mode's largest enumerated effect is drawn against
+    the forced rank with Monte Carlo error bars. The cross-validated column
+    (``axis`` value ``null``) is placed at its recorded median selected rank
+    with a distinct marker and a ``CV`` label so it is never read as a forced
+    rung. Returns ``None`` — and writes nothing — when ``axis`` is not a column
+    of ``frame``, so a study without the rank axis produces no such figure.
+    """
+
+    import matplotlib.pyplot as plt
+
+    if frame.empty or axis not in frame.columns:
+        return None
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    modes = sorted(frame["trajectory_mode"].dropna().unique().tolist(), key=lambda m: (m != "none", m))
+    fig, axes = plt.subplots(1, len(modes), figsize=(3.6 * len(modes), 3.4), sharey=True, squeeze=False)
+    forced_ranks = sorted(pd.to_numeric(frame[axis], errors="coerce").dropna().unique().tolist())
+    for j, mode in enumerate(modes):
+        ax = axes[0, j]
+        block = frame[frame["trajectory_mode"] == mode]
+        effects = block["effect_size"].astype(float)
+        top = 0.0 if mode == "none" else float(effects.max())
+        block = block[effects == top]
+        for stat in statistics:
+            rows = block[block["statistic"] == stat]
+            if rows.empty:
+                continue
+            is_cv = rows[axis].isna()
+            forced = rows[~is_cv].assign(rank=pd.to_numeric(rows.loc[~is_cv, axis], errors="coerce"))
+            forced = forced.sort_values("rank")
+            line = None
+            if not forced.empty:
+                line = ax.errorbar(
+                    forced["rank"].to_numpy(dtype=float),
+                    forced["rejection_rate"].to_numpy(dtype=float),
+                    yerr=forced["monte_carlo_se"].to_numpy(dtype=float),
+                    marker="o",
+                    capsize=2,
+                    label=stat,
+                )
+            cv = rows[is_cv]
+            if not cv.empty:
+                color = line[0].get_color() if line is not None else None
+                x = pd.to_numeric(cv["median_selected_lv"], errors="coerce").to_numpy(dtype=float)
+                y = cv["rejection_rate"].to_numpy(dtype=float)
+                ax.errorbar(
+                    x,
+                    y,
+                    yerr=cv["monte_carlo_se"].to_numpy(dtype=float),
+                    fmt="*",
+                    markersize=11,
+                    capsize=2,
+                    color=color,
+                    markeredgecolor="black",
+                    label=f"{stat} (CV)" if line is None else None,
+                )
+                for xi, yi in zip(x, y):
+                    if np.isfinite(xi) and np.isfinite(yi):
+                        ax.annotate("CV", (xi, yi), textcoords="offset points", xytext=(5, -10), fontsize=7)
+        title = "zero-effect anchor (none)" if mode == "none" else f"{mode} @ e = {top:g}"
+        ax.set_title(title, fontsize=9)
+        ax.set_xlabel("retained rank")
+        if forced_ranks:
+            ax.set_xticks(forced_ranks)
+        ax.set_ylim(-0.02, 1.02)
+        ax.grid(True, alpha=0.3)
+        if j == 0:
+            ax.set_ylabel("rejection rate")
+        ax.legend(fontsize=7)
+    fig.suptitle("Retained-rank ladder (★ = cross-validated column at its median selected rank)")
+    fig.tight_layout(rect=(0, 0, 1, 0.93))
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 #: Every non-axis column of ``resolve_operating_by_design_point``'s frame.
 _DESIGN_POINT_NON_AXIS_COLUMNS: tuple[str, ...] = (
     "phase",
@@ -784,6 +897,7 @@ _DESIGN_POINT_NON_AXIS_COLUMNS: tuple[str, ...] = (
     "median_selected_lv",
     "min_selected_lv",
     "max_selected_lv",
+    "component_selection",
 )
 
 
@@ -978,6 +1092,7 @@ __all__ = [
     "render_design_point_power",
     "render_geometry_checkpoints",
     "render_phase4_figures",
+    "render_rank_ladder",
     "render_selected_components",
     "render_type_i_plot",
     "write_phase4_report",

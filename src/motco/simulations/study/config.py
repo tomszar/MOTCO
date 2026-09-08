@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from motco.simulations.evaluation import AttributionDiagnosticSettings, SimulationEvaluationParams
+from motco.simulations.grid import SimulationGridError, _split_axis
 from motco.simulations.semisynthetic import SemiSyntheticTrajectoryParams
 
 _TRAJECTORY_MODES = {"none", "translation", "magnitude", "orientation", "shape"}
@@ -297,6 +298,88 @@ class DesignPointDecisionRule:
 
 
 @dataclass(frozen=True)
+class StatisticPair:
+    """One (trajectory mode, statistic) pair named by a decision rule."""
+
+    trajectory_mode: str
+    statistic: str
+
+    def __post_init__(self) -> None:
+        if self.trajectory_mode not in _TRAJECTORY_MODES:
+            raise StudyConfigError(f"trajectory_mode {self.trajectory_mode!r} is unknown.")
+        if self.statistic not in _STATISTICS:
+            raise StudyConfigError(f"statistic {self.statistic!r} is unknown.")
+
+    @property
+    def label(self) -> str:
+        return f"{self.trajectory_mode}/{self.statistic}"
+
+
+@dataclass(frozen=True)
+class TypeIBound:
+    """Anchor Type I bound: ``rate ≤ alpha + se_tolerance · sqrt(alpha(1−alpha)/n)``."""
+
+    alpha: float = 0.05
+    se_tolerance: float = 2.0
+
+    def __post_init__(self) -> None:
+        if not (0 < self.alpha < 1):
+            raise StudyConfigError("type_i_bound.alpha must be between 0 and 1.")
+        if self.se_tolerance < 0:
+            raise StudyConfigError("type_i_bound.se_tolerance must be non-negative.")
+
+
+#: JSON/`null` baseline value of the retained-rank axis: the key is absent and
+#: the evaluator runs its stage-supervised double cross-validation.
+RANK_AXIS_BASELINE = None
+
+
+@dataclass(frozen=True)
+class RankDecisionRule:
+    """Predeclared, advisory retained-rank rule evaluated against the CV column.
+
+    ``axis`` names a design-grid axis over the nested evaluation parameter
+    ``evaluation.integration_params.forced_components`` whose values include
+    ``null`` (the cross-validated reference column). A forced-rank column
+    *qualifies* when (a) its ``target`` power at the top effect beats the
+    reference by more than ``gain_se_multiplier`` pooled MC standard errors,
+    (b) its zero-effect anchor is within ``type_i_bound`` on every statistic,
+    and (c) no ``protected`` power at the top effect falls below the reference
+    by more than ``loss_se_multiplier`` pooled SEs. The verdict is ``keep_cv``
+    when no column qualifies, else ``adopt_fixed_rank`` with the smallest
+    qualifying rank (parsimony is predeclared). It never feeds the Phase 4 gate
+    or the acceptance targets.
+    """
+
+    axis: str
+    target: StatisticPair
+    protected: tuple[StatisticPair, ...]
+    type_i_bound: TypeIBound = field(default_factory=TypeIBound)
+    gain_se_multiplier: float = 2.0
+    loss_se_multiplier: float = 2.0
+    name: str = "rank_decision"
+    kind: str = field(default="rank_decision", init=False)
+
+    def __post_init__(self) -> None:
+        _validate_axis_namespace(self.axis, label="acceptance.rank_decision.axis")
+        _, path = _split_axis(self.axis)
+        if len(path) != 2:
+            raise StudyConfigError(
+                f"acceptance.rank_decision.axis {self.axis!r} must name a nested evaluation "
+                "integration parameter (evaluation.integration_params.<key>)."
+            )
+        if not self.protected:
+            raise StudyConfigError("acceptance.rank_decision.protected must name at least one pair.")
+        if self.target in self.protected:
+            raise StudyConfigError(
+                f"acceptance.rank_decision.target {self.target.label} cannot also be protected."
+            )
+        for name in ("gain_se_multiplier", "loss_se_multiplier"):
+            if float(getattr(self, name)) < 0:
+                raise StudyConfigError(f"acceptance.rank_decision.{name} must be non-negative.")
+
+
+@dataclass(frozen=True)
 class AcceptanceTargets:
     """Collection of pre-specified acceptance targets."""
 
@@ -305,6 +388,7 @@ class AcceptanceTargets:
     specificity: tuple[SpecificityTarget, ...] = ()
     gate: Phase4GateConfig = field(default_factory=Phase4GateConfig)
     design_point: DesignPointDecisionRule | None = None
+    rank_decision: RankDecisionRule | None = None
 
 
 @dataclass(frozen=True)
@@ -341,6 +425,7 @@ class StudyConfig:
         for axis in self.axes:
             _validate_axis_namespace(axis)
         self._validate_design_grid()
+        self._validate_rank_decision()
         if not (0 < self.alpha < 1):
             raise StudyConfigError("alpha must be between 0 and 1.")
         if self.attribution.enabled:
@@ -397,10 +482,39 @@ class StudyConfig:
                 "trajectory_modes."
             )
 
-    def axis_baseline_value(self, axis: str) -> Any:
-        """Baseline value of a namespaced ``generator.``/``evaluation.`` axis."""
+    def _validate_rank_decision(self) -> None:
+        rule = self.acceptance.rank_decision
+        if rule is None:
+            return
+        grid = self.design_grid
+        if rule.axis not in grid.axes:
+            raise StudyConfigError(
+                f"acceptance.rank_decision.axis {rule.axis!r} is not declared under design_grid.axes."
+            )
+        if not any(_same_axis_value(value, RANK_AXIS_BASELINE) for value in grid.axes[rule.axis]):
+            raise StudyConfigError(
+                f"design_grid.axes[{rule.axis!r}] must include null (the cross-validated reference "
+                "column) for acceptance.rank_decision to compare against."
+            )
+        for pair in (rule.target, *rule.protected):
+            if pair.trajectory_mode not in self.trajectory_modes:
+                raise StudyConfigError(
+                    f"acceptance.rank_decision names mode {pair.trajectory_mode!r} ({pair.label}), "
+                    "which is absent from trajectory_modes."
+                )
 
-        namespace, _, field_name = axis.partition(".")
+    def axis_baseline_value(self, axis: str) -> Any:
+        """Baseline value of a namespaced ``generator.``/``evaluation.`` axis.
+
+        For the nested form ``evaluation.integration_params.<key>`` this is the
+        mapping's current value, or ``None`` when the key is absent — which is
+        how the cross-validated column of a retained-rank ladder is addressed.
+        """
+
+        namespace, path = _split_axis_or_raise(axis)
+        if len(path) == 2:
+            return dict(self.evaluation.integration_params).get(path[1])
+        (field_name,) = path
         target = self.generator if namespace == "generator" else self.evaluation
         if not hasattr(target, field_name):
             raise StudyConfigError(f"axis {axis!r} names an unknown {namespace} field {field_name!r}.")
@@ -602,8 +716,57 @@ def _build_design_point_rule(raw: Mapping[str, Any] | None) -> DesignPointDecisi
     )
 
 
+def _build_statistic_pair(raw: Any, *, label: str) -> StatisticPair:
+    if not isinstance(raw, Mapping):
+        raise StudyConfigError(f"{label} must be a mapping with 'trajectory_mode' and 'statistic'.")
+    missing = sorted({"trajectory_mode", "statistic"} - set(raw))
+    if missing:
+        raise StudyConfigError(f"{label} is missing required field(s): {missing}.")
+    unknown = sorted(set(raw) - {"trajectory_mode", "statistic"})
+    if unknown:
+        raise StudyConfigError(f"{label} has unknown field(s): {unknown}.")
+    return StatisticPair(trajectory_mode=str(raw["trajectory_mode"]), statistic=str(raw["statistic"]))
+
+
+def _build_rank_decision_rule(raw: Mapping[str, Any] | None) -> RankDecisionRule | None:
+    if not raw:
+        return None
+    required = {"axis", "target", "protected"}
+    missing = sorted(required - set(raw))
+    if missing:
+        raise StudyConfigError(f"acceptance.rank_decision is missing required field(s): {missing}.")
+    known = required | {"type_i_bound", "gain_se_multiplier", "loss_se_multiplier", "name", "kind"}
+    unknown = sorted(set(raw) - known)
+    if unknown:
+        raise StudyConfigError(f"acceptance.rank_decision has unknown field(s): {unknown}.")
+    protected_raw = raw["protected"]
+    if isinstance(protected_raw, Mapping) or not isinstance(protected_raw, Sequence):
+        raise StudyConfigError("acceptance.rank_decision.protected must be a sequence of pairs.")
+    bound_raw = raw.get("type_i_bound") or {}
+    if not isinstance(bound_raw, Mapping):
+        raise StudyConfigError("acceptance.rank_decision.type_i_bound must be a mapping.")
+    unknown_bound = sorted(set(bound_raw) - {"alpha", "se_tolerance"})
+    if unknown_bound:
+        raise StudyConfigError(f"acceptance.rank_decision.type_i_bound has unknown field(s): {unknown_bound}.")
+    return RankDecisionRule(
+        axis=str(raw["axis"]),
+        target=_build_statistic_pair(raw["target"], label="acceptance.rank_decision.target"),
+        protected=tuple(
+            _build_statistic_pair(entry, label="acceptance.rank_decision.protected[]")
+            for entry in protected_raw
+        ),
+        type_i_bound=TypeIBound(
+            alpha=float(bound_raw.get("alpha", 0.05)),
+            se_tolerance=float(bound_raw.get("se_tolerance", 2.0)),
+        ),
+        gain_se_multiplier=float(raw.get("gain_se_multiplier", 2.0)),
+        loss_se_multiplier=float(raw.get("loss_se_multiplier", 2.0)),
+        name=str(raw.get("name", "rank_decision")),
+    )
+
+
 def _build_acceptance(raw: Mapping[str, Any]) -> AcceptanceTargets:
-    unknown = sorted(set(raw) - {"type_i", "power", "specificity", "gate", "design_point"})
+    unknown = sorted(set(raw) - {"type_i", "power", "specificity", "gate", "design_point", "rank_decision"})
     if unknown:
         raise StudyConfigError(f"acceptance has unknown block(s): {unknown}.")
     type_i = tuple(_build_type_i_target(entry) for entry in raw.get("type_i", []) or [])
@@ -611,8 +774,14 @@ def _build_acceptance(raw: Mapping[str, Any]) -> AcceptanceTargets:
     specificity = tuple(_build_specificity_target(entry) for entry in raw.get("specificity", []) or [])
     gate = _build_gate(raw.get("gate") or {})
     design_point = _build_design_point_rule(raw.get("design_point"))
+    rank_decision = _build_rank_decision_rule(raw.get("rank_decision"))
     return AcceptanceTargets(
-        type_i=type_i, power=power, specificity=specificity, gate=gate, design_point=design_point
+        type_i=type_i,
+        power=power,
+        specificity=specificity,
+        gate=gate,
+        design_point=design_point,
+        rank_decision=rank_decision,
     )
 
 
@@ -764,6 +933,13 @@ def _build_specificity_target(raw: Mapping[str, Any]) -> SpecificityTarget:
 
 
 def _validate_axis_namespace(axis: str, *, label: str = "axis") -> None:
+    """Accept ``generator.<field>``, ``evaluation.<field>``, or the one nested form.
+
+    The nested form is ``evaluation.integration_params.<key>``; any other
+    multi-segment axis is rejected by name so a typo cannot address a key the
+    evaluator never reads.
+    """
+
     if "." not in axis:
         raise StudyConfigError(
             f"{label} {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
@@ -773,6 +949,17 @@ def _validate_axis_namespace(axis: str, *, label: str = "axis") -> None:
         raise StudyConfigError(f"{label} {axis!r} has unsupported namespace {namespace!r}.")
     if not field_name:
         raise StudyConfigError(f"{label} {axis!r} is missing a field name.")
+    try:
+        _split_axis(axis)
+    except SimulationGridError as exc:
+        raise StudyConfigError(f"{label} {axis!r}: {exc}") from exc
+
+
+def _split_axis_or_raise(axis: str) -> tuple[str, tuple[str, ...]]:
+    try:
+        return _split_axis(axis)
+    except SimulationGridError as exc:
+        raise StudyConfigError(str(exc)) from exc
 
 
 def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
@@ -797,6 +984,11 @@ def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
                 None
                 if config.acceptance.design_point is None
                 else _dataclass_dict(config.acceptance.design_point)
+            ),
+            "rank_decision": (
+                None
+                if config.acceptance.rank_decision is None
+                else _dataclass_dict(config.acceptance.rank_decision)
             ),
         },
         "attribution": _dataclass_dict(config.attribution),
@@ -830,9 +1022,13 @@ __all__ = [
     "MatchedSeedPolicy",
     "Phase4GateConfig",
     "PowerMonotonicityTarget",
+    "RANK_AXIS_BASELINE",
+    "RankDecisionRule",
     "SpecificityTarget",
+    "StatisticPair",
     "StudyConfig",
     "StudyConfigError",
+    "TypeIBound",
     "TypeIControlTarget",
     "dump_study_config",
     "load_study_config",

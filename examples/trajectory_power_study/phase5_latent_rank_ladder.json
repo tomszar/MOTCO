@@ -1,0 +1,114 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 1200,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude",
+    "orientation",
+    "shape",
+    "translation"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "axes": {},
+  "design_grid": {
+    "axes": {
+      "evaluation.integration_params.forced_components": [
+        null,
+        3,
+        4,
+        6,
+        9,
+        12
+      ]
+    }
+  },
+  "n_replicates": 100,
+  "base_seed": 500,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase5-latent-rank",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [],
+    "specificity": [],
+    "gate": {
+      "enabled": false
+    },
+    "rank_decision": {
+      "axis": "evaluation.integration_params.forced_components",
+      "target": {
+        "trajectory_mode": "orientation",
+        "statistic": "angle"
+      },
+      "protected": [
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "delta"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "shape"
+        }
+      ],
+      "type_i_bound": {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      "gain_se_multiplier": 2.0,
+      "loss_se_multiplier": 2.0
+    }
+  },
+  "metadata": {
+    "name": "trajectory-power-phase5-latent-rank-ladder",
+    "phase": 5,
+    "intent": "Phase 5 latent-rank ladder (readiness item 3): at the chosen design point (rho = 0, n_samples = 1200, four stages, p_dmp = 0.1) measure how every statistic's operating characteristics respond to the retained PLS rank, and decide by a predeclared rule whether Phase 5 commits to stage-supervised double CV or to a fixed, predeclared rank. All four modes (magnitude, orientation, shape, translation) at effects 0/0.25/0.50/1.00; one design axis, evaluation.integration_params.forced_components in {null, 3, 4, 6, 9, 12}, where null is the cross-validated reference column; 100 replicates, 199 permutations, matched seeds with one shared zero-effect anchor per column.",
+    "derives_from": "examples/trajectory_power_study/phase5_design_point_pilot.json",
+    "notes": [
+      "Same data, different measurement. The rank axis is an evaluation-namespace axis, so every column shares the primary matched-seed family and identical generator parameters with the baseline: at every replicate index the six columns evaluate the same generated dataset under different retained ranks. Differences between columns are measurement differences, not sampling differences, and rank_decision.json states the pairing. The pooled independent SE used by the rule is therefore conservative.",
+      "null is the baseline value of the rank axis and means 'key absent': the baseline column's evaluation parameters carry no forced_components key, so its cells are byte-identical (same ids and signatures) to a config without the design grid. It is the cross-validated column and the reference every forced rank is compared against; it also re-measures magnitude and shape at the chosen design point under CV, which the design-point report said Phase 5 must do.",
+      "Forced 3 is included on purpose. The CV column's selected rank ranges 2-4 with median 3 (= n_stages - 1) at this design point; without a forced-3 column any difference between CV and forced 4 would confound 'one more component' with 'no selection noise'. 'Fixed n_stages - 1' is also itself a candidate group-blind rule, so it must be measured to be adoptable. 12 is the top rung because the 2026-09-03 latent-rank probe saw no further change from 9 to 12, and the rule's parsimony clause can only reach a higher rung if every lower one fails.",
+      "The rank decision (acceptance.rank_decision) is advisory and predeclared, evaluated against the null column: a forced rank qualifies when it raises orientation/angle power at the top effect by more than 2 pooled MC SEs, keeps every statistic's zero-effect anchor within alpha + 2 SE, and lowers neither magnitude/delta nor shape/shape power at the top effect by more than 2 pooled SEs. Verdict keep_cv or adopt_fixed_rank with the smallest qualifying rank. Translation is not protected: it is a negative control covered by the anchor criterion and the baseline Type I target; its e > 0 cells are still reported in the ladder. Only group-blind rules are candidates (the geometry audit's caution: group-aware sizing voids the fixed-latent-space RRPP conditioning).",
+      "surgery_censoring is left at its default ('error'); enumeration rejects over-headroom cells before compute is spent. At rho = 0, p_dmp = 0.1, four stages, orientation saturates near e = 1.69 and translation near e = 2.00, so the 0.25-1.00 axis is realizable for every pool-limited mode. Do not copy the historical 'clamp' flag from the Phase 4 configs.",
+      "Cost. 6 columns x (1 anchor + 4 modes x 3 nonzero effects) = 78 power cells plus the two baseline Type I controls = 80 cells, 8,000 work units. The CV column costs about 56 s per unit on an EPYC 7662 core (design-point pilot, n = 1200, 199 permutations); forced columns skip the double CV and are cheaper. Budget roughly 120 EPYC core-hours; 100 single-CPU shards finish in about 1.5 h wall. Pin BLAS to one thread (OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1).",
+      "Do not pass --n-jobs: the worker count enters the parameter signature and changes the realized permutation draws. Parallelize across shards. Run with --error-policy record so a forced rank that is infeasible on some replicate (the evaluator rejects rather than clamps) is recorded per column instead of aborting the shard; expected feasibility is min(~660 features, 1200 samples) >= 12 for every replicate.",
+      "The Phase 4 gate is disabled: this ladder chooses a rank rule, it does not gate Phase 5. Attribution diagnostics are off. The eigengap is a property of the configuration in the latent space and will differ across rank columns on identical data; read it per column as recorded, never as a baseline-geometry change."
+    ]
+  }
+}

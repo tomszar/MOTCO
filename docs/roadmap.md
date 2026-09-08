@@ -26,12 +26,12 @@ The roadmap prioritizes interpretability and validation before larger simulation
 
 ### Not yet established
 
-- The production orientation and shape feature-surgery modes are not geometrically pure before integration.
-- Orientation power was non-monotone in the latest pilot and reached 0.76 rather than the preregistered 0.80 target.
-- The orientation sign-anchor defect fixed on 2026-08-28 was real but is **not** the cause of the orientation shortfall; corrected power is 0.68 at the top effect ([report](reports/orientation-sign-anchor-2026-08-28.md)).
-- The orientation shortfall is **diagnosed** as of 2026-09-01: the RRPP null for `angle` tracks its own observed statistic almost one-for-one (slope 0.811), which explains the rejection inversion, but the tracking is load-bearing rather than corrigible — `angle` proceeds as specified and the 0.80 floor becomes a design-point question ([report](reports/angle-null-pivotality-2026-09-01.md)).
-- A production feature-driver workflow for significant orientation differences is designed conceptually but not implemented.
-- The 500-replicate paper-grade grid should not run until the orientation/shape gates below are resolved.
+- The production orientation and shape feature-surgery modes are not geometrically pure before integration; orientation's `shape` response (0.99–1.00 at the design point under CV rank) is predeclared as projection-associated cross-talk, not as evidence about the shape estimator ([ladder report](reports/latent-rank-ladder-2026-09-08.md), §6).
+- The orientation power claim is n-conditional at the isotropic endpoint: 0.85–0.88 at n = 1200, ρ = 0 across two independent matched-seed families ([design-point report](reports/phase5-design-point-pilot-2026-09-08.md), [ladder report](reports/latent-rank-ladder-2026-09-08.md)); it has not been measured at paper-grade Monte Carlo precision (500 replicates × 999 permutations).
+- The `angle` null tracks its own observed statistic (slope 0.811) and is load-bearing rather than corrigible ([report](reports/angle-null-pivotality-2026-09-01.md)); the recorded eigengap and null-width dispersion must accompany any real-data orientation result.
+- Readiness item 5 (Phase 5 report contract: observed-component driver reports, no cross-replicate driver-stability claim, `n_jobs` in the signature, one shared anchor) is evidenced but not yet written into the Phase 5 config and report template.
+- Cross-replicate driver stability has no design that holds the driver set fixed, so it is not claimable.
+- The 500-replicate paper-grade grid has not run; its config (`study.json` successor at the chosen design point, CV rank) is not yet written.
 
 ## Priority sequence
 
@@ -250,8 +250,13 @@ and is superseded for Phase 4 gate purposes.
 Planned baseline:
 
 - Design point chosen 2026-09-08 ([report](reports/phase5-design-point-pilot-2026-09-08.md)): ρ = 0
-  (independent baseline), n = 1200, four stages, `p_dmp = 0.1`, pooled PLS on M-value methylation with
-  CV-selected rank; all four modes, including magnitude and shape, re-measured there
+  (independent baseline), n = 1200, four stages, `p_dmp = 0.1`, pooled PLS on M-value methylation
+- Rank rule committed 2026-09-08 ([latent-rank ladder report](reports/latent-rank-ladder-2026-09-08.md)):
+  **stage-supervised double cross-validation** (`plsda_doubleCV`, modal LV, parsimony tie-break; group-blind),
+  which selects rank 3 = `n_stages − 1` at the design point. The predeclared ladder rule over fixed ranks
+  {3, 4, 6, 9, 12} returned `keep_cv`: no rank gained orientation `angle` power (0.79–0.86 vs 0.85) and every
+  rank above 3 lost shape/`shape` (1.00 → 0.57) and orientation `shape`/`delta` power while off-target `angle`
+  responses rose. Magnitude and shape were re-measured there under CV (`delta` 1.00, `shape` ≥ 0.95).
 - 500 replicates per cell
 - 999 permutations per test
 - Resumable, sharded execution using `examples/trajectory_power_study/study.json`
@@ -323,6 +328,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Add orientation-driver attribution.** Implement observed-versus-PLS reconstructed normalized feature contrasts with bootstrap stability.
-2. **Repeat the medium pilot.** Re-run the PLS operating-characteristic pilot with corrected shape semantics and construction-level diagnostics.
-3. **Run the paper-grade PLS study.** Proceed only if the medium-pilot gates pass.
+1. **Close readiness item 5 and write the Phase 5 config.** Commit the paper-grade study config at the chosen design point (ρ = 0, n = 1200, four stages, `p_dmp = 0.1`, CV rank, all four modes, 500 replicates × 999 permutations, matched seeds, predeclared acceptance targets and gate) with the report-contract items (observed-component drivers, no driver-stability claim, no `--n-jobs`, one shared anchor) encoded in the config and report template.
+2. **Run the paper-grade Phase 5 study.** Cluster execution with `--error-policy record`, committed `report/` and `PROVENANCE.txt`, and a versioned findings report reading power beside the recorded eigengap and `angle` null width.
+3. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the eigengap and null-width dispersion reported beside every orientation result.

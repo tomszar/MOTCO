@@ -703,13 +703,36 @@ def _default_evaluator(
     return evaluate_semisynthetic_trajectory(dataset, evaluation_params)
 
 
+#: The one nested axis form supported: ``evaluation.integration_params.<key>``.
+#: Nothing else is nested — see ``_split_axis``.
+NESTED_AXIS_PARENT = ("evaluation", "integration_params")
+
+
 def _apply_axis_value(
     generator_params: SemiSyntheticTrajectoryParams,
     evaluation_params: SimulationEvaluationParams,
     axis: str,
     value: Any,
 ) -> tuple[SemiSyntheticTrajectoryParams, SimulationEvaluationParams]:
-    namespace, field_name = _split_axis(axis)
+    """Return ``(generator, evaluation)`` with ``axis`` set to ``value``.
+
+    Top-level axes replace a dataclass field. The nested form
+    ``evaluation.integration_params.<key>`` sets ``key`` inside a *copy* of the
+    integration-parameter mapping; a ``None`` value removes the key instead of
+    storing ``None``, so the evaluation parameters (and therefore the parameter
+    signature) are byte-identical to never having declared the axis.
+    """
+
+    namespace, path = _split_axis(axis)
+    if len(path) == 2:
+        _, key = path
+        mapping = dict(evaluation_params.integration_params)
+        if value is None:
+            mapping.pop(key, None)
+        else:
+            mapping[key] = value
+        return generator_params, replace(evaluation_params, integration_params=mapping)
+    (field_name,) = path
     if namespace == "generator":
         return replace(generator_params, **{field_name: value}), evaluation_params
     if namespace == "evaluation":
@@ -722,25 +745,51 @@ def _get_axis_value(
     evaluation_params: SimulationEvaluationParams | None,
     axis: str,
 ) -> Any:
-    namespace, field_name = _split_axis(axis)
+    """Current value of ``axis``; ``None`` for a nested key that is absent."""
+
+    namespace, path = _split_axis(axis)
+    evaluation = evaluation_params or SimulationEvaluationParams()
+    if len(path) == 2:
+        _, key = path
+        return dict(evaluation.integration_params).get(key)
+    (field_name,) = path
     if namespace == "generator":
         return getattr(generator_params, field_name)
     if namespace == "evaluation":
-        return getattr(evaluation_params or SimulationEvaluationParams(), field_name)
+        return getattr(evaluation, field_name)
     raise SimulationGridError(f"Unsupported axis namespace: {namespace!r}.")
 
 
-def _split_axis(axis: str) -> tuple[str, str]:
+def _split_axis(axis: str) -> tuple[str, tuple[str, ...]]:
+    """Split ``axis`` into ``(namespace, path)``.
+
+    ``path`` has one segment for a top-level field and exactly two —
+    ``("integration_params", key)`` — for the single supported nested form under
+    the ``evaluation`` namespace. Any other multi-segment axis is rejected by
+    name: a nested path the evaluator never reads would silently measure
+    nothing, which is worse than failing at enumeration.
+    """
+
     if "." not in axis:
         raise SimulationGridError(
             f"Axis {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
         )
-    namespace, field_name = axis.split(".", 1)
-    if not field_name:
+    namespace, rest = axis.split(".", 1)
+    if not rest:
         raise SimulationGridError(f"Axis {axis!r} is missing a field name.")
     if namespace not in {"generator", "evaluation"}:
         raise SimulationGridError(f"Unsupported axis namespace: {namespace!r}.")
-    return namespace, field_name
+    segments = tuple(rest.split("."))
+    if any(not segment for segment in segments):
+        raise SimulationGridError(f"Axis {axis!r} has an empty path segment.")
+    if len(segments) == 1:
+        return namespace, segments
+    if (namespace, segments[0]) == NESTED_AXIS_PARENT and len(segments) == 2:
+        return namespace, segments
+    raise SimulationGridError(
+        f"Axis {axis!r} nests below a field that is not addressable; the only nested form "
+        f"supported is '{'.'.join(NESTED_AXIS_PARENT)}.<key>'."
+    )
 
 
 def _completed_index(path: Path | None) -> dict[tuple[str, int], str]:

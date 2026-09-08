@@ -29,6 +29,7 @@ from motco.simulations.study.report import (
     render_design_point_power,
     render_phase4_figures,
     render_power_curves,
+    render_rank_ladder,
     render_specificity_matrix,
     render_type_i_plot,
     write_phase4_report,
@@ -40,8 +41,10 @@ from motco.simulations.study.summary import (
 )
 from motco.simulations.study.targets import (
     evaluate_design_point_decision,
+    evaluate_rank_decision,
     evaluate_targets,
     write_design_point_decision,
+    write_rank_decision,
     write_target_report,
 )
 
@@ -91,6 +94,14 @@ def _cmd_report(args: argparse.Namespace) -> int:
         )
         design_paths.update(write_design_point_decision(decision, report_dir))
         print(f"Design-point decision: {decision.verdict.upper()} — {decision.rationale}")
+    # Written only when the design grid declares the retained-rank axis.
+    ladder = render_rank_ladder(frames.design_point_operating, report_dir / "rank_ladder.png")
+    if ladder is not None:
+        design_paths["rank_ladder"] = ladder
+    if config.acceptance.rank_decision is not None:
+        rank_decision = evaluate_rank_decision(records, config.acceptance.rank_decision, alpha=config.alpha)
+        design_paths.update(write_rank_decision(rank_decision, report_dir))
+        print(f"Retained-rank decision: {rank_decision.verdict.upper()} — {rank_decision.rationale}")
 
     phase4_paths: dict[str, Path] = {}
     if config.acceptance.gate.enabled:

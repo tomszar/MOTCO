@@ -4,8 +4,9 @@ Work to complete before launching the paper-grade study. Derived from the
 [Phase 4 medium PLS pilot](reports/phase4-medium-pls-pilot-2026-08-27.md) (run 2026-08-27, gate decision
 **HOLD**). Every number below comes from `results/phase4-2026-08-27/report/`.
 
-**Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03, item 4 resolved 2026-09-08; items 3 and 5
-open.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
+**Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03, item 3 resolved 2026-09-08
+([latent-rank ladder report](reports/latent-rank-ladder-2026-09-08.md); committed rank rule: stage-supervised
+double CV), item 4 resolved 2026-09-08; item 5 open.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
 specified — and the 0.80 orientation power floor, handed to item 4, is **met at the chosen design point
 ρ = 0, n = 1200** (orientation `angle` power 0.88, 1·SE lower bound 0.85; see the
 [design-point pilot report](reports/phase5-design-point-pilot-2026-09-08.md)). See also
@@ -136,7 +137,41 @@ response as a **projection artifact of the rank-3 stage-supervised latent space*
 constructions. Note this makes item 3 (latent dimensionality) sharper rather than moot — the same evidence
 shows what a rank-3 space costs the group contrast.
 
-## 3. Reconsider latent dimensionality for group contrasts
+## 3. Reconsider latent dimensionality for group contrasts — **resolved 2026-09-08**
+
+> **Resolved.** The latent-rank ladder ([report](reports/latent-rank-ladder-2026-09-08.md), run 2026-09-08,
+> `results/phase5-latent-rank-2026-09-08/`, 8,000 units, 0 failures, 0 censored surgeries) held the chosen
+> design point fixed (ρ = 0, n = 1200, four stages, `p_dmp = 0.1`) and varied only the retained PLS rank over
+> {CV, 3, 4, 6, 9, 12} for all four modes, every column measuring the *same* generated datasets (evaluation-only
+> design axis, shared matched-seed family). The predeclared rule (`acceptance.rank_decision`: orientation
+> `angle` gain > 2 pooled SE, anchors within α + 2 SE, magnitude `delta` and shape `shape` loss ≤ 2 pooled SE)
+> returned **`keep_cv`** (`report/rank_decision.json`).
+>
+> **Committed Phase 5 rank rule (group-blind): stage-supervised double cross-validation** (`plsda_doubleCV`,
+> modal LV across repeats, parsimony tie-break) — the production rule, unchanged. At the design point it
+> selects rank 3 = `n_stages − 1` (range 2–3 over 1,500 CV units). No group label enters the sizing, so the
+> fixed-latent-space RRPP conditioning the geometry audit protects is intact.
+>
+> **What the ladder showed.** Orientation `angle` power at e = 1.00 is 0.85 (CV), 0.86 (rank 3), and
+> 0.79–0.81 at ranks 4–12: no rank buys `angle` power. Every rank above 3 loses power elsewhere — shape
+> `shape` 1.00 → 0.57 and orientation `shape` 0.99 → 0.60 by rank 9, orientation/shape `delta` 0.9 → 0.5 —
+> while the off-target `angle` response *rises* (magnitude → `angle` 0.24 → 0.81, shape → `angle` 0.79 →
+> 0.95): extra components carry group-specific noise directions that rotate PC1. The anchor's `angle` null
+> q95 nearly doubles (5.9° → 10.8°) at rank ≥ 4 while the recorded eigengap stays ≈ 0.047, i.e. the
+> measurement space acquired noise, not geometry. No anchor is inflated (≤ 0.03 at every rank; `delta`/`shape`
+> become conservative, 0/100, at rank ≥ 4). Forced 3 equals CV within 0.03 everywhere, so CV selection noise
+> is immaterial.
+>
+> **Re-measurement at the chosen point under CV (`p_dmp = 0.1`):** magnitude `delta` 1.00 at every effect,
+> shape `shape` 0.95 / 0.97 / 1.00, orientation `angle` 0.89 / 0.89 / 0.85 (agrees with the design-point
+> pilot's 0.88 within one pooled SE), orientation → `shape` 0.99–1.00 (does not decay at CV rank; decays only
+> as rank grows, as the probe found). The item-2 predeclaration for orientation's `shape` response stands.
+>
+> The ~6% retained orientation contrast recorded below is therefore not a power deficit to fix by
+> re-sizing: the `angle` test reads what it needs from the `n_stages − 1` space, and the remaining
+> variance is stage-unorganized noise.
+
+The history of how this item was scoped is retained below.
 
 Component selection saturated at **3 in all 19 cells** (range 2–3, CV AUROC 1.00). That is
 `n_stages − 1`, which is the most a stage-supervised PLS-DA can carry with four stages.

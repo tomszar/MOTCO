@@ -265,3 +265,101 @@ def test_end_to_end_design_grid(tmp_path: Path) -> None:
     decision = evaluate_design_point_decision(records, config.acceptance.design_point, alpha=config.alpha)
     assert decision.verdict in {"chosen", "revise_claim"}
     assert len(decision.columns) == 4
+
+
+def _mock_pls_evaluator(generator_params, evaluation_params) -> SimulationEvaluationResult:
+    """Mock evaluator that honours ``forced_components`` the way ``_pls_integration`` does."""
+
+    result = _mock_evaluator(generator_params, evaluation_params)
+    forced = dict(evaluation_params.integration_params).get("forced_components")
+    metadata = {
+        "integration_method": "pls",
+        "component_selection": "forced" if forced is not None else "cv",
+        "selected_lv": int(forced) if forced is not None else 3,
+    }
+    return SimulationEvaluationResult(
+        **{**result.__dict__, "latent_matrix_metadata": metadata, "evaluation_params": evaluation_params}
+    )
+
+
+def test_end_to_end_rank_ladder(tmp_path: Path) -> None:
+    """Shards, merge, resume, and report over a tiny retained-rank ladder."""
+
+    from motco.simulations.study import (
+        DesignGrid,
+        MatchedSeedPolicy,
+        RankDecisionRule,
+        StatisticPair,
+        render_rank_ladder,
+    )
+    from motco.simulations.study.enumerate import DESIGN_PHASE
+    from motco.simulations.study.spectrum import RANK_AXIS
+    from motco.simulations.study.targets import evaluate_rank_decision, write_rank_decision
+
+    config = StudyConfig(
+        generator=SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", n_samples=60, p_dmp=0.1),
+        evaluation=SimulationEvaluationParams(
+            integration_method="pls",
+            integration_params={"cv1_splits": 3, "cv2_splits": 4, "n_repeats": 5, "max_components": 20},
+            permutations=9,
+            seed=3,
+        ),
+        trajectory_modes=("magnitude", "orientation", "shape", "translation"),
+        effect_sizes=(0.0, 0.5, 1.0),
+        n_replicates=1,
+        base_seed=7,
+        alpha=0.05,
+        matched_seeds=MatchedSeedPolicy(enabled=True, primary_family="ladder"),
+        design_grid=DesignGrid(axes={RANK_AXIS: (None, 3)}),
+        acceptance=AcceptanceTargets(
+            type_i=(TypeIControlTarget(alpha=0.05),),
+            rank_decision=RankDecisionRule(
+                axis=RANK_AXIS,
+                target=StatisticPair("orientation", "angle"),
+                protected=(StatisticPair("magnitude", "delta"), StatisticPair("shape", "shape")),
+            ),
+        ),
+    )
+    grid = enumerate_study(config)
+    forced_cells = [cell for cell in grid.cells if cell.phase == DESIGN_PHASE]
+    assert len(forced_cells) == 1 + 4 * 2
+    assert all(cell.evaluation_params.integration_params["forced_components"] == 3 for cell in forced_cells)
+
+    for shard_index in range(2):
+        run_shard(grid, shard_index=shard_index, n_shards=2, out_dir=tmp_path, evaluator=_mock_pls_evaluator)
+    records = merge_shards(discover_shard_paths(tmp_path), out_path=tmp_path / "merged.jsonl")
+    assert len(records) == sum(c.n_replicates for c in grid.cells)
+    assert {r.phase for r in records} >= {"power_primary", DESIGN_PHASE, "type_i_baseline"}
+
+    forced = [r for r in records if r.phase == DESIGN_PHASE]
+    assert forced and all(r.integration_metadata["component_selection"] == "forced" for r in forced)
+    assert all(r.integration_metadata["selected_lv"] == 3 for r in forced)
+    cv = [r for r in records if r.phase == "power_primary"]
+    assert cv and all(r.integration_metadata["component_selection"] == "cv" for r in cv)
+    # Same dataset, different measurement: paired generator seeds across the two columns.
+    by_key: dict[tuple, set[int]] = {}
+    for r in cv + forced:
+        key = (r.cell_metadata["trajectory_mode"], r.cell_metadata["effect_size"], r.replicate_index)
+        by_key.setdefault(key, set()).add(r.generator_seed)
+    assert all(len(seeds) == 1 for seeds in by_key.values())
+
+    # Resume: nothing left to do, no duplicates.
+    run_shard(grid, shard_index=0, n_shards=2, out_dir=tmp_path, evaluator=_mock_pls_evaluator)
+    records = merge_shards(discover_shard_paths(tmp_path), out_path=tmp_path / "merged.jsonl")
+    assert len(records) == sum(c.n_replicates for c in grid.cells)
+
+    per_stat = summarize_study(records, alpha=config.alpha)
+    combined = summarize_combined_rule(records, alpha=config.alpha)
+    frames = build_report_frames(per_stat, combined, records, alpha=config.alpha)
+    paths = write_report_csvs(frames, tmp_path / "report")
+    design = pd.read_csv(paths["design_point_operating"])
+    assert set(design["component_selection"]) == {"cv", "forced"}
+    assert set(design.loc[design["component_selection"] == "forced", RANK_AXIS]) == {3}
+    assert DESIGN_PHASE not in set(frames.power_curves["phase"])
+    assert render_rank_ladder(frames.design_point_operating, tmp_path / "report" / "rank_ladder.png") is not None
+
+    decision = evaluate_rank_decision(records, config.acceptance.rank_decision, alpha=config.alpha)
+    assert decision.verdict in {"keep_cv", "adopt_fixed_rank"}
+    assert [c.rank for c in decision.columns] == [None, 3]
+    out = write_rank_decision(decision, tmp_path / "report")
+    assert out["rank_decision"].exists() and out["rank_decision_csv"].exists()
