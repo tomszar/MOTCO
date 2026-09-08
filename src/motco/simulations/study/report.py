@@ -33,6 +33,7 @@ from motco.simulations.study.phase4 import (
     summarize_realized_geometry,
 )
 from motco.simulations.study.spectrum import (
+    resolve_operating_by_design_point,
     resolve_orientation_by_continuity,
     stratify_power_by_eigengap,
     summarize_config_spectrum,
@@ -56,7 +57,8 @@ class ReportFrames:
     ``continuity_resolved_orientation`` is empty — and its CSV is not written —
     unless the record set actually spans more than one baseline continuity
     value, so a study that holds the axis fixed reports exactly what it did
-    before the axis existed.
+    before the axis existed. ``design_point_operating`` likewise is empty — and
+    unwritten — unless the record set contains design-grid cells.
     """
 
     specificity_matrix: pd.DataFrame
@@ -66,6 +68,7 @@ class ReportFrames:
     eigengap_stratified_power: pd.DataFrame = field(default_factory=pd.DataFrame)
     realized_surgery: pd.DataFrame = field(default_factory=pd.DataFrame)
     continuity_resolved_orientation: pd.DataFrame = field(default_factory=pd.DataFrame)
+    design_point_operating: pd.DataFrame = field(default_factory=pd.DataFrame)
 
 
 @dataclass(frozen=True)
@@ -504,6 +507,7 @@ def build_report_frames(
         eigengap_stratified_power=stratify_power_by_eigengap(records, alpha=alpha),
         realized_surgery=build_realized_surgery(records),
         continuity_resolved_orientation=resolve_orientation_by_continuity(records, alpha=alpha),
+        design_point_operating=resolve_operating_by_design_point(records, alpha=alpha),
     )
 
 
@@ -536,6 +540,10 @@ def write_report_csvs(
         frames.continuity_resolved_orientation.to_csv(
             paths["continuity_resolved_orientation"], index=False
         )
+    # Written only when the study enumerated a design grid.
+    if not frames.design_point_operating.empty:
+        paths["design_point_operating"] = out_dir / "design_point_operating.csv"
+        frames.design_point_operating.to_csv(paths["design_point_operating"], index=False)
     return paths
 
 
@@ -670,6 +678,113 @@ def render_power_curves(
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return out_path
+
+
+def render_design_point_power(
+    frame: pd.DataFrame,
+    out_path: Path,
+    *,
+    trajectory_mode: str = "orientation",
+    statistic: str = "angle",
+    x_axis: str = "generator.n_samples",
+    line_axis: str | None = "generator.baseline_continuity",
+) -> Path:
+    """Plot one statistic's power across the design grid, at the top effect per point.
+
+    ``x_axis`` is drawn along the horizontal axis and ``line_axis`` selects one
+    line per value; when either is not a column of ``frame`` the first (and
+    second) design axes present are used instead. Each point is annotated with
+    the median recorded eigengap so the geometry that governs the power is read
+    beside it. Returns an empty placeholder figure when ``frame`` is empty.
+    """
+
+    import matplotlib.pyplot as plt
+
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    if frame.empty:
+        return _empty_figure(out_path, "Design-point power (no design grid)")
+
+    known = set(_DESIGN_POINT_NON_AXIS_COLUMNS)
+    axes = [column for column in frame.columns if column not in known]
+    if x_axis not in axes:
+        x_axis = axes[0] if axes else ""
+    if line_axis not in axes:
+        remaining = [axis for axis in axes if axis != x_axis]
+        line_axis = remaining[0] if remaining else None
+    sub = frame[
+        (frame["trajectory_mode"] == trajectory_mode)
+        & (frame["statistic"] == statistic)
+        & (frame["effect_size"].astype(float) > 0.0)
+    ]
+    if sub.empty or not x_axis:
+        return _empty_figure(out_path, f"Design-point power ({trajectory_mode}/{statistic}: no rows)")
+    group_keys = [x_axis] + ([line_axis] if line_axis else [])
+    top = sub.loc[sub.groupby(group_keys)["effect_size"].idxmax()]
+
+    fig, ax = plt.subplots(figsize=(5.2, 3.6))
+    line_values = sorted(top[line_axis].dropna().unique().tolist()) if line_axis else [None]
+    for line_index, value in enumerate(line_values):
+        block = top if value is None else top[top[line_axis] == value]
+        block = block.sort_values(x_axis)
+        ax.errorbar(
+            block[x_axis].to_numpy(dtype=float),
+            block["rejection_rate"].to_numpy(dtype=float),
+            yerr=block["monte_carlo_se"].to_numpy(dtype=float),
+            marker="o",
+            capsize=2,
+            label=None if value is None or line_axis is None else f"{line_axis.split('.')[-1]} = {value:g}",
+        )
+        for _, row in block.iterrows():
+            gap = row.get("median_eigengap")
+            if gap is not None and np.isfinite(float(gap)):
+                ax.annotate(
+                    f"gap {float(gap):.3f}",
+                    (float(row[x_axis]), float(row["rejection_rate"])),
+                    textcoords="offset points",
+                    xytext=(4, 4 + 9 * line_index),  # stagger lines so labels do not overlap
+                    fontsize=7,
+                )
+    ax.set_xlabel(x_axis.split(".")[-1])
+    ax.set_ylabel(f"{trajectory_mode}/{statistic} rejection rate (top effect)")
+    ax.set_ylim(-0.02, 1.02)
+    ax.grid(True, alpha=0.3)
+    if line_axis:
+        ax.legend(fontsize=8)
+    ax.set_title("Power across the design grid")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
+#: Every non-axis column of ``resolve_operating_by_design_point``'s frame.
+_DESIGN_POINT_NON_AXIS_COLUMNS: tuple[str, ...] = (
+    "phase",
+    "is_baseline",
+    "trajectory_mode",
+    "effect_size",
+    "statistic",
+    "n_cells",
+    "n_replicates",
+    "n_available",
+    "n_rejected",
+    "rejection_rate",
+    "monte_carlo_se",
+    "n_eigengap_available",
+    "mean_eigengap",
+    "q33_eigengap",
+    "median_eigengap",
+    "q67_eigengap",
+    "n_angle_null_available",
+    "median_angle_null_q95",
+    "iqr_angle_null_q95",
+    "sd_angle_null_q95",
+    "n_selected_lv_available",
+    "median_selected_lv",
+    "min_selected_lv",
+    "max_selected_lv",
+)
 
 
 def render_geometry_checkpoints(frame: pd.DataFrame, out_path: Path) -> Path:
@@ -860,6 +975,7 @@ __all__ = [
     "render_power_curves",
     "render_specificity_matrix",
     "render_attribution_stability",
+    "render_design_point_power",
     "render_geometry_checkpoints",
     "render_phase4_figures",
     "render_selected_components",

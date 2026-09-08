@@ -1,0 +1,12 @@
+# Phase 5 design-point pilot provenance
+date_utc: 2026-09-08T14:26:14Z
+code_revision: ff68514cb339da2aefdd5e89f20987cef201fc54 (branch feat/phase5-design-point-pilot)
+working_tree: dirty at launch (results/ dir itself is the only untracked path)
+config: examples/trajectory_power_study/phase5_design_point_pilot.json
+config_sha256: 153f53b7760699aea00331768b540ced6d4efd4630826980149c1318a8e9c374
+host: cluster.ing.uc.cl (SLURM), partition 512x1024, AMD EPYC 7662 compute nodes
+launch: sbatch --array=0-99 scripts/motco_study_array.sbatch, N_SHARDS=100, --cpus-per-task=1 --mem=2G --time=6:00:00, --error-policy record, no --n-jobs (STUDY_N_JOBS unset)
+blas_threads: OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 (exported at submit)
+probe: single-unit wallclock on a compute node, 199 permutations: n=300 27.7 s, n=1200 55.8 s
+versions: python 3.11.16, motco 0.6.0, numpy 2.3.5, scikit-learn 1.8.0, scipy 1.16.3, uv 0.12.10
+job_id: 878322

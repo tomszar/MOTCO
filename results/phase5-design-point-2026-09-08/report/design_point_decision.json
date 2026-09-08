@@ -1,0 +1,192 @@
+{
+  "verdict": "chosen",
+  "chosen": {
+    "generator.baseline_continuity": 0.0,
+    "generator.n_samples": 1200
+  },
+  "rationale": "First design point in preference order ['generator.n_samples', 'generator.baseline_continuity'] whose orientation/angle power at its top effect (1) clears the 0.80 floor with 1\u00b7SE confirmation: rate 0.880, lower bound 0.848.",
+  "alpha": 0.05,
+  "rule": {
+    "trajectory_mode": "orientation",
+    "statistic": "angle",
+    "min_power_at_top": 0.8,
+    "confirmation_se_threshold": 1.0,
+    "prefer": [
+      "generator.n_samples",
+      "generator.baseline_continuity"
+    ]
+  },
+  "columns": [
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.0,
+        "generator.n_samples": 300
+      },
+      "is_baseline": true,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.55,
+      "monte_carlo_se": 0.049749371855330994,
+      "lower_bound": 0.500250628144669,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.03,
+        "angle": 0.06,
+        "shape": 0.03
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.5,
+        "generator.n_samples": 300
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.24,
+      "monte_carlo_se": 0.04270831300812525,
+      "lower_bound": 0.19729168699187474,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.01,
+        "angle": 0.02,
+        "shape": 0.01
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.8,
+        "generator.n_samples": 300
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.69,
+      "monte_carlo_se": 0.04624932431938871,
+      "lower_bound": 0.6437506756806113,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.04,
+        "angle": 0.01,
+        "shape": 0.01
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.0,
+        "generator.n_samples": 600
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.76,
+      "monte_carlo_se": 0.04270831300812525,
+      "lower_bound": 0.7172916869918747,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.04,
+        "angle": 0.05,
+        "shape": 0.05
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.5,
+        "generator.n_samples": 600
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.46,
+      "monte_carlo_se": 0.04983974317750845,
+      "lower_bound": 0.4101602568224916,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.02,
+        "angle": 0.0,
+        "shape": 0.02
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.8,
+        "generator.n_samples": 600
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.73,
+      "monte_carlo_se": 0.044395945760846225,
+      "lower_bound": 0.6856040542391537,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.02,
+        "angle": 0.05,
+        "shape": 0.07
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.0,
+        "generator.n_samples": 1200
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.88,
+      "monte_carlo_se": 0.03249615361854384,
+      "lower_bound": 0.8475038463814561,
+      "status": "meets",
+      "anchor_rates": {
+        "delta": 0.04,
+        "angle": 0.04,
+        "shape": 0.03
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.5,
+        "generator.n_samples": 1200
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.69,
+      "monte_carlo_se": 0.04624932431938871,
+      "lower_bound": 0.6437506756806113,
+      "status": "fails",
+      "anchor_rates": {
+        "delta": 0.05,
+        "angle": 0.02,
+        "shape": 0.02
+      },
+      "anchor_available": 100
+    },
+    {
+      "design_point": {
+        "generator.baseline_continuity": 0.8,
+        "generator.n_samples": 1200
+      },
+      "is_baseline": false,
+      "top_effect": 1.0,
+      "n_available": 100,
+      "rejection_rate": 0.81,
+      "monte_carlo_se": 0.03923009049186606,
+      "lower_bound": 0.770769909508134,
+      "status": "marginal",
+      "anchor_rates": {
+        "delta": 0.02,
+        "angle": 0.04,
+        "shape": 0.03
+      },
+      "anchor_available": 100
+    }
+  ]
+}

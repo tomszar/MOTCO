@@ -227,6 +227,18 @@ specified. What remains: investigate orientation→shape at the PLS checkpoint, 
 if orientation is a primary estimand, and then choose the Phase 5 design point — which now also owns the
 0.80 orientation power floor.
 
+**Update 2026-09-08** ([report](reports/phase5-design-point-pilot-2026-09-08.md)): the design point is
+**chosen** and the floor is **met, not revised**. A crossed pilot (ρ ∈ {0, 0.5, 0.8} × n ∈ {300, 600, 1200},
+`p_dmp = 0.1`, uncensored effect axis, 6,500 units, 0 failures) puts orientation `angle` power at **0.88**
+(1·SE lower bound 0.85) at **ρ = 0, n = 1200**, with that column's null at nominal level on every statistic.
+Sample size does what the pivotality report predicted — the `angle` null width contracts 40.7° → 18.8° →
+10.8° along n at a constant eigengap — but baseline continuity does not help and is non-monotone (ρ = 0.5 is
+worse at every n), because the orientation surgery realizes a smaller latent contrast on a trending baseline.
+The Phase 5 claim is therefore n-conditional at the isotropic endpoint, reported beside the recorded eigengap
+(median 0.049). Selected rank stays at `n_stages − 1` for every n, so the retained-rank question passes to
+readiness item 3 unchanged; magnitude and shape must be re-measured at the chosen point because `p_dmp`
+changed.
+
 The July pilot ([`mvalue-pls-pilot-2026-07-30.md`](reports/mvalue-pls-pilot-2026-07-30.md)) predates the
 corrected shape estimator and realized-geometry diagnostics. It is retained unchanged as historical evidence
 and is superseded for Phase 4 gate purposes.
@@ -237,6 +249,9 @@ and is superseded for Phase 4 gate purposes.
 
 Planned baseline:
 
+- Design point chosen 2026-09-08 ([report](reports/phase5-design-point-pilot-2026-09-08.md)): ρ = 0
+  (independent baseline), n = 1200, four stages, `p_dmp = 0.1`, pooled PLS on M-value methylation with
+  CV-selected rank; all four modes, including magnitude and shape, re-measured there
 - 500 replicates per cell
 - 999 permutations per test
 - Resumable, sharded execution using `examples/trajectory_power_study/study.json`

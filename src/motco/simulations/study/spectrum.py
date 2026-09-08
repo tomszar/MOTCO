@@ -37,7 +37,16 @@ from motco.stats.trajectory import pooled_relative_eigengap
 STRATIFIED_MODES: tuple[str, ...] = ("orientation",)
 
 #: Phases carrying power cells (as opposed to the Type I controls).
-POWER_PHASES: tuple[str, ...] = ("power_primary", "power_ofat")
+POWER_PHASES: tuple[str, ...] = ("power_primary", "power_ofat", "power_design")
+
+#: Phases whose cells sit at a design point: the primary grid (baseline column,
+#: stamped with its coordinates when a design grid is declared) and the
+#: design-point grids. OFAT cells vary one factor off the baseline and are not
+#: design points.
+DESIGN_PHASES: tuple[str, ...] = ("power_primary", "power_design")
+
+#: Cell-metadata key carrying a cell's design-grid coordinates.
+DESIGN_POINT_KEY = "design_point"
 
 #: Number of within-cell strata. Terciles: enough to show a monotone trend at
 #: 100 replicates per cell without splitting the counts past usefulness.
@@ -350,7 +359,15 @@ def resolve_orientation_by_continuity(
         raise ValueError("alpha must be between 0 and 1.")
 
     wanted = set(modes)
-    buckets: dict[tuple[float, str, float | None], list[SimulationReplicateResult]] = {}
+    # Records at a design point are additionally keyed on every design
+    # coordinate other than continuity, so a grid crossing ρ with (say) sample
+    # size never pools three operating points into one row. Without a design
+    # grid the extra key is empty and the frame is exactly the pre-grid one.
+    buckets: dict[
+        tuple[float, tuple[tuple[str, Any], ...], str, float | None],
+        list[SimulationReplicateResult],
+    ] = {}
+    extra_axes: list[str] = []
     for record in records:
         if record.status != "completed" or record.phase not in POWER_PHASES:
             continue
@@ -362,14 +379,24 @@ def resolve_orientation_by_continuity(
         if mode not in wanted:
             continue
         effect = meta.get("effect_size")
-        key = (continuity, mode, None if effect is None else float(effect))
+        point = record_design_point(record) or {}
+        others = tuple(
+            (axis, value) for axis, value in point.items() if axis != CONTINUITY_AXIS
+        )
+        for axis, _ in others:
+            if axis not in extra_axes:
+                extra_axes.append(axis)
+        key = (continuity, others, mode, None if effect is None else float(effect))
         buckets.setdefault(key, []).append(record)
 
+    columns = list(_CONTINUITY_COLUMNS[:1]) + extra_axes + list(_CONTINUITY_COLUMNS[1:])
     if len({key[0] for key in buckets}) < 2:
-        return pd.DataFrame(columns=list(_CONTINUITY_COLUMNS))
+        return pd.DataFrame(columns=columns)
 
     rows: list[dict[str, Any]] = []
-    for (continuity, mode, effect), group in sorted(buckets.items(), key=_continuity_sort_key):
+    for (continuity, others, mode, effect), group in sorted(
+        buckets.items(), key=_continuity_sort_key
+    ):
         gaps = [gap for gap in (pooled_eigengap(record) for record in group) if gap is not None]
         widths = [
             width
@@ -378,6 +405,8 @@ def resolve_orientation_by_continuity(
         ]
         identity = {
             "baseline_continuity": continuity,
+            **{axis: None for axis in extra_axes},
+            **dict(others),
             "trajectory_mode": mode,
             "effect_size": effect,
             "n_cells": len({record.cell_id for record in group}),
@@ -426,7 +455,11 @@ def resolve_orientation_by_continuity(
                 }
             )
 
-    return pd.DataFrame(rows, columns=list(_CONTINUITY_COLUMNS))
+    return pd.DataFrame(rows, columns=columns)
+
+
+#: Design-grid axis name of the baseline-continuity generator parameter.
+CONTINUITY_AXIS = f"generator.{CONTINUITY_KEY}"
 
 
 _CONTINUITY_COLUMNS: tuple[str, ...] = (
@@ -452,9 +485,186 @@ _CONTINUITY_COLUMNS: tuple[str, ...] = (
 )
 
 
-def _continuity_sort_key(item: tuple[tuple[float, str, float | None], Any]) -> tuple[Any, ...]:
-    continuity, mode, effect = item[0]
-    return (continuity, mode, math.inf if effect is None else effect)
+def _continuity_sort_key(
+    item: tuple[tuple[float, tuple[tuple[str, Any], ...], str, float | None], Any],
+) -> tuple[Any, ...]:
+    continuity, others, mode, effect = item[0]
+    return (continuity, _sortable(others), mode, math.inf if effect is None else effect)
+
+
+def _sortable(values: Any) -> Any:
+    """Make design coordinates orderable across mixed value types."""
+
+    if isinstance(values, tuple):
+        return tuple(_sortable(value) for value in values)
+    if isinstance(values, bool | int | float):
+        return (0, float(values))
+    return (1, str(values))
+
+
+def record_design_point(record: SimulationReplicateResult) -> dict[str, Any] | None:
+    """Design-grid coordinates the record's cell sits at, or ``None``.
+
+    Only cells of :data:`DESIGN_PHASES` are design points; OFAT cells vary one
+    factor off the baseline and return ``None`` even if a grid was declared.
+    """
+
+    if record.phase not in DESIGN_PHASES:
+        return None
+    point = (record.cell_metadata or {}).get(DESIGN_POINT_KEY)
+    if not isinstance(point, Mapping):
+        return None
+    return dict(point)
+
+
+def _selected_components(record: SimulationReplicateResult) -> int | None:
+    """Recorded selected latent dimensionality, or ``None`` when unavailable."""
+
+    integration = record.integration_metadata or {}
+    selected = integration.get("selected_lv")
+    if selected is None:
+        selected = (integration.get("integration_params") or {}).get("selected_lv")
+    return None if selected is None else int(selected)
+
+
+def resolve_operating_by_design_point(
+    records: Sequence[SimulationReplicateResult],
+    *,
+    alpha: float = 0.05,
+    statistics: Sequence[str] = ("delta", "angle", "shape"),
+) -> pd.DataFrame:
+    """Operating characteristics resolved on every design-grid coordinate.
+
+    One row per (design point, mode, effect size, statistic), the baseline
+    column and each point's zero-effect anchor included (mode ``none`` at effect
+    ``0.0``). Beside the rejection rate each row carries the recorded
+    pooled-eigengap distribution, the dispersion of the per-replicate ``angle``
+    null width, and the distribution of the selected latent dimensionality —
+    the covariates the design-point decision is read against.
+
+    Returns an **empty frame** unless at least one completed ``power_design``
+    record is present, so a study without a design grid reports nothing new.
+    """
+
+    if not (0 < alpha < 1):
+        raise ValueError("alpha must be between 0 and 1.")
+
+    buckets: dict[
+        tuple[tuple[tuple[str, Any], ...], str, float | None], list[SimulationReplicateResult]
+    ] = {}
+    axes: list[str] = []
+    saw_design_phase = False
+    for record in records:
+        if record.status != "completed":
+            continue
+        point = record_design_point(record)
+        if point is None:
+            continue
+        saw_design_phase = saw_design_phase or record.phase == "power_design"
+        for axis in point:
+            if axis not in axes:
+                axes.append(axis)
+        meta = dict(record.cell_metadata)
+        mode = _resolve_mode(meta, record.phase)
+        effect = meta.get("effect_size")
+        key = (tuple(point.items()), mode, None if effect is None else float(effect))
+        buckets.setdefault(key, []).append(record)
+
+    columns = axes + list(_DESIGN_POINT_COLUMNS)
+    if not saw_design_phase:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, Any]] = []
+    for (coords, mode, effect), group in sorted(
+        buckets.items(),
+        key=lambda item: (_sortable(item[0][0]), item[0][1], math.inf if item[0][2] is None else item[0][2]),
+    ):
+        gaps = [gap for gap in (pooled_eigengap(record) for record in group) if gap is not None]
+        widths = [
+            width for width in (_angle_null_width(record) for record in group) if width is not None
+        ]
+        selected = [
+            value for value in (_selected_components(record) for record in group) if value is not None
+        ]
+        phases = sorted({record.phase for record in group})
+        identity = {
+            **{axis: None for axis in axes},
+            **dict(coords),
+            "phase": phases[0] if len(phases) == 1 else "+".join(phases),
+            "is_baseline": all(record.phase == "power_primary" for record in group),
+            "trajectory_mode": mode,
+            "effect_size": effect,
+            "n_cells": len({record.cell_id for record in group}),
+            "n_replicates": len(group),
+        }
+        geometry = {
+            "n_eigengap_available": len(gaps),
+            "mean_eigengap": _mean(gaps),
+            **{
+                f"{name}_eigengap": (float(np.quantile(gaps, q)) if gaps else None)
+                for name, q in _CONTINUITY_QUANTILES
+            },
+            "n_angle_null_available": len(widths),
+            "median_angle_null_q95": (float(np.quantile(widths, 0.5)) if widths else None),
+            "iqr_angle_null_q95": (
+                float(np.quantile(widths, 0.75) - np.quantile(widths, 0.25)) if widths else None
+            ),
+            "sd_angle_null_q95": _sd(widths),
+            "n_selected_lv_available": len(selected),
+            "median_selected_lv": (float(np.median(selected)) if selected else None),
+            "min_selected_lv": (min(selected) if selected else None),
+            "max_selected_lv": (max(selected) if selected else None),
+        }
+        for statistic in statistics:
+            p_values = [
+                float(p)
+                for record in group
+                if (p := record.p_values.get(statistic)) is not None and math.isfinite(float(p))
+            ]
+            rejected = sum(p < alpha for p in p_values)
+            rate = rejected / len(p_values) if p_values else None
+            rows.append(
+                {
+                    **identity,
+                    "statistic": statistic,
+                    "n_available": len(p_values),
+                    "n_rejected": rejected,
+                    "rejection_rate": rate,
+                    "monte_carlo_se": (
+                        math.sqrt(rate * (1.0 - rate) / len(p_values)) if rate is not None else None
+                    ),
+                    **geometry,
+                }
+            )
+    return pd.DataFrame(rows, columns=columns)
+
+
+_DESIGN_POINT_COLUMNS: tuple[str, ...] = (
+    "phase",
+    "is_baseline",
+    "trajectory_mode",
+    "effect_size",
+    "statistic",
+    "n_cells",
+    "n_replicates",
+    "n_available",
+    "n_rejected",
+    "rejection_rate",
+    "monte_carlo_se",
+    "n_eigengap_available",
+    "mean_eigengap",
+    "q33_eigengap",
+    "median_eigengap",
+    "q67_eigengap",
+    "n_angle_null_available",
+    "median_angle_null_q95",
+    "iqr_angle_null_q95",
+    "sd_angle_null_q95",
+    "n_selected_lv_available",
+    "median_selected_lv",
+    "min_selected_lv",
+    "max_selected_lv",
+)
 
 
 def _angle_null_width(record: SimulationReplicateResult) -> float | None:
@@ -514,14 +724,19 @@ def _sd(values: Sequence[float]) -> float | None:
 
 
 __all__ = [
+    "CONTINUITY_AXIS",
     "CONTINUITY_KEY",
     "DEFAULT_N_STRATA",
+    "DESIGN_PHASES",
+    "DESIGN_POINT_KEY",
     "POWER_PHASES",
     "STRATIFIED_MODES",
     "group_eigengaps",
     "has_spectrum",
     "pooled_eigengap",
     "record_continuity",
+    "record_design_point",
+    "resolve_operating_by_design_point",
     "resolve_orientation_by_continuity",
     "stratify_power_by_eigengap",
     "summarize_config_spectrum",

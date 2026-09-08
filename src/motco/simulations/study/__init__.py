@@ -3,6 +3,8 @@
 from motco.simulations.study.config import (
     AcceptanceTargets,
     AttributionSelector,
+    DesignGrid,
+    DesignPointDecisionRule,
     GateRule,
     MatchedSeedPolicy,
     Phase4GateConfig,
@@ -39,6 +41,7 @@ from motco.simulations.study.report import (
     build_specificity_matrix,
     build_type_i_table,
     render_attribution_stability,
+    render_design_point_power,
     render_geometry_checkpoints,
     render_phase4_figures,
     render_power_curves,
@@ -55,6 +58,7 @@ from motco.simulations.study.sharding import (
     run_shard,
 )
 from motco.simulations.study.spectrum import (
+    resolve_operating_by_design_point,
     resolve_orientation_by_continuity,
     stratify_power_by_eigengap,
     summarize_config_spectrum,
@@ -65,8 +69,11 @@ from motco.simulations.study.summary import (
     summarize_study,
 )
 from motco.simulations.study.targets import (
+    DesignPointDecision,
     TargetEvaluation,
+    evaluate_design_point_decision,
     evaluate_targets,
+    write_design_point_decision,
     write_target_report,
 )
 
@@ -74,6 +81,9 @@ __all__ = [
     "AcceptanceTargets",
     "AttributionSelector",
     "CombinedRuleSummary",
+    "DesignGrid",
+    "DesignPointDecision",
+    "DesignPointDecisionRule",
     "GateObservation",
     "GateRule",
     "MatchedSeedPolicy",
@@ -101,6 +111,7 @@ __all__ = [
     "dump_study_config",
     "enumerate_study",
     "enumerate_units",
+    "evaluate_design_point_decision",
     "evaluate_phase4_gate",
     "evaluate_targets",
     "load_study_config",
@@ -108,12 +119,14 @@ __all__ = [
     "merge_shards",
     "partition_unit",
     "render_attribution_stability",
+    "render_design_point_power",
     "render_geometry_checkpoints",
     "render_phase4_figures",
     "render_power_curves",
     "render_selected_components",
     "render_specificity_matrix",
     "render_type_i_plot",
+    "resolve_operating_by_design_point",
     "resolve_orientation_by_continuity",
     "run_shard",
     "stratify_power_by_eigengap",
@@ -124,6 +137,7 @@ __all__ = [
     "summarize_realized_geometry",
     "summarize_study",
     "type_i_inflation_bound",
+    "write_design_point_decision",
     "write_phase4_report",
     "write_report_csvs",
     "write_target_report",

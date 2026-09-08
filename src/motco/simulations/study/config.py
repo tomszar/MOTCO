@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -231,6 +232,71 @@ class Phase4GateConfig:
 
 
 @dataclass(frozen=True)
+class DesignGrid:
+    """Crossed design grid: every combination of the declared axis values.
+
+    Unlike ``StudyConfig.axes`` (one factor at a time off the baseline), the
+    design grid crosses its axes into *design points* and enumerates the full
+    power grid — one zero-effect anchor plus every (mode × nonzero effect) — at
+    each point. Every axis MUST list the baseline value so the primary power
+    cells are one of the points; that column is served by the primary grid and
+    never re-emitted.
+    """
+
+    axes: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for axis, values in self.axes.items():
+            _validate_axis_namespace(axis, label="design_grid.axes")
+            if not values:
+                raise StudyConfigError(f"design_grid.axes[{axis!r}] must list at least one value.")
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.axes)
+
+
+@dataclass(frozen=True)
+class DesignPointDecisionRule:
+    """Predeclared rule choosing the study design point from a design grid.
+
+    Per design point the target statistic's rejection rate at the largest
+    enumerated effect is compared with ``min_power_at_top``; a point *meets* the
+    floor when ``rate − confirmation_se_threshold·SE ≥ floor``, is *marginal*
+    when only the point estimate clears it, and *fails* otherwise. The chosen
+    point is the first confirmed one in ``prefer`` order (each named axis
+    ascending, then the remaining design axes in declared order). The rule is
+    advisory: it never feeds the Phase 4 gate or the acceptance targets.
+    """
+
+    trajectory_mode: str
+    statistic: str
+    min_power_at_top: float
+    prefer: tuple[str, ...]
+    confirmation_se_threshold: float = 1.0
+    name: str = "design_point"
+    kind: str = field(default="design_point", init=False)
+
+    def __post_init__(self) -> None:
+        if self.trajectory_mode not in _TRAJECTORY_MODES:
+            raise StudyConfigError(
+                f"acceptance.design_point.trajectory_mode {self.trajectory_mode!r} is unknown."
+            )
+        if self.statistic not in _STATISTICS:
+            raise StudyConfigError(f"acceptance.design_point.statistic {self.statistic!r} is unknown.")
+        if not (0 <= self.min_power_at_top <= 1):
+            raise StudyConfigError("acceptance.design_point.min_power_at_top must be between 0 and 1.")
+        if self.confirmation_se_threshold < 0:
+            raise StudyConfigError(
+                "acceptance.design_point.confirmation_se_threshold must be non-negative."
+            )
+        if not self.prefer:
+            raise StudyConfigError("acceptance.design_point.prefer must name at least one design axis.")
+        for axis in self.prefer:
+            _validate_axis_namespace(axis, label="acceptance.design_point.prefer")
+
+
+@dataclass(frozen=True)
 class AcceptanceTargets:
     """Collection of pre-specified acceptance targets."""
 
@@ -238,6 +304,7 @@ class AcceptanceTargets:
     power: tuple[PowerMonotonicityTarget, ...] = ()
     specificity: tuple[SpecificityTarget, ...] = ()
     gate: Phase4GateConfig = field(default_factory=Phase4GateConfig)
+    design_point: DesignPointDecisionRule | None = None
 
 
 @dataclass(frozen=True)
@@ -249,6 +316,7 @@ class StudyConfig:
     trajectory_modes: tuple[str, ...]
     effect_sizes: tuple[float, ...]
     axes: Mapping[str, tuple[Any, ...]] = field(default_factory=dict)
+    design_grid: DesignGrid = field(default_factory=DesignGrid)
     n_replicates: int = 1
     base_seed: int = 0
     alpha: float = 0.05
@@ -272,6 +340,7 @@ class StudyConfig:
                 raise StudyConfigError(f"effect_sizes must be non-negative; got {value}.")
         for axis in self.axes:
             _validate_axis_namespace(axis)
+        self._validate_design_grid()
         if not (0 < self.alpha < 1):
             raise StudyConfigError("alpha must be between 0 and 1.")
         if self.attribution.enabled:
@@ -296,6 +365,70 @@ class StudyConfig:
                     raise StudyConfigError(
                         f"attribution.effect_sizes select effect(s) absent from effect_sizes: {missing}."
                     )
+
+
+    def _validate_design_grid(self) -> None:
+        grid = self.design_grid
+        for axis, values in grid.axes.items():
+            if axis in self.axes:
+                raise StudyConfigError(
+                    f"design_grid.axes[{axis!r}] is also declared under axes; an axis is either "
+                    "crossed in the design grid or varied one factor at a time, not both."
+                )
+            baseline = self.axis_baseline_value(axis)
+            if not any(_same_axis_value(value, baseline) for value in values):
+                raise StudyConfigError(
+                    f"design_grid.axes[{axis!r}] must include the baseline value {baseline!r} so the "
+                    "primary power cells are one of the design points."
+                )
+        rule = self.acceptance.design_point
+        if rule is None:
+            return
+        if not grid.enabled:
+            raise StudyConfigError("acceptance.design_point requires a non-empty design_grid.")
+        unknown = [axis for axis in rule.prefer if axis not in grid.axes]
+        if unknown:
+            raise StudyConfigError(
+                f"acceptance.design_point.prefer names axis(es) absent from design_grid.axes: {unknown}."
+            )
+        if rule.trajectory_mode not in self.trajectory_modes:
+            raise StudyConfigError(
+                f"acceptance.design_point.trajectory_mode {rule.trajectory_mode!r} is absent from "
+                "trajectory_modes."
+            )
+
+    def axis_baseline_value(self, axis: str) -> Any:
+        """Baseline value of a namespaced ``generator.``/``evaluation.`` axis."""
+
+        namespace, _, field_name = axis.partition(".")
+        target = self.generator if namespace == "generator" else self.evaluation
+        if not hasattr(target, field_name):
+            raise StudyConfigError(f"axis {axis!r} names an unknown {namespace} field {field_name!r}.")
+        return getattr(target, field_name)
+
+    def design_points(self) -> list[dict[str, Any]]:
+        """Every design point as ``{axis: value}``, baseline included, in declared order."""
+
+        axes = list(self.design_grid.axes.items())
+        if not axes:
+            return []
+        points: list[dict[str, Any]] = []
+        for combination in itertools.product(*(values for _, values in axes)):
+            points.append({axis: value for (axis, _), value in zip(axes, combination)})
+        return points
+
+    def baseline_design_point(self) -> dict[str, Any]:
+        """The design point occupied by the primary power cells."""
+
+        return {axis: self.axis_baseline_value(axis) for axis in self.design_grid.axes}
+
+    def is_baseline_design_point(self, point: Mapping[str, Any]) -> bool:
+        baseline = self.baseline_design_point()
+        return all(_same_axis_value(point[axis], baseline[axis]) for axis in baseline)
+
+
+def _same_axis_value(left: Any, right: Any) -> bool:
+    return _to_jsonable(left) == _to_jsonable(right)
 
 
 def load_study_config(path: str | Path) -> StudyConfig:
@@ -352,6 +485,7 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
     trajectory_modes = tuple(str(mode) for mode in data["trajectory_modes"])
     effect_sizes = tuple(float(value) for value in data["effect_sizes"])
     axes = _build_axes(data.get("axes") or {})
+    design_grid = _build_design_grid(data.get("design_grid") or {})
     n_replicates = int(data.get("n_replicates", 1))
     base_seed = int(data.get("base_seed", 0))
     alpha = float(data.get("alpha", 0.05))
@@ -365,6 +499,7 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
         trajectory_modes=trajectory_modes,
         effect_sizes=effect_sizes,
         axes=axes,
+        design_grid=design_grid,
         n_replicates=n_replicates,
         base_seed=base_seed,
         alpha=alpha,
@@ -429,15 +564,56 @@ def _build_axes(raw: Mapping[str, Any]) -> Mapping[str, tuple[Any, ...]]:
     return axes
 
 
+def _build_design_grid(raw: Mapping[str, Any]) -> DesignGrid:
+    if not raw:
+        return DesignGrid()
+    unknown = sorted(set(raw) - {"axes"})
+    if unknown:
+        raise StudyConfigError(f"design_grid has unknown field(s): {unknown}.")
+    axes: dict[str, tuple[Any, ...]] = {}
+    for axis, values in (raw.get("axes") or {}).items():
+        _validate_axis_namespace(axis, label="design_grid.axes")
+        if not isinstance(values, Sequence) or isinstance(values, str | bytes):
+            raise StudyConfigError(f"design_grid.axes[{axis!r}] values must be a sequence.")
+        axes[axis] = tuple(values)
+    return DesignGrid(axes=axes)
+
+
+def _build_design_point_rule(raw: Mapping[str, Any] | None) -> DesignPointDecisionRule | None:
+    if not raw:
+        return None
+    required = {"trajectory_mode", "statistic", "min_power_at_top", "prefer"}
+    missing = sorted(required - set(raw))
+    if missing:
+        raise StudyConfigError(f"acceptance.design_point is missing required field(s): {missing}.")
+    unknown = sorted(set(raw) - (required | {"confirmation_se_threshold", "name", "kind"}))
+    if unknown:
+        raise StudyConfigError(f"acceptance.design_point has unknown field(s): {unknown}.")
+    prefer = raw["prefer"]
+    if isinstance(prefer, str) or not isinstance(prefer, Sequence):
+        raise StudyConfigError("acceptance.design_point.prefer must be a sequence of axis names.")
+    return DesignPointDecisionRule(
+        trajectory_mode=str(raw["trajectory_mode"]),
+        statistic=str(raw["statistic"]),
+        min_power_at_top=float(raw["min_power_at_top"]),
+        prefer=tuple(str(axis) for axis in prefer),
+        confirmation_se_threshold=float(raw.get("confirmation_se_threshold", 1.0)),
+        name=str(raw.get("name", "design_point")),
+    )
+
+
 def _build_acceptance(raw: Mapping[str, Any]) -> AcceptanceTargets:
-    unknown = sorted(set(raw) - {"type_i", "power", "specificity", "gate"})
+    unknown = sorted(set(raw) - {"type_i", "power", "specificity", "gate", "design_point"})
     if unknown:
         raise StudyConfigError(f"acceptance has unknown block(s): {unknown}.")
     type_i = tuple(_build_type_i_target(entry) for entry in raw.get("type_i", []) or [])
     power = tuple(_build_power_target(entry) for entry in raw.get("power", []) or [])
     specificity = tuple(_build_specificity_target(entry) for entry in raw.get("specificity", []) or [])
     gate = _build_gate(raw.get("gate") or {})
-    return AcceptanceTargets(type_i=type_i, power=power, specificity=specificity, gate=gate)
+    design_point = _build_design_point_rule(raw.get("design_point"))
+    return AcceptanceTargets(
+        type_i=type_i, power=power, specificity=specificity, gate=gate, design_point=design_point
+    )
 
 
 def _build_gate(raw: Mapping[str, Any]) -> Phase4GateConfig:
@@ -587,16 +763,16 @@ def _build_specificity_target(raw: Mapping[str, Any]) -> SpecificityTarget:
     )
 
 
-def _validate_axis_namespace(axis: str) -> None:
+def _validate_axis_namespace(axis: str, *, label: str = "axis") -> None:
     if "." not in axis:
         raise StudyConfigError(
-            f"axis {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
+            f"{label} {axis!r} must use a namespace prefix: 'generator.' or 'evaluation.'."
         )
     namespace, _, field_name = axis.partition(".")
     if namespace not in _AXIS_NAMESPACES:
-        raise StudyConfigError(f"axis {axis!r} has unsupported namespace {namespace!r}.")
+        raise StudyConfigError(f"{label} {axis!r} has unsupported namespace {namespace!r}.")
     if not field_name:
-        raise StudyConfigError(f"axis {axis!r} is missing a field name.")
+        raise StudyConfigError(f"{label} {axis!r} is missing a field name.")
 
 
 def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
@@ -606,6 +782,9 @@ def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
         "trajectory_modes": list(config.trajectory_modes),
         "effect_sizes": list(config.effect_sizes),
         "axes": {axis: list(values) for axis, values in config.axes.items()},
+        "design_grid": {
+            "axes": {axis: list(values) for axis, values in config.design_grid.axes.items()}
+        },
         "n_replicates": config.n_replicates,
         "base_seed": config.base_seed,
         "alpha": config.alpha,
@@ -614,6 +793,11 @@ def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
             "power": [_dataclass_dict(t) for t in config.acceptance.power],
             "specificity": [_dataclass_dict(t) for t in config.acceptance.specificity],
             "gate": _dataclass_dict(config.acceptance.gate),
+            "design_point": (
+                None
+                if config.acceptance.design_point is None
+                else _dataclass_dict(config.acceptance.design_point)
+            ),
         },
         "attribution": _dataclass_dict(config.attribution),
         "matched_seeds": _dataclass_dict(config.matched_seeds),
@@ -640,6 +824,8 @@ def _to_jsonable(value: Any) -> Any:
 __all__ = [
     "AcceptanceTargets",
     "AttributionSelector",
+    "DesignGrid",
+    "DesignPointDecisionRule",
     "GateRule",
     "MatchedSeedPolicy",
     "Phase4GateConfig",

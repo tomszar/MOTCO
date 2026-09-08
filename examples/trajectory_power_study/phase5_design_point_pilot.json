@@ -1,0 +1,100 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 300,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "orientation",
+    "translation"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "axes": {},
+  "design_grid": {
+    "axes": {
+      "generator.baseline_continuity": [
+        0.0,
+        0.5,
+        0.8
+      ],
+      "generator.n_samples": [
+        300,
+        600,
+        1200
+      ]
+    }
+  },
+  "n_replicates": 100,
+  "base_seed": 500,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase5-design-point",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [],
+    "specificity": [],
+    "gate": {
+      "enabled": false
+    },
+    "design_point": {
+      "trajectory_mode": "orientation",
+      "statistic": "angle",
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "prefer": [
+        "generator.n_samples",
+        "generator.baseline_continuity"
+      ]
+    }
+  },
+  "metadata": {
+    "name": "trajectory-power-phase5-design-point-pilot",
+    "phase": 5,
+    "intent": "Phase 5 design-point pilot (readiness item 4): measure how orientation's operating characteristics scale with samples per group-stage cell and baseline continuity, on an uncensored effect axis, so the paper-grade design point is chosen on evidence. Modes are orientation (the estimand whose power floor is in question) and translation (the location-only negative control that binds the surgery headroom). Crossed design grid rho in {0.0, 0.5, 0.8} x n_samples in {300, 600, 1200}; pooled PLS on M-value methylation, four stages, p_dmp = 0.1, 100 replicates, 199 permutations, matched seeds with one shared zero-effect anchor per design point.",
+    "derives_from": "examples/trajectory_power_study/phase4_pilot_100x199.json",
+    "notes": [
+      "p_dmp is 0.1 rather than the Phase 4 pilot's 0.2 so the 0.25-1.00 effect axis is realizable without censoring for every pool-limited mode at every design point, including the rho = 0 stress-test endpoint (orientation saturates near e = 1.69 and translation near e = 2.00 at rho = 0; both grow with rho). Changing p_dmp is a baseline change that touches every mode; magnitude and shape are deliberately left out of this pilot to halve its compute (they reached power 1.00 at n = 300 in Phase 4 and only gain from larger n), and are re-measured at the chosen design point in the Phase 5 study itself.",
+      "surgery_censoring is left at its default ('error'): a surgery that cannot be realized in full fails loudly, and enumeration rejects over-headroom cells before compute is spent. Do not copy the historical 'clamp' flag from the Phase 4 configs.",
+      "Design-point cells share the primary matched-seed family. rho = 0 and rho > 0 threshold the same uniform block, so comparisons along rho at fixed n are paired at the baseline indicator draw; columns that differ in n_samples simply diverge. Each non-baseline design point owns its own zero-effect anchor, so every column has its own null measurement.",
+      "The design-point decision rule is advisory and predeclared: the chosen point is the first column in (n_samples ascending, then rho ascending) order whose orientation/angle power at the top effect clears 0.80 with a one-SE lower-bound confirmation; if none does, the verdict is revise_claim and the readiness worklist revises the claim, not the Monte Carlo size. Lower n is cheaper for Phase 5 and for any real cohort; lower rho is the more general claim.",
+      "Power is read beside the recorded pooled configuration eigengap and the angle null-width dispersion (design_point_operating.csv, continuity_resolved_orientation.csv), because the eigengap - not the knob - is the observable that carries a continuity-conditioned orientation claim to real data.",
+      "The Phase 4 gate is disabled: this pilot chooses a design point, it does not gate Phase 5. Attribution diagnostics are off; they answer a different question. Selected PLS dimensionality is recorded but not varied (readiness item 3).",
+      "Do not pass --n-jobs: the worker count enters the parameter signature and changes the realized permutation draws. Parallelize across shards. Expect roughly 6,500 work units; PLS double CV scales about linearly in n_samples, so the n = 1200 columns dominate compute."
+    ]
+  }
+}
