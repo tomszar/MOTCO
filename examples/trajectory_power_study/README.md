@@ -172,25 +172,37 @@ permutations per cell; 6,500 work units, with the `n = 1200` columns
 dominating compute. `magnitude` and `shape` are left to the Phase 5 study at
 the chosen design point — both reached power 1.00 at n = 300 in Phase 4.
 
-A local rehearsal (2026-09-04; 4 replicates, 49 permutations, 14 single-thread
-shards on a 16-core workstation) ran all 65 cells with zero failures and no
-censored surgery. Measured per-unit cost on that machine, PLS fit + RRPP:
-about 30 s + 0.5 s/permutation at n = 300, and 72 s + 2 s/permutation at
-n = 1200 — so at 199 permutations expect roughly 135 s, 250 s, and 460 s per
-unit for n = 300, 600, 1200, or ~500 core-hours for the full pilot on
-comparable cores (Phase 4 ran ~3× faster per core on the cluster). Pin BLAS to
-one thread per shard (`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1`): with the
-default thread pool each shard spawns ~32 threads and 12 parallel shards drove
-the load average past 100.
+**Run 2026-09-08** — see the
+[findings report](../../docs/reports/phase5-design-point-pilot-2026-09-08.md) and
+the committed outputs under `results/phase5-design-point-2026-09-08/`
+(`report/` and `PROVENANCE.txt`). All 6,500 units completed with zero failures
+and no censored surgery on a SLURM array of 100 single-CPU shards (AMD EPYC
+7662): 70 core-hours of recorded unit runtime, 70 minutes wall. Verdict:
+**chosen**, ρ = 0 at n = 1200 (orientation `angle` power 0.88, 1·SE lower
+bound 0.85).
+
+Measured per-unit cost with BLAS pinned to one thread (PLS double CV + 199
+RRPP permutations): 12.5 s / 18.5 s / 27 s per unit at n = 300 / 600 / 1200 on
+a desktop core (Ryzen 9 7900X), 28 s / — / 56 s on an EPYC 7662 core — about
+35 desktop-core-hours or 70 EPYC-core-hours for the whole pilot. Running many
+shards on one workstation costs more per unit than the isolated figures
+(memory bandwidth: 25 s / 69 s / 124 s with 22 concurrent shards on 12 cores),
+so a 22-shard local run takes roughly 6 hours. **Always pin BLAS**
+(`OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1`): with the
+default thread pool each shard spawns ~32 threads, 12 parallel shards drove
+the load average past 100, and the 2026-09-04 rehearsal measured under that
+oversubscription over-estimated the cost by about 7×.
 
 ```bash
-sbatch --array=0-63 \
-    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_design_point_pilot.json,STUDY_OUT=$(pwd)/results/phase5-design-point,N_SHARDS=64 \
+# As executed on 2026-09-08 (partition/resource flags are cluster-specific).
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_design_point_pilot.json,STUDY_OUT=$(pwd)/results/phase5-design-point-2026-09-08,N_SHARDS=100 \
     scripts/motco_study_array.sbatch
-python scripts/motco_study.py merge  --out-dir results/phase5-design-point
+python scripts/motco_study.py merge  --out-dir results/phase5-design-point-2026-09-08
 python scripts/motco_study.py report \
     --config examples/trajectory_power_study/phase5_design_point_pilot.json \
-    --out-dir results/phase5-design-point
+    --out-dir results/phase5-design-point-2026-09-08
 ```
 
 The report adds, beside the usual outputs:

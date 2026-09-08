@@ -4,11 +4,15 @@ Work to complete before launching the paper-grade study. Derived from the
 [Phase 4 medium PLS pilot](reports/phase4-medium-pls-pilot-2026-08-27.md) (run 2026-08-27, gate decision
 **HOLD**). Every number below comes from `results/phase4-2026-08-27/report/`.
 
-**Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03; items 3–5 open.** Phase 4 is complete;
-these are its follow-ups. The blocking item is closed — `angle` proceeds as specified — and the 0.80
-orientation power floor moves to item 4. See [the pivotality report](reports/angle-null-pivotality-2026-09-01.md).
-The [geometry audit](reports/geometry-audit-2026-09-01.md) (2026-09-01) has since narrowed items 2–4 and added
-preconditions — see its remediation plan (P1–P6); P3 landed 2026-09-03 and closed item 2.
+**Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03, item 4 resolved 2026-09-08; items 3 and 5
+open.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
+specified — and the 0.80 orientation power floor, handed to item 4, is **met at the chosen design point
+ρ = 0, n = 1200** (orientation `angle` power 0.88, 1·SE lower bound 0.85; see the
+[design-point pilot report](reports/phase5-design-point-pilot-2026-09-08.md)). See also
+[the pivotality report](reports/angle-null-pivotality-2026-09-01.md). The
+[geometry audit](reports/geometry-audit-2026-09-01.md) (2026-09-01) narrowed items 2–4 and added
+preconditions — see its remediation plan (P1–P6); P3 landed 2026-09-03 and closed item 2, and P1/P2/P4 were
+the preconditions item 4's pilot ran on.
 
 ## What is already settled — do not re-litigate
 
@@ -171,10 +175,42 @@ argued from recorded evidence — see
 [Recording the latent configuration spectrum](reports/latent-config-spectrum-2026-09-02.md). The
 group-aware-supervision caution stands: this change only *observes* the spectrum.
 
-## 4. Choose the Phase 5 design point
+## 4. Choose the Phase 5 design point — **resolved 2026-09-08**
 
-Only after item 3; items 1 and 2 are resolved. The pilot used n = 300 with four stages (75 samples per
-group-stage cell) over ~660 standardized features.
+> **Resolved.** The design-point pilot ([report](reports/phase5-design-point-pilot-2026-09-08.md), run
+> 2026-09-08, `results/phase5-design-point-2026-09-08/`, 6,500 units, 0 failures, 0 censored surgeries)
+> crossed baseline continuity ρ ∈ {0, 0.5, 0.8} with `n_samples` ∈ {300, 600, 1200} at `p_dmp = 0.1`, four
+> stages, 100 replicates × 199 permutations, on an effect axis (0.25–1.00) that is uncensored at every
+> design point.
+>
+> **Decision: the Phase 5 design point is ρ = 0 (independent baseline), n = 1200 (300 samples per
+> group-stage cell), four stages, `p_dmp = 0.1`, pooled PLS on M-value methylation with CV-selected
+> rank.** Orientation `angle` power at e = 1.00 is **0.88** (MC SE 0.032, 1·SE lower bound 0.85) and the
+> column's own zero-effect anchor is at nominal level on all three statistics (0.04 / 0.04 / 0.03). The 0.80
+> floor is **met, not revised**, at the isotropic stress-test endpoint — the most general claim the grid
+> offered (`report/design_point_decision.json`).
+>
+> **What the covariates showed.** Along n at fixed ρ = 0 the eigengap is constant (≈ 0.05) while the median
+> `angle` null width contracts 40.7° → 18.8° → 10.8° and power rises 0.55 → 0.76 → 0.88: sample size shrinks
+> the null-width dispersion exactly as item 1 predicted. **Continuity does not help and is non-monotone:**
+> ρ = 0.5 is worse than ρ = 0 at every n (0.24 / 0.46 / 0.69) and ρ = 0.8 beats ρ = 0 only at n = 300. The
+> eigengap rises with ρ as designed, and at ρ = 0.5 the null is the narrowest in the grid, but the same
+> nominal orientation surgery realizes a *smaller* latent contrast on a trending baseline (median observed
+> angle 28° at ρ = 0.5, n = 1200, against 66° at ρ = 0). The Phase 5 claim is therefore n-conditional; the
+> eigengap distribution at the chosen point (median 0.049, terciles 0.038–0.063) is the observable to report
+> beside any real-data orientation result, and baseline continuity must not be used as a lever to buy power.
+>
+> **Hand-off to item 3.** Selected rank is 3 (`n_stages − 1`) at the chosen point for every n (range 2–4),
+> so the retained-rank question is unchanged by sample size. New fact for item 3: only a strongly trending
+> baseline (ρ = 0.8) moves the CV off `n_stages − 1` — orientation at e = 1.00 there selects median rank 7–8
+> (up to 14) against the column's anchor at 4, and it is the only ρ at which orientation's `delta`/`shape`
+> responses fall, consistent with the latent-rank probe's decay.
+>
+> **Phase 5 must re-measure magnitude and shape** at the chosen point: `p_dmp` changed from 0.2 to 0.1, and
+> the pilot deliberately ran only orientation and translation.
+
+The history of how this item was scoped is retained below. The Phase 4 pilot used n = 300 with four stages
+(75 samples per group-stage cell) over ~660 standardized features.
 
 **What to establish:** how orientation's operating characteristics scale with samples per group-stage cell
 and with feature count, so the Phase 5 sample size is chosen on evidence rather than inherited. Item 1 has
