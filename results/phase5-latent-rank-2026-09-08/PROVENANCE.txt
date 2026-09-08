@@ -1,0 +1,16 @@
+# Phase 5 latent-rank ladder provenance
+date_utc: 2026-09-08T18:36:23Z
+code_revision: a3ea2b4f27dca496cfee34cc064670a98927476c (branch main) + uncommitted working tree of OpenSpec change resolve-latent-rank-at-design-point, synced from the workstation by rsync (nested evaluation axes, rank ladder reporting, ladder profile)
+working_tree_diff_sha256: 16afc68c6d1ea8e88900edd1e6dee2c72eca374faf3e363097d5734889bf6ed1 (tracked files); untracked: examples/trajectory_power_study/phase5_latent_rank_ladder.json tests/test_nested_axes.py tests/test_phase5_latent_rank_ladder_profile.py tests/test_study_rank_ladder.py
+config: examples/trajectory_power_study/phase5_latent_rank_ladder.json
+config_sha256: b91339f9a8db9ee33d177e9fd9084d5c34e28d5ad2482fc47e4e25232fe31b5f
+host: cluster.ing.uc.cl (SLURM), partition 512x1024, AMD EPYC 7662 compute nodes
+launch: sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 scripts/motco_study_array.sbatch, N_SHARDS=100, --error-policy record, no --n-jobs (STUDY_N_JOBS unset)
+blas_threads: OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 (exported at submit)
+units: 80 cells x 100 replicates = 8000 (78 power cells over 6 rank columns + 2 baseline Type I controls)
+versions: python 3.11.16, motco 0.6.0, numpy 2.3.5, scikit-learn 1.8.0, scipy 1.16.3, uv 0.12.10
+job_id: 878624
+outcome: all 100 array tasks COMPLETED (exit 0:0, empty stderr); 8000/8000 (cell, replicate) units present once, 0 parameter-signature mismatches, 0 failed records, 0 censored surgeries
+wall: 2026-09-08T15:36:24 -> 15:56:16 cluster local time (20 min); first task 8 min, longest 20 min
+unit_timings: cv column 1500 units, median 57.4 s (min 36.8, max 117.7), 24.1 core-hours; forced columns 6500 units, median 0.2 s (min 0.1, max 0.6), 0.3 core-hours; total recorded 24.5 core-hours
+merge: python scripts/motco_study.py merge --out-dir results/phase5-latent-rank-2026-09-08 (on the cluster); merged.jsonl and shard_*.jsonl copied to the workstation by rsync; report generated on the workstation from merged.jsonl with the same working tree

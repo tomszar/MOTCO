@@ -1,0 +1,607 @@
+{
+  "verdict": "keep_cv",
+  "chosen_rank": null,
+  "rationale": "No forced rank clears every criterion against the cross-validated column on orientation/angle (failing criteria per rank: {3: ['gain'], 4: ['gain', 'protected'], 6: ['gain', 'protected'], 9: ['gain', 'protected'], 12: ['gain', 'protected']}); stage-supervised double cross-validation remains the committed rank rule.",
+  "alpha": 0.05,
+  "rule": {
+    "axis": "evaluation.integration_params.forced_components",
+    "target": {
+      "trajectory_mode": "orientation",
+      "statistic": "angle"
+    },
+    "protected": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "delta"
+      },
+      {
+        "trajectory_mode": "shape",
+        "statistic": "shape"
+      }
+    ],
+    "type_i_bound": {
+      "alpha": 0.05,
+      "se_tolerance": 2.0
+    },
+    "gain_se_multiplier": 2.0,
+    "loss_se_multiplier": 2.0
+  },
+  "pairing": "Columns share the primary matched-seed family and generator parameters: at every replicate index they evaluate the same generated dataset under different retained ranks, so differences are measurement differences, not sampling differences.",
+  "reference": {
+    "rank": null,
+    "is_reference": true,
+    "top_effect": 1.0,
+    "target": {
+      "rate": 0.85,
+      "monte_carlo_se": 0.035707142142714254,
+      "n_available": 100
+    },
+    "anchor": {
+      "delta": {
+        "rate": 0.01,
+        "monte_carlo_se": 0.0099498743710662,
+        "n_available": 100
+      },
+      "angle": {
+        "rate": 0.02,
+        "monte_carlo_se": 0.014,
+        "n_available": 100
+      },
+      "shape": {
+        "rate": 0.03,
+        "monte_carlo_se": 0.01705872210923198,
+        "n_available": 100
+      }
+    },
+    "protected": {
+      "magnitude/delta": {
+        "rate": 1.0,
+        "monte_carlo_se": 0.0,
+        "n_available": 100
+      },
+      "shape/shape": {
+        "rate": 1.0,
+        "monte_carlo_se": 0.0,
+        "n_available": 100
+      }
+    },
+    "criteria": [],
+    "qualifies": null
+  },
+  "columns": [
+    {
+      "rank": null,
+      "is_reference": true,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.85,
+        "monte_carlo_se": 0.035707142142714254,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.01,
+          "monte_carlo_se": 0.0099498743710662,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.03,
+          "monte_carlo_se": 0.01705872210923198,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "criteria": [],
+      "qualifies": null
+    },
+    {
+      "rank": 3,
+      "is_reference": false,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.86,
+        "monte_carlo_se": 0.03469870314579494,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.01,
+          "monte_carlo_se": 0.0099498743710662,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.03,
+          "monte_carlo_se": 0.01705872210923198,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "criteria": [
+        {
+          "name": "gain",
+          "passed": false,
+          "detail": "orientation/angle: rate \u2212 reference = +0.010 <= 2\u00b7pooled SE (0.100)",
+          "failing": [
+            "orientation/angle"
+          ],
+          "observations": {
+            "target": "orientation/angle",
+            "rate": 0.86,
+            "se": 0.03469870314579494,
+            "reference_rate": 0.85,
+            "reference_se": 0.035707142142714254,
+            "se_multiplier": 2.0,
+            "difference": 0.010000000000000009,
+            "pooled_se": 0.049789557138018414,
+            "threshold": 0.09957911427603683
+          }
+        },
+        {
+          "name": "anchor",
+          "passed": true,
+          "detail": "Every statistic's zero-effect rate is within the Type I bound.",
+          "failing": [],
+          "observations": {
+            "alpha": 0.05,
+            "se_tolerance": 2.0,
+            "delta_rate": 0.01,
+            "delta_bound": 0.09358898943540674,
+            "delta_n": 100,
+            "angle_rate": 0.02,
+            "angle_bound": 0.09358898943540674,
+            "angle_n": 100,
+            "shape_rate": 0.03,
+            "shape_bound": 0.09358898943540674,
+            "shape_n": 100
+          }
+        },
+        {
+          "name": "protected",
+          "passed": true,
+          "detail": "No protected power falls below the reference by more than the allowed loss.",
+          "failing": [],
+          "observations": {
+            "se_multiplier": 2.0,
+            "magnitude_delta_rate": 1.0,
+            "magnitude_delta_reference_rate": 1.0,
+            "magnitude_delta_loss": 0.0,
+            "magnitude_delta_threshold": 0.0,
+            "shape_shape_rate": 1.0,
+            "shape_shape_reference_rate": 1.0,
+            "shape_shape_loss": 0.0,
+            "shape_shape_threshold": 0.0
+          }
+        }
+      ],
+      "qualifies": false
+    },
+    {
+      "rank": 4,
+      "is_reference": false,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.79,
+        "monte_carlo_se": 0.0407308237088326,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 0.95,
+          "monte_carlo_se": 0.021794494717703377,
+          "n_available": 100
+        }
+      },
+      "criteria": [
+        {
+          "name": "gain",
+          "passed": false,
+          "detail": "orientation/angle: rate \u2212 reference = -0.060 <= 2\u00b7pooled SE (0.108)",
+          "failing": [
+            "orientation/angle"
+          ],
+          "observations": {
+            "target": "orientation/angle",
+            "rate": 0.79,
+            "se": 0.0407308237088326,
+            "reference_rate": 0.85,
+            "reference_se": 0.035707142142714254,
+            "se_multiplier": 2.0,
+            "difference": -0.05999999999999994,
+            "pooled_se": 0.05416641025580337,
+            "threshold": 0.10833282051160674
+          }
+        },
+        {
+          "name": "anchor",
+          "passed": true,
+          "detail": "Every statistic's zero-effect rate is within the Type I bound.",
+          "failing": [],
+          "observations": {
+            "alpha": 0.05,
+            "se_tolerance": 2.0,
+            "delta_rate": 0.0,
+            "delta_bound": 0.09358898943540674,
+            "delta_n": 100,
+            "angle_rate": 0.02,
+            "angle_bound": 0.09358898943540674,
+            "angle_n": 100,
+            "shape_rate": 0.0,
+            "shape_bound": 0.09358898943540674,
+            "shape_n": 100
+          }
+        },
+        {
+          "name": "protected",
+          "passed": false,
+          "detail": "Protected loss on ['shape/shape']: reference \u2212 rate exceeds 2\u00b7pooled SE.",
+          "failing": [
+            "shape/shape"
+          ],
+          "observations": {
+            "se_multiplier": 2.0,
+            "magnitude_delta_rate": 1.0,
+            "magnitude_delta_reference_rate": 1.0,
+            "magnitude_delta_loss": 0.0,
+            "magnitude_delta_threshold": 0.0,
+            "shape_shape_rate": 0.95,
+            "shape_shape_reference_rate": 1.0,
+            "shape_shape_loss": 0.050000000000000044,
+            "shape_shape_threshold": 0.043588989435406754
+          }
+        }
+      ],
+      "qualifies": false
+    },
+    {
+      "rank": 6,
+      "is_reference": false,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.8,
+        "monte_carlo_se": 0.04,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 0.57,
+          "monte_carlo_se": 0.04950757517794625,
+          "n_available": 100
+        }
+      },
+      "criteria": [
+        {
+          "name": "gain",
+          "passed": false,
+          "detail": "orientation/angle: rate \u2212 reference = -0.050 <= 2\u00b7pooled SE (0.107)",
+          "failing": [
+            "orientation/angle"
+          ],
+          "observations": {
+            "target": "orientation/angle",
+            "rate": 0.8,
+            "se": 0.04,
+            "reference_rate": 0.85,
+            "reference_se": 0.035707142142714254,
+            "se_multiplier": 2.0,
+            "difference": -0.04999999999999993,
+            "pooled_se": 0.05361902647381805,
+            "threshold": 0.1072380529476361
+          }
+        },
+        {
+          "name": "anchor",
+          "passed": true,
+          "detail": "Every statistic's zero-effect rate is within the Type I bound.",
+          "failing": [],
+          "observations": {
+            "alpha": 0.05,
+            "se_tolerance": 2.0,
+            "delta_rate": 0.0,
+            "delta_bound": 0.09358898943540674,
+            "delta_n": 100,
+            "angle_rate": 0.02,
+            "angle_bound": 0.09358898943540674,
+            "angle_n": 100,
+            "shape_rate": 0.0,
+            "shape_bound": 0.09358898943540674,
+            "shape_n": 100
+          }
+        },
+        {
+          "name": "protected",
+          "passed": false,
+          "detail": "Protected loss on ['shape/shape']: reference \u2212 rate exceeds 2\u00b7pooled SE.",
+          "failing": [
+            "shape/shape"
+          ],
+          "observations": {
+            "se_multiplier": 2.0,
+            "magnitude_delta_rate": 1.0,
+            "magnitude_delta_reference_rate": 1.0,
+            "magnitude_delta_loss": 0.0,
+            "magnitude_delta_threshold": 0.0,
+            "shape_shape_rate": 0.57,
+            "shape_shape_reference_rate": 1.0,
+            "shape_shape_loss": 0.43000000000000005,
+            "shape_shape_threshold": 0.0990151503558925
+          }
+        }
+      ],
+      "qualifies": false
+    },
+    {
+      "rank": 9,
+      "is_reference": false,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.81,
+        "monte_carlo_se": 0.03923009049186606,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 0.58,
+          "monte_carlo_se": 0.04935585071701227,
+          "n_available": 100
+        }
+      },
+      "criteria": [
+        {
+          "name": "gain",
+          "passed": false,
+          "detail": "orientation/angle: rate \u2212 reference = -0.040 <= 2\u00b7pooled SE (0.106)",
+          "failing": [
+            "orientation/angle"
+          ],
+          "observations": {
+            "target": "orientation/angle",
+            "rate": 0.81,
+            "se": 0.03923009049186606,
+            "reference_rate": 0.85,
+            "reference_se": 0.035707142142714254,
+            "se_multiplier": 2.0,
+            "difference": -0.039999999999999925,
+            "pooled_se": 0.053047148839499375,
+            "threshold": 0.10609429767899875
+          }
+        },
+        {
+          "name": "anchor",
+          "passed": true,
+          "detail": "Every statistic's zero-effect rate is within the Type I bound.",
+          "failing": [],
+          "observations": {
+            "alpha": 0.05,
+            "se_tolerance": 2.0,
+            "delta_rate": 0.0,
+            "delta_bound": 0.09358898943540674,
+            "delta_n": 100,
+            "angle_rate": 0.02,
+            "angle_bound": 0.09358898943540674,
+            "angle_n": 100,
+            "shape_rate": 0.0,
+            "shape_bound": 0.09358898943540674,
+            "shape_n": 100
+          }
+        },
+        {
+          "name": "protected",
+          "passed": false,
+          "detail": "Protected loss on ['shape/shape']: reference \u2212 rate exceeds 2\u00b7pooled SE.",
+          "failing": [
+            "shape/shape"
+          ],
+          "observations": {
+            "se_multiplier": 2.0,
+            "magnitude_delta_rate": 1.0,
+            "magnitude_delta_reference_rate": 1.0,
+            "magnitude_delta_loss": 0.0,
+            "magnitude_delta_threshold": 0.0,
+            "shape_shape_rate": 0.58,
+            "shape_shape_reference_rate": 1.0,
+            "shape_shape_loss": 0.42000000000000004,
+            "shape_shape_threshold": 0.09871170143402454
+          }
+        }
+      ],
+      "qualifies": false
+    },
+    {
+      "rank": 12,
+      "is_reference": false,
+      "top_effect": 1.0,
+      "target": {
+        "rate": 0.81,
+        "monte_carlo_se": 0.03923009049186606,
+        "n_available": 100
+      },
+      "anchor": {
+        "delta": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "angle": {
+          "rate": 0.02,
+          "monte_carlo_se": 0.014,
+          "n_available": 100
+        },
+        "shape": {
+          "rate": 0.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        }
+      },
+      "protected": {
+        "magnitude/delta": {
+          "rate": 1.0,
+          "monte_carlo_se": 0.0,
+          "n_available": 100
+        },
+        "shape/shape": {
+          "rate": 0.58,
+          "monte_carlo_se": 0.04935585071701227,
+          "n_available": 100
+        }
+      },
+      "criteria": [
+        {
+          "name": "gain",
+          "passed": false,
+          "detail": "orientation/angle: rate \u2212 reference = -0.040 <= 2\u00b7pooled SE (0.106)",
+          "failing": [
+            "orientation/angle"
+          ],
+          "observations": {
+            "target": "orientation/angle",
+            "rate": 0.81,
+            "se": 0.03923009049186606,
+            "reference_rate": 0.85,
+            "reference_se": 0.035707142142714254,
+            "se_multiplier": 2.0,
+            "difference": -0.039999999999999925,
+            "pooled_se": 0.053047148839499375,
+            "threshold": 0.10609429767899875
+          }
+        },
+        {
+          "name": "anchor",
+          "passed": true,
+          "detail": "Every statistic's zero-effect rate is within the Type I bound.",
+          "failing": [],
+          "observations": {
+            "alpha": 0.05,
+            "se_tolerance": 2.0,
+            "delta_rate": 0.0,
+            "delta_bound": 0.09358898943540674,
+            "delta_n": 100,
+            "angle_rate": 0.02,
+            "angle_bound": 0.09358898943540674,
+            "angle_n": 100,
+            "shape_rate": 0.0,
+            "shape_bound": 0.09358898943540674,
+            "shape_n": 100
+          }
+        },
+        {
+          "name": "protected",
+          "passed": false,
+          "detail": "Protected loss on ['shape/shape']: reference \u2212 rate exceeds 2\u00b7pooled SE.",
+          "failing": [
+            "shape/shape"
+          ],
+          "observations": {
+            "se_multiplier": 2.0,
+            "magnitude_delta_rate": 1.0,
+            "magnitude_delta_reference_rate": 1.0,
+            "magnitude_delta_loss": 0.0,
+            "magnitude_delta_threshold": 0.0,
+            "shape_shape_rate": 0.58,
+            "shape_shape_reference_rate": 1.0,
+            "shape_shape_loss": 0.42000000000000004,
+            "shape_shape_threshold": 0.09871170143402454
+          }
+        }
+      ],
+      "qualifies": false
+    }
+  ]
+}
