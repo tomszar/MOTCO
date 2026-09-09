@@ -87,11 +87,22 @@ guard (parameter signature) skips already-completed replicates.
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 | `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
+| `report_contract` | Declared reporting/execution rules (`driver_component`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid`/`warn`); adds `report_contract.json` + `driver_report.csv` and, under `forbid`, makes the runner refuse `--n-jobs` (see the Phase 5 paper-grade study) |
+
+Unknown top-level keys are rejected by name, so a misspelled block cannot be
+silently ignored.
+
+**Which config is the paper-grade one?** `phase5_power_study.json`. The older
+`study.json` is **superseded**: it predates every decision since Phase 4
+(n = 300, `p_dmp = 0.2`, `n_jobs = -1`, `"surgery_censoring": "clamp"`, no
+matched seeds, no gate, and a specificity target on orientation → `shape` that
+the predeclared cross-talk fails by construction). It stays as the historical
+record and must not be run as Phase 5.
 
 `none` is always present as the Type I baseline (enforced by enumeration);
 `translation` is added explicitly as a second negative control.
 
-### `generator.surgery_censoring` — why every committed config sets `"clamp"`
+### `generator.surgery_censoring` — why the pre-Phase-5 configs set `"clamp"`
 
 `orientation`, `translation`, and `shape` with `shape_kind="relocate"` draw
 their surgery from a finite pool of CpGs, so a large `group_effect_size` can
@@ -100,8 +111,8 @@ request more sites than the pool holds. The generator's default policy,
 cell whose requested effect exceeds the expected pool headroom before compute
 is spent.
 
-**Every config in this directory predates that policy** and was run under the
-old silent clamping, so each one carries an explicit
+**Every config in this directory older than the Phase 5 pilots predates that
+policy** and was run under the old silent clamping, so each one carries an explicit
 `"surgery_censoring": "clamp"` to stay loadable and enumerable as the record of
 what was actually run. At `p_dmp = 0.2` with four stages the axis saturates at
 roughly `e ≈ 0.56` for `orientation` and `e ≈ 0.29` for `translation` — above
@@ -448,3 +459,90 @@ on a scale-free quantity (`delta` divided by that checkpoint's path length;
 across the standardized feature space and the PLS latent space. Its labels —
 construction-present, sampling/preprocessing-associated, projection-associated —
 describe *where* a response first appears, not what caused it, and gate nothing.
+
+## Phase 5 paper-grade study
+
+`phase5_power_study.json` is the committed paper-grade Phase 5 configuration —
+the study the paper's operating-characteristic claims are read from. It
+supersedes `study.json` (see the config quick reference) and derives from the
+latent-rank ladder's cross-validated column (`metadata.derives_from`): identical
+`generator` and `evaluation.integration_params`, no `design_grid` (the ladder
+returned `keep_cv`, so the retained rank is the stage-supervised double-CV
+choice), and paper-grade Monte Carlo precision.
+
+| | |
+|---|---|
+| design point | ρ = 0, n = 1200 (300 per group-stage cell), four stages, `p_dmp = 0.1`, default fail-loud `surgery_censoring` |
+| measurement | pooled PLS on M-value methylation, double-CV rank (`cv1_splits` 3, `cv2_splits` 4, 5 repeats, ≤ 20 components) |
+| grid | modes magnitude / orientation / shape / translation × effects 0 / 0.25 / 0.50 / 0.75 / 1.00; every point under headroom (orientation saturates ≈ 1.69, translation ≈ 2.00) |
+| Monte Carlo | 500 replicates × 999 permutations; `n_jobs` 1 |
+| cells / units | 2 Type I controls + 1 shared zero-effect anchor + 16 power cells = 19 cells, 9,500 units |
+| seeds | matched seeds, family `phase5-primary` (independent of both pilots), one shared zero-effect anchor |
+| attribution | nonzero orientation primary cells; 100 bootstraps, top-20, seed 0 |
+| gate | Phase 4 roles — mandatory power magnitude/`delta`, orientation/`angle`, shape/`shape` (floor 0.80); mandatory control magnitude/`angle`, magnitude/`shape`; descriptive orientation/`delta`, orientation/`shape`, shape/`delta`, shape/`angle`; controls `none`, translation |
+| acceptance | `type_i` 0.05 ± 2 SE; `power` 0.80 on the three diagonals; `specificity` = exactly the gate's mandatory controls (translation × 3, magnitude/`angle`, magnitude/`shape`) — orientation → `shape` is predeclared cross-talk, not a target |
+| report contract | `driver_component: observed`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid` |
+
+### Report contract
+
+The `report_contract` block turns the readiness-item-5 rules into enforced or
+echoed outputs (`docs/phase5-readiness.md` §5):
+
+- `report/driver_report.csv` — the declared component only, one row per
+  (mode, effect, transition): precision/recall vs generator truth, mean
+  selected count, **within-replicate** bootstrap stability, replicate
+  accounting. No `top_k_jaccard` / `sign_agreement` columns; those stay in
+  `phase4_attribution.csv` (which keeps all three components) as descriptive
+  quantities, never a stability claim.
+- `phase4_attribution_stability.png` — retitled "Within-replicate bootstrap
+  stability (observed component)" and drawn from the bootstrap series only.
+- `report/report_contract.json` — the resolved contract plus the uniform
+  `n_jobs` the records carry (a mixed set is refused) and the shared
+  zero-effect anchor's `cell_id`, `resolves_modes`, and `counted_as: 1`.
+- `scripts/run_study_shard.py` exits 2 before enumeration when `--n-jobs`
+  (`STUDY_N_JOBS`) differs from `evaluation.n_jobs`.
+
+The dated findings report must follow
+[`phase5_report_template.md`](phase5_report_template.md), which carries a
+section for every contract item, the `PROVENANCE.txt` field list, the two
+design-point hand-offs (eigengap and `angle` null width beside every
+orientation result; the orientation surgery's non-ρ-invariant realized
+contrast), and reproduction commands without `--n-jobs`. The gate's outputs
+keep their `phase4_*` names — they name the mechanism, not the phase.
+
+### Cost
+
+A one-replicate rehearsal (2026-09-09, 19 units as 19 concurrent
+single-threaded processes on a 24-core workstation, BLAS pinned) measured a
+median **43 s per unit** (min 30, max 51) for the CV fit + 999 permutations +
+attribution at n = 1200; attribution units cost the same as the others
+(median 42.9 s vs 43.0 s). Budget ≈ 120 workstation core-hours, ≈ 150 EPYC
+7662 core-hours by the ladder's per-core ratio; 100 single-CPU shards finish
+in roughly 1.5–2 h wall.
+
+### Running it
+
+```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+RUN=results/phase5-$(date -u +%F)
+
+# SLURM (partition/resource flags are cluster-specific). Do NOT set STUDY_N_JOBS:
+# the contract forbids it and every array task would exit 2.
+sbatch -p <partition> --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_power_study.json,STUDY_OUT=$(pwd)/$RUN,N_SHARDS=100 \
+    scripts/motco_study_array.sbatch
+
+# Locally, in K resumable shards (one process each):
+for i in $(seq 0 $((K-1))); do
+  uv run python scripts/run_study_shard.py \
+      --config examples/trajectory_power_study/phase5_power_study.json \
+      --out-dir $RUN --shard-index "$i" --n-shards K --error-policy record &
+done; wait
+
+uv run python scripts/motco_study.py merge  --out-dir $RUN
+uv run python scripts/motco_study.py report \
+    --config examples/trajectory_power_study/phase5_power_study.json --out-dir $RUN
+```
+
+Commit `report/` and a hand-written `PROVENANCE.txt` (fields listed in the
+template); the shard and merged JSONL stay gitignored.

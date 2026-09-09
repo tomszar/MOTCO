@@ -1,0 +1,202 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 1200,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 999,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude",
+    "orientation",
+    "shape",
+    "translation"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.25,
+    0.5,
+    0.75,
+    1.0
+  ],
+  "axes": {},
+  "n_replicates": 500,
+  "base_seed": 600,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase5-primary",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": true,
+    "trajectory_modes": [
+      "orientation"
+    ],
+    "phases": [
+      "power_primary"
+    ],
+    "nonzero_effects_only": true,
+    "bootstrap_replicates": 100,
+    "bootstrap_seed": 0,
+    "top_k": 20,
+    "zero_tolerance": 1e-12
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "delta",
+        "min_power_at_top": 0.8
+      },
+      {
+        "trajectory_mode": "orientation",
+        "statistic": "angle",
+        "min_power_at_top": 0.8
+      },
+      {
+        "trajectory_mode": "shape",
+        "statistic": "shape",
+        "min_power_at_top": 0.8
+      }
+    ],
+    "specificity": [
+      {
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "angle",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "shape",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "gate": {
+      "enabled": true,
+      "alpha": 0.05,
+      "control_se_tolerance": 2.0,
+      "monotonicity_se_tolerance": 2.0,
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "max_marginal_exceedances": 1,
+      "control_modes": [
+        "none",
+        "translation"
+      ],
+      "require_complete_records": true,
+      "rules": [
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "delta",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "angle",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "shape",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "angle",
+          "role": "mandatory_control"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "shape",
+          "role": "mandatory_control"
+        },
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "delta",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "orientation",
+          "statistic": "shape",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "delta",
+          "role": "descriptive"
+        },
+        {
+          "trajectory_mode": "shape",
+          "statistic": "angle",
+          "role": "descriptive"
+        }
+      ]
+    }
+  },
+  "report_contract": {
+    "driver_component": "observed",
+    "cross_replicate_driver_agreement": "descriptive",
+    "n_jobs_override": "forbid"
+  },
+  "metadata": {
+    "name": "trajectory-power-phase5",
+    "phase": 5,
+    "intent": "Phase 5 paper-grade trajectory power study at the chosen design point (rho = 0, n_samples = 1200, four stages, p_dmp = 0.1; pooled PLS on M-value methylation with the committed stage-supervised double-CV rank rule): Type I error, power, and specificity of the delta / angle / shape RRPP tests for all four trajectory modes (magnitude, orientation, shape, translation) at effects 0/0.25/0.50/0.75/1.00, 500 replicates x 999 permutations, with the Phase 4 gate as the predeclared pass/fail, orientation driver attribution on the nonzero orientation cells, and a declared report contract (observed driver component; cross-replicate driver agreement descriptive only; run-time n_jobs override forbidden).",
+    "derives_from": "examples/trajectory_power_study/phase5_latent_rank_ladder.json",
+    "notes": [
+      "Same measurement as the ladder's cross-validated column at paper-grade Monte Carlo precision. generator and evaluation.integration_params are copied verbatim from phase5_latent_rank_ladder.json (which took them from phase5_design_point_pilot.json with n_samples raised to 1200); the design_grid is removed (the 2026-09-08 ladder returned keep_cv, so Phase 5 keeps stage-supervised double CV and no forced_components key exists here), permutations rise from 199 to 999, n_replicates from 100 to 500, base_seed and the matched-seed family (phase5-primary) are new, so this study is independent of both Phase 5 pilots.",
+      "Effect axis 0/0.25/0.50/0.75/1.00. Both Phase 5 pilots used four points (0/0.25/0.50/1.00) to halve compute; the paper-grade curve restores the Phase 4 five-point axis. surgery_censoring is left at its default ('error') and every point is under headroom at rho = 0, p_dmp = 0.1, four stages: orientation saturates near e = 1.69 and translation near e = 2.00, so no cell is censored and no cell is rejected at enumeration. Do not copy the historical 'clamp' flag from study.json or the Phase 4 configs.",
+      "Cells and cost. 2 baseline Type I controls (none, translation) + 1 shared zero-effect anchor + 4 modes x 4 nonzero effects = 19 cells, 9,500 work units. Each unit is one double-CV PLS fit + 999 RRPP permutations (+ attribution on the orientation units); the ladder's CV column cost a median 57 s per unit at 199 permutations on an EPYC 7662 core, and RRPP itself is about 0.2 s per 199 permutations in the rank-3 latent space, so 999 permutations add about a second. See the examples README for the rehearsal-measured per-unit wall time. Pin BLAS to one thread (OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1) and parallelize across shards.",
+      "Attribution runs on the nonzero-effect orientation primary cells (100 bootstraps, top-20, seed 0), exactly as Phase 4. It is what the driver items of the report contract govern; it was 0.45 % of Phase 4 compute at n = 300 and the paper's driver table needs it at the design point. If the rehearsal shows the bootstrap cost is material at n = 1200, lower bootstrap_replicates before the run, never after.",
+      "The shared zero-effect anchor (matched_seeds.shared_zero_effect_anchor) is one power_primary cell with trajectory_mode none; every mode's 0.00 power point reads it and it is counted as one measurement, never once per mode. The report echoes its cell id and the modes it resolves in report/report_contract.json. The Type I acceptance target reads only the type_i_* phases (a separate seed family), so the anchor never enters the Type I claim twice.",
+      "Acceptance specificity targets are exactly the gate's mandatory controls: translation x {delta, angle, shape} and magnitude x {angle, shape}. The orientation->shape, shape->delta, and shape->angle targets that study.json carried are dropped on purpose: orientation->shape is predeclared projection-associated cross-talk (readiness item 2; ladder report section 6 measured 0.99-1.00 at CV rank), so a specificity target on it would fail by construction and is not a target. Those pairs stay in the gate as descriptive roles and in the specificity matrix; the findings report states the cross-talk as such.",
+      "The Phase 4 gate is the predeclared pass/fail for the paper: mandatory_power magnitude/delta, orientation/angle, shape/shape (floor 0.80 at the top effect); mandatory_control magnitude/angle, magnitude/shape; descriptive orientation/delta, orientation/shape, shape/delta, shape/angle; control modes none and translation. Its outputs keep the phase4_* file names (they name the mechanism, not the phase).",
+      "Report contract (report_contract). driver_component observed: driver_report.csv and the attribution figure present the observed component only (phase4_attribution.csv keeps all three; the Phase 4 pilot's pls_captured precision of 0.15 is why). cross_replicate_driver_agreement descriptive: top-k Jaccard and sign agreement across replicates describe sampling variation of a driver set that is re-drawn every replicate and are never a stability claim. n_jobs_override forbid: scripts/run_study_shard.py exits 2 if --n-jobs (STUDY_N_JOBS) differs from evaluation.n_jobs = 1.",
+      "Do not pass --n-jobs. The worker count enters the parameter signature and changes the realized permutation draws; with this contract the runner refuses it. Run with --error-policy record so a failed unit is recorded rather than aborting the shard. The dated Phase 5 findings report must follow examples/trajectory_power_study/phase5_report_template.md."
+    ]
+  }
+}

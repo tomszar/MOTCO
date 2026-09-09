@@ -6,7 +6,9 @@ Work to complete before launching the paper-grade study. Derived from the
 
 **Status: item 1 resolved 2026-09-01, item 2 resolved 2026-09-03, item 3 resolved 2026-09-08
 ([latent-rank ladder report](reports/latent-rank-ladder-2026-09-08.md); committed rank rule: stage-supervised
-double CV), item 4 resolved 2026-09-08; item 5 open.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
+double CV), item 4 resolved 2026-09-08, item 5 resolved 2026-09-09 (report contract, paper-grade profile
+`examples/trajectory_power_study/phase5_power_study.json`, and report template committed). All five items are
+closed; the next change is the paper-grade run.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
 specified — and the 0.80 orientation power floor, handed to item 4, is **met at the chosen design point
 ρ = 0, n = 1200** (orientation `angle` power 0.88, 1·SE lower bound 0.85; see the
 [design-point pilot report](reports/phase5-design-point-pilot-2026-09-08.md)). See also
@@ -307,7 +309,27 @@ geometry that governs it*: every record now carries `config_spectrum`, and
 `report/eigengap_stratified_power.csv` reports orientation power within eigengap terciles per cell. See
 [Recording the latent configuration spectrum](reports/latent-config-spectrum-2026-09-02.md).
 
-## 5. Carry into the Phase 5 report contract
+## 5. Carry into the Phase 5 report contract — **resolved 2026-09-09**
+
+> **Resolved** by `phase5-report-contract-and-config`. The four items below are no longer prose: they are a
+> declared `report_contract` block in the committed paper-grade profile
+> [`examples/trajectory_power_study/phase5_power_study.json`](../examples/trajectory_power_study/phase5_power_study.json)
+> (`driver_component: observed`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid`),
+> each **enforced or echoed** by the study code, and the dated Phase 5 findings report must follow the committed
+> [report template](../examples/trajectory_power_study/phase5_report_template.md), which carries a section
+> for every item. The loader also rejects unknown top-level config keys, so a misspelled contract fails loudly.
+> How each point is enforced:
+>
+> | item | contract field | enforced / echoed by |
+> |---|---|---|
+> | observed-component drivers | `driver_component: observed` | `report/driver_report.csv` (declared component only) and the attribution figure ("Within-replicate bootstrap stability (observed component)"); `phase4_attribution.csv` keeps all three components as evidence |
+> | no cross-replicate stability claim | `cross_replicate_driver_agreement: descriptive` (the only legal value; `claim` is rejected) | `top_k_jaccard` / `sign_agreement` stay in `phase4_attribution.csv`, are absent from the driver table and figure, and `report/report_contract.json` states they are not a stability claim |
+> | `n_jobs` in the signature | `n_jobs_override: forbid` | `scripts/run_study_shard.py` exits 2 before enumeration when `--n-jobs` (`STUDY_N_JOBS`) differs from `evaluation.n_jobs`; the echo records the uniform `n_jobs` the records carry and refuses a mixed set |
+> | one shared anchor | (matched seeds, echoed) | `report/report_contract.json` names the anchor `cell_id`, the modes it resolves, and `counted_as: 1`; operating rows stay flagged `from_shared_anchor` |
+>
+> The profile itself is the ladder's cross-validated column at paper-grade precision (500 × 999, five-point
+> effect axis, gate enabled with the Phase 4 roles, acceptance specificity = the gate's mandatory controls —
+> orientation → `shape` is predeclared cross-talk, not a target). The historical `study.json` is superseded.
 
 Small items, already evidenced, that should be settled before the study rather than discovered during it.
 
@@ -318,7 +340,8 @@ Small items, already evidenced, that should be settled before the study rather t
   design that holds the driver set fixed.
 - **`n_jobs` is part of the cell parameter signature.** RRPP seeds one RNG stream per worker, so the worker
   count changes the realized permutation draws. Phase 5 must run at the config's value; parallelize across
-  shards. The sbatch script forwards `--n-jobs` only when `STUDY_N_JOBS` is set.
+  shards. The sbatch script forwards `--n-jobs` only when `STUDY_N_JOBS` is set — and the Phase 5 profile
+  refuses it.
 - **The zero-effect anchor is one measurement.** All four modes' `0.00` points resolve to a single shared
   cell and must not be counted as four independent nulls.
 

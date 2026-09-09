@@ -40,7 +40,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "Within-replicate RRPP parallelism (CPUs per task). Overrides the config when set. "
             "This changes the realized permutation draws and the cell parameter signature, so "
-            "leave it unset for a reproducible, resumable study run."
+            "leave it unset for a reproducible, resumable study run. A config whose "
+            "report_contract sets n_jobs_override: forbid refuses a differing value (exit 2)."
         ),
     )
     parser.add_argument(
@@ -65,6 +66,21 @@ def main(argv: list[str] | None = None) -> int:
         # realized permutation draws; n_jobs is part of `evaluation_params` and
         # therefore of the cell parameter signature. Overriding it silently would
         # make already-completed replicates unresumable.
+        contract = config.report_contract
+        if contract is not None and contract.forbids_n_jobs_override:
+            # The config's report contract locks the worker count: refuse rather
+            # than run at a different signature (or silently ignore the flag, which
+            # would hide a wrong sbatch environment). Nothing has been enumerated
+            # or written at this point.
+            print(
+                f"ERROR: --n-jobs {args.n_jobs} differs from the config's evaluation.n_jobs "
+                f"{config.evaluation.n_jobs}, and the config's report_contract sets "
+                "n_jobs_override: forbid. The worker count changes the realized permutation "
+                "draws and the cell parameter signature, so the run would not be the declared "
+                "study. Unset --n-jobs (STUDY_N_JOBS) or change the config.",
+                file=sys.stderr,
+            )
+            return 2
         print(
             f"WARNING: --n-jobs {args.n_jobs} overrides the config's n_jobs "
             f"{config.evaluation.n_jobs}. This changes the permutation draws and the cell "

@@ -23,6 +23,7 @@ from motco.simulations.grid import read_replicate_results
 from motco.simulations.study.config import load_study_config
 from motco.simulations.study.enumerate import enumerate_study
 from motco.simulations.study.merge import discover_shard_paths, merge_shards
+from motco.simulations.study.phase4 import summarize_attribution
 from motco.simulations.study.report import (
     build_phase4_frames,
     build_report_frames,
@@ -32,7 +33,9 @@ from motco.simulations.study.report import (
     render_rank_ladder,
     render_specificity_matrix,
     render_type_i_plot,
+    write_driver_report,
     write_phase4_report,
+    write_report_contract,
     write_report_csvs,
 )
 from motco.simulations.study.summary import (
@@ -103,21 +106,42 @@ def _cmd_report(args: argparse.Namespace) -> int:
         design_paths.update(write_rank_decision(rank_decision, report_dir))
         print(f"Retained-rank decision: {rank_decision.verdict.upper()} — {rank_decision.rationale}")
 
+    contract = config.report_contract
     phase4_paths: dict[str, Path] = {}
+    attribution_frame = None
     if config.acceptance.gate.enabled:
         expected_units = sum(cell.n_replicates for cell in enumerate_study(config).cells)
         frames4 = build_phase4_frames(
             config.acceptance.gate, per_stat, records, expected_units=expected_units
         )
+        attribution_frame = frames4.attribution
         phase4_paths = {
             **write_phase4_report(frames4, report_dir),
-            **render_phase4_figures(frames4, report_dir),
+            **render_phase4_figures(frames4, report_dir, contract=contract),
         }
         print(f"Phase 4 gate decision: {frames4.decision.decision.upper()} — {frames4.decision.rationale}")
         for run in frames4.decision.confirmation_runs:
             print(f"  confirmation re-run required: {run['action']}")
 
-    for key, path in {**csv_paths, **figure_paths, **target_paths, **design_paths, **phase4_paths}.items():
+    # Written only when the config declares a report contract; configs without
+    # one produce exactly the files above.
+    contract_paths: dict[str, Path] = {}
+    if contract is not None:
+        if attribution_frame is None:
+            attribution_frame = summarize_attribution(records)
+        contract_paths = {
+            "driver_report": write_driver_report(attribution_frame, contract, report_dir),
+            "report_contract": write_report_contract(config, records, report_dir),
+        }
+
+    for key, path in {
+        **csv_paths,
+        **figure_paths,
+        **target_paths,
+        **design_paths,
+        **phase4_paths,
+        **contract_paths,
+    }.items():
         print(f"  {key}: {path}")
     return 0
 

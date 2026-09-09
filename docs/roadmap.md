@@ -29,9 +29,8 @@ The roadmap prioritizes interpretability and validation before larger simulation
 - The production orientation and shape feature-surgery modes are not geometrically pure before integration; orientation's `shape` response (0.99–1.00 at the design point under CV rank) is predeclared as projection-associated cross-talk, not as evidence about the shape estimator ([ladder report](reports/latent-rank-ladder-2026-09-08.md), §6).
 - The orientation power claim is n-conditional at the isotropic endpoint: 0.85–0.88 at n = 1200, ρ = 0 across two independent matched-seed families ([design-point report](reports/phase5-design-point-pilot-2026-09-08.md), [ladder report](reports/latent-rank-ladder-2026-09-08.md)); it has not been measured at paper-grade Monte Carlo precision (500 replicates × 999 permutations).
 - The `angle` null tracks its own observed statistic (slope 0.811) and is load-bearing rather than corrigible ([report](reports/angle-null-pivotality-2026-09-01.md)); the recorded eigengap and null-width dispersion must accompany any real-data orientation result.
-- Readiness item 5 (Phase 5 report contract: observed-component driver reports, no cross-replicate driver-stability claim, `n_jobs` in the signature, one shared anchor) is evidenced but not yet written into the Phase 5 config and report template.
 - Cross-replicate driver stability has no design that holds the driver set fixed, so it is not claimable.
-- The 500-replicate paper-grade grid has not run; its config (`study.json` successor at the chosen design point, CV rank) is not yet written.
+- The 500-replicate paper-grade grid has not run. Its config is committed (`examples/trajectory_power_study/phase5_power_study.json`: the ladder's CV column at 500 × 999 with the Phase 4 gate, attribution, and a declared report contract) together with the findings-report template it must follow; only the run, its `PROVENANCE.txt`, and the dated report are outstanding.
 
 ## Priority sequence
 
@@ -328,6 +327,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Close readiness item 5 and write the Phase 5 config.** Commit the paper-grade study config at the chosen design point (ρ = 0, n = 1200, four stages, `p_dmp = 0.1`, CV rank, all four modes, 500 replicates × 999 permutations, matched seeds, predeclared acceptance targets and gate) with the report-contract items (observed-component drivers, no driver-stability claim, no `--n-jobs`, one shared anchor) encoded in the config and report template.
-2. **Run the paper-grade Phase 5 study.** Cluster execution with `--error-policy record`, committed `report/` and `PROVENANCE.txt`, and a versioned findings report reading power beside the recorded eigengap and `angle` null width.
-3. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the eigengap and null-width dispersion reported beside every orientation result.
+1. **Run the paper-grade Phase 5 study.** Cluster execution of `examples/trajectory_power_study/phase5_power_study.json` (9,500 units) with `--error-policy record` and no `STUDY_N_JOBS`, committed `report/` (including `report_contract.json` and `driver_report.csv`) and `PROVENANCE.txt`, and a dated findings report that follows `phase5_report_template.md`, reading power beside the recorded eigengap and `angle` null width. Readiness item 5 closed 2026-09-09 with the config, contract, and template.
+2. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the eigengap and null-width dispersion reported beside every orientation result.
+3. **Phase 5 exit review.** Explain every deviation from the predeclared targets in the dated report (method or claim revision, never Monte Carlo size), close the Phase 5 exit gate, and decide whether Phase 7 (SNF-native trajectory statistics) opens or stays deferred.

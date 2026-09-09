@@ -9,10 +9,12 @@ from motco.simulations import SemiSyntheticTrajectoryParams, SimulationEvaluatio
 from motco.simulations.study import (
     AcceptanceTargets,
     PowerMonotonicityTarget,
+    ReportContract,
     SpecificityTarget,
     StudyConfig,
     StudyConfigError,
     TypeIControlTarget,
+    dump_study_config,
     enumerate_study,
     load_study_config,
 )
@@ -135,3 +137,103 @@ def test_load_study_config_unknown_generator_field(tmp_path: Path) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(StudyConfigError, match="unknown field"):
         load_study_config(path)
+
+
+def _contract_payload(**contract) -> dict:
+    return {
+        "generator": {"seed": 2, "trajectory_mode": "magnitude", "group_ratio": 0.5, "n_samples": 60},
+        "evaluation": {"integration_method": "concat", "permutations": 0, "seed": 3, "n_jobs": 1},
+        "trajectory_modes": ["magnitude", "translation"],
+        "effect_sizes": [0.1, 0.5],
+        "report_contract": contract,
+    }
+
+
+def test_report_contract_is_loaded_and_round_trips(tmp_path: Path) -> None:
+    path = tmp_path / "study.json"
+    payload = _contract_payload(
+        driver_component="observed",
+        cross_replicate_driver_agreement="descriptive",
+        n_jobs_override="forbid",
+    )
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    config = load_study_config(path)
+    contract = config.report_contract
+    assert contract is not None
+    assert contract.driver_component == "observed"
+    assert contract.cross_replicate_driver_agreement == "descriptive"
+    assert contract.n_jobs_override == "forbid"
+    assert contract.forbids_n_jobs_override
+
+    dumped = tmp_path / "dumped.json"
+    dump_study_config(config, dumped)
+    assert json.loads(dumped.read_text(encoding="utf-8"))["report_contract"] == {
+        "driver_component": "observed",
+        "cross_replicate_driver_agreement": "descriptive",
+        "n_jobs_override": "forbid",
+    }
+    assert load_study_config(dumped) == config
+
+
+def test_report_contract_defaults_to_warn_and_descriptive(tmp_path: Path) -> None:
+    path = tmp_path / "study.json"
+    path.write_text(json.dumps(_contract_payload(driver_component="pls_captured")), encoding="utf-8")
+    contract = load_study_config(path).report_contract
+    assert contract == ReportContract(driver_component="pls_captured")
+    assert contract.n_jobs_override == "warn"
+    assert not contract.forbids_n_jobs_override
+
+
+def test_absent_report_contract_is_none_and_round_trips(tmp_path: Path) -> None:
+    payload = _contract_payload(driver_component="observed")
+    del payload["report_contract"]
+    path = tmp_path / "study.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    config = load_study_config(path)
+    assert config.report_contract is None
+    dumped = tmp_path / "dumped.json"
+    dump_study_config(config, dumped)
+    assert json.loads(dumped.read_text(encoding="utf-8"))["report_contract"] is None
+    assert load_study_config(dumped) == config
+
+
+@pytest.mark.parametrize(
+    ("contract", "match"),
+    [
+        ({"driver_component": "observed", "not_a_field": 1}, "unknown field.*not_a_field"),
+        ({"driver_component": "observed", "n_jobs_override": "ignore"}, "n_jobs_override 'ignore'"),
+        ({"driver_component": "observed", "cross_replicate_driver_agreement": "claim"}, "never claimable"),
+        ({"driver_component": "latent"}, "driver_component 'latent'"),
+        ({"n_jobs_override": "forbid"}, "driver_component is required"),
+    ],
+)
+def test_report_contract_rejects_unknown_fields_and_values(tmp_path: Path, contract: dict, match: str) -> None:
+    path = tmp_path / "study.json"
+    path.write_text(json.dumps(_contract_payload(**contract)), encoding="utf-8")
+    with pytest.raises(StudyConfigError, match=match):
+        load_study_config(path)
+
+
+def test_report_contract_dataclass_validates_directly() -> None:
+    with pytest.raises(StudyConfigError, match="never claimable"):
+        ReportContract(driver_component="observed", cross_replicate_driver_agreement="claim")
+    with pytest.raises(StudyConfigError, match="n_jobs_override"):
+        ReportContract(driver_component="observed", n_jobs_override="forbid ")
+
+
+def test_unknown_root_key_is_rejected_by_name(tmp_path: Path) -> None:
+    payload = _contract_payload(driver_component="observed")
+    del payload["report_contract"]
+    payload["report_contrat"] = {"driver_component": "observed"}  # misspelled block
+    path = tmp_path / "study.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(StudyConfigError, match=r"unknown root key\(s\): \['report_contrat'\]"):
+        load_study_config(path)
+
+
+def test_every_committed_example_config_loads() -> None:
+    config_dir = Path(__file__).resolve().parents[1] / "examples" / "trajectory_power_study"
+    names = sorted(p.name for p in config_dir.glob("*.json"))
+    assert names, "no committed example configs found"
+    for name in names:
+        load_study_config(config_dir / name)

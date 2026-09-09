@@ -6,6 +6,7 @@ import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -16,7 +17,7 @@ from motco.simulations.grid import (
     SimulationSummaryResult,
     summarize_realized_surgery,
 )
-from motco.simulations.study.config import Phase4GateConfig
+from motco.simulations.study.config import Phase4GateConfig, ReportContract, StudyConfig
 from motco.simulations.study.phase4 import (
     CHECKPOINT_ORDER as _CHECKPOINT_ORDER,
 )
@@ -25,6 +26,7 @@ from motco.simulations.study.phase4 import (
 )
 from motco.simulations.study.phase4 import (
     Phase4GateDecision,
+    build_driver_report,
     build_operating_frame,
     evaluate_phase4_gate,
     localize_off_diagonal,
@@ -162,6 +164,128 @@ def write_phase4_report(frames: Phase4ReportFrames, out_dir: Path) -> dict[str, 
     )
     paths["phase4_gate_decision"] = decision_path
     return paths
+
+
+def write_driver_report(attribution: pd.DataFrame, contract: ReportContract, out_dir: Path) -> Path:
+    """Write ``driver_report.csv`` — the declared component only (see D2)."""
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "driver_report.csv"
+    build_driver_report(attribution, contract).to_csv(path, index=False)
+    return path
+
+
+def build_report_contract_echo(
+    config: StudyConfig, records: Sequence[SimulationReplicateResult]
+) -> dict[str, Any]:
+    """Resolve the declared contract against the merged records.
+
+    Beside the three declared fields the echo carries facts read from the
+    records: the worker count they were produced with (``n_jobs``, asserted
+    uniform — a mixed set means two signatures were merged and is refused), the
+    configured worker count, and the shared zero-effect anchor's cell id, the
+    modes whose ``0.00`` power point it resolves, and ``counted_as: 1``. One
+    plain-language statement per contract item accompanies the values so the
+    findings report can cite the echo rather than prose.
+    """
+
+    contract = config.report_contract
+    if contract is None:
+        raise StudyReportError("build_report_contract_echo requires a config with a report_contract block.")
+
+    # The evaluator records ``params.n_jobs`` verbatim; ``None`` means serial and
+    # is the same measurement as 1, so both normalise to 1. A record without the
+    # key predates the field (or came from an evaluator that does not write it).
+    n_jobs_values = sorted(
+        {
+            1 if record.runtime_metadata["n_jobs"] is None else int(record.runtime_metadata["n_jobs"])
+            for record in records
+            if record.status == "completed" and "n_jobs" in record.runtime_metadata
+        }
+    )
+    if len(n_jobs_values) > 1:
+        raise StudyReportError(
+            f"merged records carry more than one n_jobs value: {n_jobs_values}; the contract echo "
+            "cannot name one worker count for the run."
+        )
+    n_jobs = n_jobs_values[0] if n_jobs_values else None
+    # ``evaluation.n_jobs`` is Optional in the evaluator's dataclass (None = serial);
+    # RRPP records the resolved integer, so normalise the same way here.
+    config_n_jobs = 1 if config.evaluation.n_jobs is None else int(config.evaluation.n_jobs)
+
+    anchors: dict[str, list[str]] = {}
+    for record in records:
+        meta = record.cell_metadata
+        if record.phase == "power_primary" and meta.get("zero_effect_anchor"):
+            anchors.setdefault(record.cell_id, [str(mode) for mode in meta.get("resolves_modes", [])])
+    if len(anchors) > 1:
+        raise StudyReportError(
+            f"records contain more than one primary shared zero-effect anchor: {sorted(anchors)}."
+        )
+    anchor: dict[str, Any] | None = None
+    if anchors:
+        (cell_id, modes), = anchors.items()
+        anchor = {"cell_id": cell_id, "resolves_modes": modes, "counted_as": 1}
+
+    component = contract.driver_component
+    statements = {
+        "driver_component": (
+            f"Driver tables (driver_report.csv) and the attribution figure present the {component!r} "
+            "attribution component only. phase4_attribution.csv keeps every component."
+        ),
+        "cross_replicate_driver_agreement": (
+            "Cross-replicate top-k Jaccard and sign agreement are descriptive: they remain in "
+            "phase4_attribution.csv, are absent from driver_report.csv and the attribution figure, "
+            "and are not a driver-stability claim. The driver set is re-drawn every replicate, so "
+            "no cross-replicate stability claim is made."
+        ),
+        "n_jobs": (
+            "Records carry no n_jobs value (written before the field existed or by an evaluator that "
+            f"does not record it); the configured value is {config_n_jobs}."
+            if n_jobs is None
+            else (
+                f"Every record was produced with n_jobs = {n_jobs}"
+                + (
+                    ", the configured value."
+                    if n_jobs == config_n_jobs
+                    else f", which differs from the configured value {config_n_jobs}."
+                )
+                + f" The run-time override policy is {contract.n_jobs_override!r}."
+            )
+        ),
+        "zero_effect_anchor": (
+            "No shared zero-effect anchor is present in the records."
+            if anchor is None
+            else (
+                f"Cell {anchor['cell_id']} is the shared zero-effect anchor; every mode in "
+                f"{anchor['resolves_modes']} reads its 0.00 power point from it, and it is counted as "
+                "one measurement (one cell), not once per mode."
+            )
+        ),
+    }
+    return {
+        "driver_component": component,
+        "cross_replicate_driver_agreement": contract.cross_replicate_driver_agreement,
+        "n_jobs_override": contract.n_jobs_override,
+        "n_jobs": n_jobs,
+        "config_n_jobs": config_n_jobs,
+        "zero_effect_anchor": anchor,
+        "statements": statements,
+    }
+
+
+def write_report_contract(
+    config: StudyConfig, records: Sequence[SimulationReplicateResult], out_dir: Path
+) -> Path:
+    """Write ``report_contract.json`` (see :func:`build_report_contract_echo`)."""
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    path = out_dir / "report_contract.json"
+    payload = build_report_contract_echo(config, records)
+    path.write_text(json.dumps(payload, indent=2, default=_json_default) + "\n", encoding="utf-8")
+    return path
 
 
 def _json_default(value: object) -> object:
@@ -989,16 +1113,41 @@ def render_selected_components(frame: pd.DataFrame, out_path: Path) -> Path:
     return out_path
 
 
-def render_attribution_stability(frame: pd.DataFrame, out_path: Path) -> Path:
-    """Plot cross-replicate top-k agreement and bootstrap sign stability."""
+def render_attribution_stability(
+    frame: pd.DataFrame, out_path: Path, *, contract: ReportContract | None = None
+) -> Path:
+    """Plot attribution stability for one component.
+
+    Without a contract (the historical figure) the ``observed`` component's
+    cross-replicate top-k Jaccard and sign agreement are drawn beside bootstrap
+    sign stability under the title "Attribution stability". Under a contract
+    only the *within-replicate* bootstrap series are drawn, for the declared
+    component, and the title says so — cross-replicate agreement is descriptive
+    and never plotted as stability.
+    """
 
     import matplotlib.pyplot as plt
 
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    block = frame[frame["component"] == "observed"] if not frame.empty else frame
+    component = "observed" if contract is None else contract.driver_component
+    series: tuple[tuple[str, str], ...]
+    if contract is None:
+        title = "Attribution stability"
+        series = (
+            ("top_k_jaccard", "cross-replicate top-k Jaccard"),
+            ("sign_agreement", "cross-replicate sign agreement"),
+            ("bootstrap_sign_stability_mean", "bootstrap sign stability"),
+        )
+    else:
+        title = "Within-replicate bootstrap stability"
+        series = (
+            ("bootstrap_sign_stability_mean", "bootstrap sign stability"),
+            ("bootstrap_top_k_frequency_mean", "bootstrap top-k selection frequency"),
+        )
+    block = frame[frame["component"] == component] if not frame.empty else frame
     if block.empty:
-        return _empty_figure(out_path, "Attribution stability (empty)")
+        return _empty_figure(out_path, f"{title} (empty)")
 
     block = block.sort_values(["trajectory_mode", "effect_size", "transition_id"])
     labels = [
@@ -1007,11 +1156,7 @@ def render_attribution_stability(frame: pd.DataFrame, out_path: Path) -> Path:
     ]
     x = np.arange(len(block))
     fig, ax = plt.subplots(figsize=(max(6.0, 0.7 * len(block)), 3.6))
-    for column, label in (
-        ("top_k_jaccard", "cross-replicate top-k Jaccard"),
-        ("sign_agreement", "cross-replicate sign agreement"),
-        ("bootstrap_sign_stability_mean", "bootstrap sign stability"),
-    ):
+    for column, label in series:
         if column not in block.columns:
             continue
         ax.plot(x, block[column].to_numpy(dtype=float), marker="o", label=label)
@@ -1019,7 +1164,7 @@ def render_attribution_stability(frame: pd.DataFrame, out_path: Path) -> Path:
     ax.set_xticklabels(labels, rotation=45, ha="right", fontsize=7)
     ax.set_ylim(-0.02, 1.02)
     ax.set_ylabel("agreement")
-    ax.set_title("Attribution stability (observed component)")
+    ax.set_title(f"{title} ({component} component)")
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=7)
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
@@ -1027,8 +1172,14 @@ def render_attribution_stability(frame: pd.DataFrame, out_path: Path) -> Path:
     return out_path
 
 
-def render_phase4_figures(frames: Phase4ReportFrames, out_dir: Path) -> dict[str, Path]:
-    """Render every Phase 4 figure alongside the existing study outputs."""
+def render_phase4_figures(
+    frames: Phase4ReportFrames, out_dir: Path, *, contract: ReportContract | None = None
+) -> dict[str, Path]:
+    """Render every Phase 4 figure alongside the existing study outputs.
+
+    ``contract`` is forwarded to :func:`render_attribution_stability`; without it
+    every figure is byte-for-byte the pre-contract output.
+    """
 
     out_dir = Path(out_dir)
     return {
@@ -1039,7 +1190,7 @@ def render_phase4_figures(frames: Phase4ReportFrames, out_dir: Path) -> dict[str
             frames.pls_selection, out_dir / "phase4_selected_components.png"
         ),
         "phase4_attribution_stability_plot": render_attribution_stability(
-            frames.attribution, out_dir / "phase4_attribution_stability.png"
+            frames.attribution, out_dir / "phase4_attribution_stability.png", contract=contract
         ),
     }
 
@@ -1082,6 +1233,7 @@ __all__ = [
     "build_phase4_frames",
     "build_power_curves",
     "build_realized_surgery",
+    "build_report_contract_echo",
     "build_report_frames",
     "build_specificity_matrix",
     "build_type_i_table",
@@ -1095,6 +1247,8 @@ __all__ = [
     "render_rank_ladder",
     "render_selected_components",
     "render_type_i_plot",
+    "write_driver_report",
     "write_phase4_report",
+    "write_report_contract",
     "write_report_csvs",
 ]
