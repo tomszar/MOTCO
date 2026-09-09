@@ -23,7 +23,12 @@
 # Optional environment variable:
 #   STUDY_N_JOBS  Within-replicate RRPP parallelism. Leave UNSET to use the
 #                 value in the config, which is what a reproducible study run
-#                 wants.
+#                 wants. A config whose `report_contract` sets
+#                 `n_jobs_override: forbid` (the Phase 5 paper-grade profile
+#                 does) REFUSES a STUDY_N_JOBS that differs from its
+#                 `evaluation.n_jobs`: the runner exits 2 before enumerating
+#                 anything and every array task fails the same way. Such a
+#                 config can only be run with STUDY_N_JOBS unset (or equal).
 #
 # Why n_jobs is not simply $SLURM_CPUS_PER_TASK:
 #   RRPP seeds one RNG stream per worker, so the realized permutation draws —

@@ -363,3 +363,105 @@ def test_end_to_end_rank_ladder(tmp_path: Path) -> None:
     assert [c.rank for c in decision.columns] == [None, 3]
     out = write_rank_decision(decision, tmp_path / "report")
     assert out["rank_decision"].exists() and out["rank_decision_csv"].exists()
+
+
+# --- report contract: CLI wiring and runner refusal -----------------------------
+
+
+def _import_script(name: str):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    try:
+        return __import__(name)
+    finally:
+        sys.path.pop(0)
+
+
+def _contract_config(n_jobs_override: str = "forbid") -> StudyConfig:
+    from motco.simulations.study import ReportContract
+
+    return StudyConfig(
+        generator=SemiSyntheticTrajectoryParams(seed=2, trajectory_mode="magnitude", group_effect_size=0.1),
+        evaluation=SimulationEvaluationParams(integration_method="concat", permutations=0, seed=3, n_jobs=1),
+        trajectory_modes=("magnitude",),
+        effect_sizes=(0.1, 0.5),
+        n_replicates=1,
+        base_seed=42,
+        acceptance=AcceptanceTargets(type_i=(TypeIControlTarget(alpha=0.05),)),
+        report_contract=ReportContract(driver_component="observed", n_jobs_override=n_jobs_override),
+    )
+
+
+def test_report_writes_contract_files_only_when_declared(tmp_path: Path) -> None:
+    motco_study = _import_script("motco_study")
+
+    plain = _smoke_config()
+    plain_dir = tmp_path / "plain"
+    dump_study_config(plain, plain_dir / "config.json")
+    grid = enumerate_study(plain)
+    run_shard(grid, shard_index=0, n_shards=1, out_dir=plain_dir, evaluator=_mock_evaluator)
+    assert motco_study.main(["merge", "--out-dir", str(plain_dir)]) == 0
+    assert motco_study.main(["report", "--config", str(plain_dir / "config.json"), "--out-dir", str(plain_dir)]) == 0
+    plain_files = {p.name for p in (plain_dir / "report").iterdir()}
+    assert "driver_report.csv" not in plain_files and "report_contract.json" not in plain_files
+
+    contracted = _contract_config()
+    c_dir = tmp_path / "contract"
+    dump_study_config(contracted, c_dir / "config.json")
+    grid = enumerate_study(contracted)
+    run_shard(grid, shard_index=0, n_shards=1, out_dir=c_dir, evaluator=_mock_evaluator)
+    assert motco_study.main(["merge", "--out-dir", str(c_dir)]) == 0
+    assert motco_study.main(["report", "--config", str(c_dir / "config.json"), "--out-dir", str(c_dir)]) == 0
+    files = {p.name for p in (c_dir / "report").iterdir()}
+    assert {"driver_report.csv", "report_contract.json"} <= files
+    # Same study apart from the contract: the shared files are the same set.
+    assert files - {"driver_report.csv", "report_contract.json"} == plain_files
+    echo = json.loads((c_dir / "report" / "report_contract.json").read_text(encoding="utf-8"))
+    assert echo["driver_component"] == "observed" and echo["n_jobs_override"] == "forbid"
+    assert echo["config_n_jobs"] == 1
+    driver = pd.read_csv(c_dir / "report" / "driver_report.csv")
+    assert list(driver.columns)[:3] == ["trajectory_mode", "effect_size", "transition_id"]
+
+
+def test_runner_refuses_a_differing_n_jobs_under_forbid(tmp_path: Path, capsys) -> None:
+    run_study_shard = _import_script("run_study_shard")
+    config_path = tmp_path / "forbid.json"
+    dump_study_config(_contract_config("forbid"), config_path)
+    out_dir = tmp_path / "shards"
+    common = ["--config", str(config_path), "--out-dir", str(out_dir), "--shard-index", "0", "--n-shards", "1"]
+
+    with patch("run_study_shard.enumerate_study") as mock_enumerate, patch("run_study_shard.run_shard") as mock_run:
+        rc = run_study_shard.main([*common, "--n-jobs", "4"])
+    assert rc == 2
+    mock_enumerate.assert_not_called()
+    mock_run.assert_not_called()
+    assert not out_dir.exists()
+    err = capsys.readouterr().err
+    assert "--n-jobs 4" in err and "evaluation.n_jobs 1" in err
+    assert "n_jobs_override: forbid" in err and "parameter signature" in err
+
+    # Equal to the config value: accepted, no warning.
+    with patch("run_study_shard.run_shard") as mock_run:
+        mock_run.return_value = []
+        assert run_study_shard.main([*common, "--n-jobs", "1"]) == 0
+    mock_run.assert_called_once()
+    assert capsys.readouterr().err == ""
+
+    # Absent: runs the shard for real.
+    with patch("run_study_shard.run_shard") as mock_run:
+        mock_run.return_value = []
+        assert run_study_shard.main(common) == 0
+    mock_run.assert_called_once()
+
+
+def test_runner_warns_and_proceeds_under_warn_or_no_contract(tmp_path: Path, capsys) -> None:
+    run_study_shard = _import_script("run_study_shard")
+    for name, config in (("warn.json", _contract_config("warn")), ("plain.json", _smoke_config())):
+        config_path = tmp_path / name
+        dump_study_config(config, config_path)
+        common = ["--config", str(config_path), "--out-dir", str(tmp_path / "out"), "--shard-index", "0"]
+        with patch("run_study_shard.run_shard") as mock_run:
+            mock_run.return_value = []
+            assert run_study_shard.main([*common, "--n-shards", "1", "--n-jobs", "4"]) == 0
+        mock_run.assert_called_once()
+        assert mock_run.call_args.args[0].cells[0].evaluation_params.n_jobs == 4
+        assert "WARNING: --n-jobs 4 overrides" in capsys.readouterr().err

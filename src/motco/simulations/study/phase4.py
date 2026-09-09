@@ -28,7 +28,7 @@ from typing import Any
 import pandas as pd
 
 from motco.simulations.grid import SimulationReplicateResult, SimulationSummaryResult
-from motco.simulations.study.config import GateRule, Phase4GateConfig
+from motco.simulations.study.config import GateRule, Phase4GateConfig, ReportContract
 
 #: Checkpoint order from construction through preprocessing to projection.
 CHECKPOINT_ORDER: tuple[str, ...] = (
@@ -444,6 +444,59 @@ def summarize_attribution(records: Sequence[SimulationReplicateResult]) -> pd.Da
         ["trajectory_mode", "effect_size", "cell_id", "transition_id", "component"],
         na_position="first",
     ).reset_index(drop=True)
+
+
+DRIVER_REPORT_COLUMNS: tuple[str, ...] = (
+    "trajectory_mode",
+    "effect_size",
+    "transition_id",
+    "precision_mean",
+    "recall_mean",
+    "selected_count_mean",
+    "bootstrap_sign_stability_mean",
+    "bootstrap_top_k_frequency_mean",
+    "eligible_replicates",
+    "computed_replicates",
+    "failed_replicates",
+)
+"""Columns of ``driver_report.csv``: the declared component's truth recovery and
+*within-replicate* bootstrap stability. The cross-replicate ``top_k_jaccard`` and
+``sign_agreement`` columns are deliberately absent — they stay in
+``phase4_attribution.csv`` as descriptive quantities and are not a stability
+claim (see :class:`~motco.simulations.study.config.ReportContract`)."""
+
+
+def build_driver_report(attribution: pd.DataFrame, contract: ReportContract) -> pd.DataFrame:
+    """The paper's driver table: one row per (mode, effect, transition).
+
+    Restricts :func:`summarize_attribution`'s frame to the contract's declared
+    component and to the columns in :data:`DRIVER_REPORT_COLUMNS`. Rows whose
+    attribution never produced a transition (failed-only groups, ``component``
+    ``None``) fall out with the component filter. Each (mode, effect,
+    transition) must come from exactly one attribution cell — the frame is
+    per-cell, and pooling two cells that differ in a varied axis into one row
+    would mix design points — so more than one is an error rather than a mean.
+    """
+
+    if attribution.empty:
+        return pd.DataFrame(columns=list(DRIVER_REPORT_COLUMNS))
+    block = attribution[attribution["component"] == contract.driver_component]
+    if block.empty:
+        return pd.DataFrame(columns=list(DRIVER_REPORT_COLUMNS))
+    keys = ["trajectory_mode", "effect_size", "transition_id"]
+    cells_per_key = block.groupby(keys, dropna=False)["cell_id"].nunique()
+    ambiguous = cells_per_key[cells_per_key > 1]
+    if not ambiguous.empty:
+        raise Phase4SummaryError(
+            "driver report requires one attribution cell per (trajectory_mode, effect_size, "
+            f"transition_id); found several for {[tuple(k) for k in ambiguous.index]}. "
+            "Restrict attribution.phases to one phase."
+        )
+    return (
+        block.loc[:, list(DRIVER_REPORT_COLUMNS)]
+        .sort_values(keys)
+        .reset_index(drop=True)
+    )
 
 
 def _attribution_group(groups: dict, key: tuple, mode: str, effect_size, record) -> dict[str, Any]:
@@ -1277,6 +1330,8 @@ def _ratio(numerator: float, denominator: float) -> float | None:
 
 
 __all__ = [
+    "DRIVER_REPORT_COLUMNS",
+    "build_driver_report",
     "CHECKPOINT_CLASSIFICATION",
     "CHECKPOINT_ORDER",
     "DEFAULT_MATERIALITY_THRESHOLD",

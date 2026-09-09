@@ -597,3 +597,95 @@ def test_completeness_counts_failed_units() -> None:
     observation = evaluate_completeness([ok, failed])
     assert observation.met is False
     assert observation.observations["failed"] == 1
+
+
+def _three_component_payload(features: list[str]) -> dict:
+    """Attribution payload carrying truth recovery for all three components."""
+
+    payload = _attribution_payload(features)
+    payload["truth_recovery"] = [
+        {
+            "transition_id": "0->1",
+            "component": component,
+            "available": True,
+            "precision": precision,
+            "recall": 0.1,
+            "selected_count": len(features),
+        }
+        for component, precision in (("observed", 0.5), ("pls_captured", 0.15), ("residual", 0.3))
+    ]
+    payload["top_features"] = [
+        {"transition_id": "0->1", "component": component, "rank": i + 1, "feature": name, "sign": 1}
+        for component in ("observed", "pls_captured", "residual")
+        for i, name in enumerate(features)
+    ]
+    return payload
+
+
+def _attribution_records(cell_id: str = "power-orientation-1.0", *, effect_size: float = 1.0, varied=None):
+    payloads = [
+        _three_component_payload(["f1", "f2", "f3"]),
+        _three_component_payload(["f1", "f2", "f4"]),
+    ]
+    metadata: dict = {"trajectory_mode": "orientation", "effect_size": effect_size}
+    if varied is not None:
+        metadata["varied_axis"] = varied
+    return [
+        _record(
+            cell_id,
+            "power_primary",
+            index,
+            metadata=metadata,
+            p_values={"angle": 0.01},
+            attribution_status="computed",
+            attribution=payload,
+        )
+        for index, payload in enumerate(payloads)
+    ]
+
+
+def test_driver_report_presents_the_declared_component_only() -> None:
+    from motco.simulations.study.config import ReportContract
+    from motco.simulations.study.phase4 import DRIVER_REPORT_COLUMNS, build_driver_report
+
+    frame = summarize_attribution(_attribution_records())
+    # The full table keeps every component and the cross-replicate columns.
+    assert set(frame["component"]) == {"observed", "pls_captured", "residual"}
+    assert {"top_k_jaccard", "sign_agreement"} <= set(frame.columns)
+
+    driver = build_driver_report(frame, ReportContract(driver_component="observed"))
+    assert list(driver.columns) == list(DRIVER_REPORT_COLUMNS)
+    assert "component" not in driver.columns
+    assert "top_k_jaccard" not in driver.columns and "sign_agreement" not in driver.columns
+    assert len(driver) == 1
+    row = driver.iloc[0]
+    assert (row["trajectory_mode"], row["effect_size"], row["transition_id"]) == ("orientation", 1.0, "0->1")
+    assert row["precision_mean"] == pytest.approx(0.5)
+    assert row["bootstrap_sign_stability_mean"] == pytest.approx(0.9)
+    assert row["bootstrap_top_k_frequency_mean"] == pytest.approx(0.6)
+    assert row["eligible_replicates"] == 2 and row["computed_replicates"] == 2 and row["failed_replicates"] == 0
+
+    other = build_driver_report(frame, ReportContract(driver_component="pls_captured"))
+    assert other.iloc[0]["precision_mean"] == pytest.approx(0.15)
+
+
+def test_driver_report_is_empty_without_attribution_rows() -> None:
+    import pandas as pd
+
+    from motco.simulations.study.config import ReportContract
+    from motco.simulations.study.phase4 import DRIVER_REPORT_COLUMNS, build_driver_report
+
+    contract = ReportContract(driver_component="observed")
+    empty = build_driver_report(pd.DataFrame(), contract)
+    assert empty.empty and list(empty.columns) == list(DRIVER_REPORT_COLUMNS)
+    assert build_driver_report(summarize_attribution(_cells(rates=_PASSING_RATES)), contract).empty
+
+
+def test_driver_report_refuses_to_pool_two_cells_into_one_row() -> None:
+    from motco.simulations.study.config import ReportContract
+    from motco.simulations.study.phase4 import build_driver_report
+
+    records = _attribution_records("cell-a") + _attribution_records("cell-b", varied="generator.n_samples")
+    frame = summarize_attribution(records)
+    with pytest.raises(Phase4SummaryError, match="one attribution cell per"):
+        build_driver_report(frame, ReportContract(driver_component="observed"))

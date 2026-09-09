@@ -19,6 +19,25 @@ _AXIS_NAMESPACES = {"generator", "evaluation"}
 _TARGET_KINDS = {"type_i_control", "power_monotonicity", "specificity"}
 _GATE_ROLES = {"mandatory_power", "mandatory_control", "descriptive"}
 _STATISTICS = {"delta", "angle", "shape"}
+_ATTRIBUTION_COMPONENTS = ("observed", "pls_captured", "residual")
+_N_JOBS_OVERRIDE_POLICIES = ("forbid", "warn")
+_DRIVER_AGREEMENT_DESCRIPTIVE = "descriptive"
+_ROOT_KEYS = {
+    "generator",
+    "evaluation",
+    "trajectory_modes",
+    "effect_sizes",
+    "axes",
+    "design_grid",
+    "n_replicates",
+    "base_seed",
+    "alpha",
+    "acceptance",
+    "attribution",
+    "matched_seeds",
+    "report_contract",
+    "metadata",
+}
 
 
 class StudyConfigError(ValueError):
@@ -380,6 +399,52 @@ class RankDecisionRule:
 
 
 @dataclass(frozen=True)
+class ReportContract:
+    """Declared reporting and execution rules the findings report must honor.
+
+    The block is optional; when absent, reporting and the shard runner behave
+    exactly as before it existed. When declared it is *enforced*, not merely
+    recorded: ``driver_component`` selects the one attribution component that
+    driver tables and the attribution figure present (``phase4_attribution.csv``
+    keeps every component); ``cross_replicate_driver_agreement`` is fixed to
+    ``"descriptive"`` because the study re-draws the driver set every replicate,
+    so cross-replicate top-k Jaccard and sign agreement describe sampling
+    variation and can never support a stability claim (``"claim"`` is not a
+    legal value); ``n_jobs_override`` says whether ``run_study_shard.py`` refuses
+    (``"forbid"``) or warns about (``"warn"``, the historical behavior) a
+    ``--n-jobs`` that differs from ``evaluation.n_jobs``. The report echoes the
+    resolved contract to ``report/report_contract.json``.
+    """
+
+    driver_component: str
+    cross_replicate_driver_agreement: str = _DRIVER_AGREEMENT_DESCRIPTIVE
+    n_jobs_override: str = "warn"
+
+    def __post_init__(self) -> None:
+        if self.driver_component not in _ATTRIBUTION_COMPONENTS:
+            raise StudyConfigError(
+                f"report_contract.driver_component {self.driver_component!r} is unknown; "
+                f"expected one of {list(_ATTRIBUTION_COMPONENTS)}."
+            )
+        if self.cross_replicate_driver_agreement != _DRIVER_AGREEMENT_DESCRIPTIVE:
+            raise StudyConfigError(
+                "report_contract.cross_replicate_driver_agreement must be "
+                f"{_DRIVER_AGREEMENT_DESCRIPTIVE!r}; got {self.cross_replicate_driver_agreement!r}. "
+                "Cross-replicate driver agreement is never claimable: the driver set is "
+                "re-drawn every replicate."
+            )
+        if self.n_jobs_override not in _N_JOBS_OVERRIDE_POLICIES:
+            raise StudyConfigError(
+                f"report_contract.n_jobs_override {self.n_jobs_override!r} is unknown; "
+                f"expected one of {list(_N_JOBS_OVERRIDE_POLICIES)}."
+            )
+
+    @property
+    def forbids_n_jobs_override(self) -> bool:
+        return self.n_jobs_override == "forbid"
+
+
+@dataclass(frozen=True)
 class AcceptanceTargets:
     """Collection of pre-specified acceptance targets."""
 
@@ -407,6 +472,7 @@ class StudyConfig:
     acceptance: AcceptanceTargets = field(default_factory=AcceptanceTargets)
     attribution: AttributionSelector = field(default_factory=AttributionSelector)
     matched_seeds: MatchedSeedPolicy = field(default_factory=MatchedSeedPolicy)
+    report_contract: ReportContract | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -593,6 +659,12 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
     missing = sorted(required - set(data))
     if missing:
         raise StudyConfigError(f"Study configuration is missing required field(s): {missing}.")
+    unknown = sorted(set(data) - _ROOT_KEYS)
+    if unknown:
+        raise StudyConfigError(
+            f"Study configuration has unknown root key(s): {unknown}; "
+            f"expected only {sorted(_ROOT_KEYS)}."
+        )
 
     generator = _build_generator(data["generator"])
     evaluation = _build_evaluation(data.get("evaluation") or {})
@@ -606,6 +678,7 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
     acceptance = _build_acceptance(data.get("acceptance") or {})
     attribution = _build_attribution(data.get("attribution") or {})
     matched_seeds = _build_matched_seeds(data.get("matched_seeds") or {})
+    report_contract = _build_report_contract(data.get("report_contract"))
     metadata = dict(data.get("metadata") or {})
     return StudyConfig(
         generator=generator,
@@ -620,6 +693,7 @@ def _build_config(data: Mapping[str, Any]) -> StudyConfig:
         acceptance=acceptance,
         attribution=attribution,
         matched_seeds=matched_seeds,
+        report_contract=report_contract,
         metadata=metadata,
     )
 
@@ -889,6 +963,26 @@ def _build_matched_seeds(raw: Mapping[str, Any]) -> MatchedSeedPolicy:
     )
 
 
+def _build_report_contract(raw: Any) -> ReportContract | None:
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise StudyConfigError(f"report_contract must be a mapping, got {type(raw).__name__}.")
+    field_names = {f.name for f in dataclasses.fields(ReportContract)}
+    unknown = sorted(set(raw) - field_names)
+    if unknown:
+        raise StudyConfigError(f"report_contract has unknown field(s): {unknown}.")
+    if "driver_component" not in raw:
+        raise StudyConfigError("report_contract.driver_component is required when the block is declared.")
+    return ReportContract(
+        driver_component=str(raw["driver_component"]),
+        cross_replicate_driver_agreement=str(
+            raw.get("cross_replicate_driver_agreement", _DRIVER_AGREEMENT_DESCRIPTIVE)
+        ),
+        n_jobs_override=str(raw.get("n_jobs_override", "warn")),
+    )
+
+
 def _build_type_i_target(raw: Mapping[str, Any]) -> TypeIControlTarget:
     if "alpha" not in raw:
         raise StudyConfigError("acceptance.type_i entries require 'alpha'.")
@@ -993,6 +1087,9 @@ def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
         },
         "attribution": _dataclass_dict(config.attribution),
         "matched_seeds": _dataclass_dict(config.matched_seeds),
+        "report_contract": (
+            None if config.report_contract is None else _dataclass_dict(config.report_contract)
+        ),
         "metadata": dict(config.metadata),
     }
 
@@ -1024,6 +1121,7 @@ __all__ = [
     "PowerMonotonicityTarget",
     "RANK_AXIS_BASELINE",
     "RankDecisionRule",
+    "ReportContract",
     "SpecificityTarget",
     "StatisticPair",
     "StudyConfig",

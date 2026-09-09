@@ -115,6 +115,7 @@ schema lives in `config.py` (`StudyConfig`). Required top-level keys:
 | `base_seed`        | Deterministic seed root for replicates.                                |
 | `alpha`            | Significance level for rejection rates.                                |
 | `acceptance`       | Pre-specified targets: `type_i`, `power`, `specificity`, optional `gate`, optional `design_point` (advisory design-point rule over a `design_grid`), optional `rank_decision` (advisory retained-rank rule over the rank axis). |
+| `report_contract`  | Optional declared reporting/execution rules: `driver_component` (`observed` \| `pls_captured` \| `residual`; which attribution component `driver_report.csv` and the attribution figure present), `cross_replicate_driver_agreement` (only `descriptive` is legal — cross-replicate Jaccard/sign agreement is never a stability claim), `n_jobs_override` (`forbid` \| `warn`, default `warn`; `forbid` makes the shard runner refuse a differing `--n-jobs`). When declared, `report` also writes `report_contract.json` and `driver_report.csv`; when absent, every output is byte-identical to a pre-contract run. The Phase 5 profile declares `observed` / `descriptive` / `forbid`. |
 | `metadata`         | Free-form provenance (name, intent, notes).                            |
 
 Validation enforces:
@@ -129,6 +130,12 @@ Validation enforces:
   include `null`; its target and protected modes are in `trajectory_modes`; both
   SE multipliers are non-negative.
 - `0 < alpha < 1`.
+- **The root mapping contains only the keys in the table above.** An unknown
+  top-level key (a misspelled `report_contract`, say) fails to load with an
+  error naming it instead of being silently ignored; every sub-block already
+  rejected unknown fields.
+- `report_contract`, when present, names a known `driver_component`, uses
+  `cross_replicate_driver_agreement: descriptive`, and a known `n_jobs_override`.
 
 ### Nested evaluation axes
 
@@ -171,6 +178,19 @@ typically want:
 
 Keep `0.0` as the first effect size — it anchors the within-mode null
 and is what the specificity/Type I checks read.
+
+**Phase 5 cost.** The committed paper-grade profile
+`examples/trajectory_power_study/phase5_power_study.json` (n = 1200, four
+stages, `p_dmp = 0.1`, pooled PLS with double-CV rank, 999 permutations,
+attribution on the orientation cells) is 19 cells × 500 replicates = 9,500
+units. A one-replicate rehearsal on 2026-09-09 (19 units as 19 concurrent
+single-threaded processes on a 24-core workstation, BLAS pinned) measured a
+median **43 s per unit** (min 30, max 51; CV fit + 999 RRPP permutations +
+attribution) — the attribution units cost the same as the others (median 42.9 s
+vs 43.0 s), so the bootstrap is immaterial at n = 1200. Budget roughly 120
+workstation core-hours, or about 150 EPYC 7662 core-hours if the ladder's
+per-core ratio (57 s per CV unit at 199 permutations) carries over; 100
+single-CPU shards finish in about 1.5–2 h wall.
 
 ---
 
@@ -266,9 +286,14 @@ mkdir -p logs results
 
 sbatch \
   --array=0-63 \
-  --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/study.json,STUDY_OUT=$(pwd)/results,N_SHARDS=64 \
+  --export=ALL,STUDY_CONFIG=$(pwd)/examples/trajectory_power_study/phase5_power_study.json,STUDY_OUT=$(pwd)/results,N_SHARDS=64 \
   scripts/motco_study_array.sbatch
 ```
+
+Leave `STUDY_N_JOBS` unset. A config whose `report_contract` sets
+`n_jobs_override: forbid` (the Phase 5 profile does) makes every array task
+exit 2 before enumerating anything if `STUDY_N_JOBS` differs from its
+`evaluation.n_jobs`; other configs warn and run at the overridden signature.
 
 Required environment variables (via `--export`):
 
@@ -283,7 +308,7 @@ Required environment variables (via `--export`):
 ```bash
 python scripts/motco_study.py merge  --out-dir results
 python scripts/motco_study.py report \
-    --config examples/trajectory_power_study/study.json \
+    --config examples/trajectory_power_study/phase5_power_study.json \
     --out-dir results
 ```
 
@@ -310,6 +335,13 @@ python scripts/motco_study.py report \
 - **Forced overwrite** — pass `--overwrite` to `run_study_shard.py` to
   discard an existing shard JSONL before running. Use with care; this
   loses any completed replicates in that shard.
+- **Worker-count lock** — `--n-jobs` enters the cell parameter signature
+  and changes the realized permutation draws. When the config declares
+  `report_contract.n_jobs_override: forbid`, `run_study_shard.py` refuses a
+  `--n-jobs` that differs from `evaluation.n_jobs`: it prints both values
+  and the signature consequence to stderr and exits **2** before enumerating
+  or writing anything (an equal value is accepted). Under `warn`, or with no
+  contract, it warns and proceeds at the overridden signature, as before.
 
 ---
 
@@ -340,9 +372,23 @@ results/
     ├── rank_ladder.png            only when the design grid declares the retained-rank axis
     ├── rank_decision.json         only when acceptance.rank_decision is declared
     ├── rank_decision.csv          (same condition)
+    ├── driver_report.csv          only when the config declares a report_contract: the declared
+    │                              attribution component per (mode, effect, transition) — precision/recall
+    │                              vs truth, selected count, within-replicate bootstrap stability,
+    │                              replicate accounting; no cross-replicate agreement columns
+    ├── report_contract.json       (same condition) resolved contract: driver component, the descriptive
+    │                              status of cross-replicate agreement, the uniform n_jobs the records
+    │                              carry, and the shared zero-effect anchor (cell_id, resolves_modes,
+    │                              counted_as: 1) with one plain-language statement per item
     ├── acceptance_report.csv      acceptance target evaluation
     └── acceptance_report.json
 ```
+
+With `acceptance.gate.enabled` the `phase4_*` tables and figures are written
+as well (see "Phase 4 outputs" in the examples README); under a report
+contract the attribution figure plots within-replicate bootstrap stability
+only, for the declared component, while `phase4_attribution.csv` keeps every
+component and the cross-replicate columns.
 
 ### Per-replicate record fields
 
