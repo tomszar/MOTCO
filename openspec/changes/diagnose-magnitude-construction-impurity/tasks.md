@@ -24,7 +24,7 @@
 - [x] 4.1 Add a `scripts/` driver that runs the block decomposition, the recalibrated localization, the uniform-δ comparator and the two-stage isolation, writing its outputs under a dated results directory; verify it runs on the workstation with no cluster and no R runtime.
 - [x] 4.2 Write `docs/reports/magnitude-construction-diagnostic-<date>.md` stating the mechanism verdict (with the block-decomposition table), the size-purity verdict for the uniform-δ candidate, the two-stage confirmation, and the recalibrated classification for both failing pairs under both rules; verify every number cites a committed output path and each verdict names the revision it implies (method or claim) without adopting one.
 - [x] 4.3 Record in the report what the reader found for `orientation` and `shape` off-target responses (task 1.3), including whether the paper-grade run's predeclared "projection-associated" label for orientation/`shape` is supported by the block decomposition; verify the report does not restate the predeclared label as a finding.
-- [ ] 4.4 Commit the diagnostic outputs and the report; verify no large regenerable artifact is staged and that `results/phase5-2026-09-10/` is untouched.
+- [x] 4.4 Commit the diagnostic outputs and the report; verify no large regenerable artifact is staged and that `results/phase5-2026-09-10/` is untouched.
 
 ## 5. Docs and gate
 
