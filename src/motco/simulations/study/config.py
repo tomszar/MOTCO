@@ -12,7 +12,10 @@ from typing import Any
 
 from motco.simulations.evaluation import AttributionDiagnosticSettings, SimulationEvaluationParams
 from motco.simulations.grid import SimulationGridError, _split_axis
-from motco.simulations.semisynthetic import SemiSyntheticTrajectoryParams
+from motco.simulations.semisynthetic import (
+    _MAGNITUDE_KINDS,
+    SemiSyntheticTrajectoryParams,
+)
 
 _TRAJECTORY_MODES = {"none", "translation", "magnitude", "orientation", "shape"}
 _AXIS_NAMESPACES = {"generator", "evaluation"}
@@ -715,6 +718,16 @@ def _build_generator(raw: Mapping[str, Any]) -> SemiSyntheticTrajectoryParams:
         if f.name == "stage_sample_prop" and value is not None:
             value = tuple(float(v) for v in value)
         kwargs[f.name] = value
+    # Reject an unknown construction variant at load time rather than letting
+    # every work unit fail at generation. Diagnostic-only constructions (the
+    # uniform-delta magnitude probe) are deliberately absent from the selectable
+    # set, so a committed profile cannot acquire one.
+    magnitude_kind = kwargs.get("magnitude_kind")
+    if magnitude_kind is not None and magnitude_kind not in _MAGNITUDE_KINDS:
+        raise StudyConfigError(
+            f"generator.magnitude_kind {magnitude_kind!r} is unknown; "
+            f"expected one of {sorted(_MAGNITUDE_KINDS)}."
+        )
     return SemiSyntheticTrajectoryParams(**kwargs)
 
 

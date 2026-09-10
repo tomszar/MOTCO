@@ -463,7 +463,14 @@ describe *where* a response first appears, not what caused it, and gate nothing.
 ## Phase 5 paper-grade study
 
 `phase5_power_study.json` is the committed paper-grade Phase 5 configuration —
-the study the paper's operating-characteristic claims are read from. It
+the study the paper's operating-characteristic claims are read from. **It ran
+2026-09-10** (job 880599 on `ing`, 100 shards, 3 h 04 m wall, 182.7 core-hours,
+9,500/9,500 units, 0 failures, 0 censored surgeries); the Phase 4 gate returned
+**HOLD** on the two magnitude mandatory controls, with all three mandatory power
+diagonals and all 21 Type I checks met. Results are in
+`results/phase5-2026-09-10/` and the findings report is
+[`docs/reports/phase5-paper-grade-2026-09-10.md`](../../docs/reports/phase5-paper-grade-2026-09-10.md).
+It
 supersedes `study.json` (see the config quick reference) and derives from the
 latent-rank ladder's cross-validated column (`metadata.derives_from`): identical
 `generator` and `evaluation.integration_params`, no `design_grid` (the ladder

@@ -1,0 +1,910 @@
+{
+  "decision": "hold",
+  "rationale": "Mandatory gate(s) failed: mandatory_control[magnitude,angle] (rate=0.2760 > bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)); mandatory_control[magnitude,shape] (rate=0.7420 > bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500))",
+  "confirmation_runs": [],
+  "observations": [
+    {
+      "rule": "type_i_inflation[power_primary-8d1d54882ad0,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-8d1d54882ad0",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0400 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-8d1d54882ad0",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.04,
+        "monte_carlo_se": 0.008763560920082658,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.029493588689617926,
+        "exceedance_in_se": -3.365479963975619
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-8d1d54882ad0,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-8d1d54882ad0",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0500 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-8d1d54882ad0",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.05,
+        "monte_carlo_se": 0.009746794344808964,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.019493588689617924,
+        "exceedance_in_se": -1.9999999999999996
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-8d1d54882ad0,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-8d1d54882ad0",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0440 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-8d1d54882ad0",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.044,
+        "monte_carlo_se": 0.009172131704244111,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.02549358868961793,
+        "exceedance_in_se": -2.779461690222087
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-94ae5b6e309e,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-94ae5b6e309e",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0420 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-94ae5b6e309e",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.042,
+        "monte_carlo_se": 0.008970618707759236,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.027493588689617925,
+        "exceedance_in_se": -3.064848655961382
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-94ae5b6e309e,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-94ae5b6e309e",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0420 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-94ae5b6e309e",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.042,
+        "monte_carlo_se": 0.008970618707759236,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.027493588689617925,
+        "exceedance_in_se": -3.064848655961382
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-94ae5b6e309e,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-94ae5b6e309e",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0300 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-94ae5b6e309e",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.03,
+        "monte_carlo_se": 0.00762889244910426,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03949358868961793,
+        "exceedance_in_se": -5.176844339214015
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-a3dabd0a79ce,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-a3dabd0a79ce",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0560 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-a3dabd0a79ce",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.056,
+        "monte_carlo_se": 0.010282412168358162,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.013493588689617926,
+        "exceedance_in_se": -1.3122979772335372
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-a3dabd0a79ce,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-a3dabd0a79ce",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0280 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-a3dabd0a79ce",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.028,
+        "monte_carlo_se": 0.007377804551490911,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04149358868961793,
+        "exceedance_in_se": -5.624110587374245
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-a3dabd0a79ce,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-a3dabd0a79ce",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0460 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-a3dabd0a79ce",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.046,
+        "monte_carlo_se": 0.00936845771725528,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.023493588689617928,
+        "exceedance_in_se": -2.507732798574337
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-ac245a5f3d63,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-ac245a5f3d63",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0540 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-ac245a5f3d63",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.054,
+        "monte_carlo_se": 0.010107818755794942,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.015493588689617928,
+        "exceedance_in_se": -1.5328320643596083
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-ac245a5f3d63,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-ac245a5f3d63",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0380 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-ac245a5f3d63",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.038,
+        "monte_carlo_se": 0.00855055553750749,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03149358868961793,
+        "exceedance_in_se": -3.6832213476036197
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-ac245a5f3d63,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-ac245a5f3d63",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0460 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-ac245a5f3d63",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.046,
+        "monte_carlo_se": 0.00936845771725528,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.023493588689617928,
+        "exceedance_in_se": -2.507732798574337
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-d74045b65506,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "delta",
+      "cell_id": "power_primary-d74045b65506",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0360 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-d74045b65506",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "delta",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.036,
+        "monte_carlo_se": 0.008331146379700696,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03349358868961793,
+        "exceedance_in_se": -4.020285704165148
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-d74045b65506,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "angle",
+      "cell_id": "power_primary-d74045b65506",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0460 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-d74045b65506",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "angle",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.046,
+        "monte_carlo_se": 0.00936845771725528,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.023493588689617928,
+        "exceedance_in_se": -2.507732798574337
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-d74045b65506,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "shape",
+      "cell_id": "power_primary-d74045b65506",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0480 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-d74045b65506",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "shape",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.048,
+        "monte_carlo_se": 0.009559916317625379,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.021493588689617926,
+        "exceedance_in_se": -2.248303015999286
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-c9b8da02420a,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "delta",
+      "cell_id": "type_i_baseline-c9b8da02420a",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0500 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-c9b8da02420a",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "delta",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.05,
+        "monte_carlo_se": 0.009746794344808964,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.019493588689617924,
+        "exceedance_in_se": -1.9999999999999996
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-c9b8da02420a,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "angle",
+      "cell_id": "type_i_baseline-c9b8da02420a",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0400 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-c9b8da02420a",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "angle",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.04,
+        "monte_carlo_se": 0.008763560920082658,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.029493588689617926,
+        "exceedance_in_se": -3.365479963975619
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-c9b8da02420a,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "shape",
+      "cell_id": "type_i_baseline-c9b8da02420a",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0540 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-c9b8da02420a",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "shape",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.054,
+        "monte_carlo_se": 0.010107818755794942,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.015493588689617928,
+        "exceedance_in_se": -1.5328320643596083
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-d18f474778c9,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "type_i_baseline-d18f474778c9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0440 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-d18f474778c9",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.044,
+        "monte_carlo_se": 0.009172131704244111,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.02549358868961793,
+        "exceedance_in_se": -2.779461690222087
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-d18f474778c9,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "type_i_baseline-d18f474778c9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0480 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-d18f474778c9",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.048,
+        "monte_carlo_se": 0.009559916317625379,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.021493588689617926,
+        "exceedance_in_se": -2.248303015999286
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-d18f474778c9,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "type_i_baseline-d18f474778c9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0620 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-d18f474778c9",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.062,
+        "monte_carlo_se": 0.010784804124322332,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.007493588689617928,
+        "exceedance_in_se": -0.6948284459536989
+      }
+    },
+    {
+      "rule": "mandatory_power[magnitude,delta]",
+      "kind": "power",
+      "trajectory_mode": "magnitude",
+      "statistic": "delta",
+      "cell_id": null,
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "top_rate=1.000 >= floor=0.800; tolerated_monotone=True",
+      "observations": {
+        "trajectory_mode": "magnitude",
+        "statistic": "delta",
+        "min_power_at_top": 0.8,
+        "monotonicity_se_tolerance": 2.0,
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.036,
+            "se": 0.008331146379700696,
+            "from_shared_anchor": true
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 1.0,
+            "se": 0.0,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 1.0,
+            "se": 0.0,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 1.0,
+            "se": 0.0,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 1.0,
+            "se": 0.0,
+            "from_shared_anchor": false
+          }
+        ],
+        "top_effect_size": 1.0,
+        "top_rate": 1.0,
+        "reversals": []
+      }
+    },
+    {
+      "rule": "mandatory_power[orientation,angle]",
+      "kind": "power",
+      "trajectory_mode": "orientation",
+      "statistic": "angle",
+      "cell_id": null,
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "top_rate=0.840 >= floor=0.800; tolerated_monotone=True",
+      "observations": {
+        "trajectory_mode": "orientation",
+        "statistic": "angle",
+        "min_power_at_top": 0.8,
+        "monotonicity_se_tolerance": 2.0,
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.046,
+            "se": 0.00936845771725528,
+            "from_shared_anchor": true
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.842,
+            "se": 0.016311713582576173,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.878,
+            "se": 0.014636666287102402,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.872,
+            "se": 0.014940950438308804,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.84,
+            "se": 0.01639512122553536,
+            "from_shared_anchor": false
+          }
+        ],
+        "top_effect_size": 1.0,
+        "top_rate": 0.84,
+        "reversals": []
+      }
+    },
+    {
+      "rule": "mandatory_power[shape,shape]",
+      "kind": "power",
+      "trajectory_mode": "shape",
+      "statistic": "shape",
+      "cell_id": null,
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "top_rate=0.996 >= floor=0.800; tolerated_monotone=True",
+      "observations": {
+        "trajectory_mode": "shape",
+        "statistic": "shape",
+        "min_power_at_top": 0.8,
+        "monotonicity_se_tolerance": 2.0,
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.048,
+            "se": 0.009559916317625379,
+            "from_shared_anchor": true
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.954,
+            "se": 0.009368457717255283,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.988,
+            "se": 0.004869496893930627,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.994,
+            "se": 0.0034536936748935927,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.996,
+            "se": 0.002822764602300377,
+            "from_shared_anchor": false
+          }
+        ],
+        "top_effect_size": 1.0,
+        "top_rate": 0.996,
+        "reversals": []
+      }
+    },
+    {
+      "rule": "mandatory_control[magnitude,angle]",
+      "kind": "control",
+      "trajectory_mode": "magnitude",
+      "statistic": "angle",
+      "cell_id": "power_primary-6459c57fb4f3",
+      "effect_size": 1.0,
+      "met": false,
+      "detail": "rate=0.2760 > bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "trajectory_mode": "magnitude",
+        "statistic": "angle",
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "cell_id": "power_primary-6459c57fb4f3",
+        "effect_size": 1.0,
+        "rejection_rate": 0.276,
+        "monte_carlo_se": 0.01999119806314769,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": 0.2065064113103821,
+        "exceedance_in_se": 10.329866707241601
+      }
+    },
+    {
+      "rule": "mandatory_control[magnitude,shape]",
+      "kind": "control",
+      "trajectory_mode": "magnitude",
+      "statistic": "shape",
+      "cell_id": "power_primary-6459c57fb4f3",
+      "effect_size": 1.0,
+      "met": false,
+      "detail": "rate=0.7420 > bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "trajectory_mode": "magnitude",
+        "statistic": "shape",
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "cell_id": "power_primary-6459c57fb4f3",
+        "effect_size": 1.0,
+        "rejection_rate": 0.742,
+        "monte_carlo_se": 0.019567115270269147,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": 0.672506411310382,
+        "exceedance_in_se": 34.36921600457928
+      }
+    },
+    {
+      "rule": "descriptive[orientation,delta]",
+      "kind": "descriptive",
+      "trajectory_mode": "orientation",
+      "statistic": "delta",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.036,
+            "se": 0.008331146379700696
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.804,
+            "se": 0.01775297158224504
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.878,
+            "se": 0.014636666287102402
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.894,
+            "se": 0.013766916866168691
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.912,
+            "se": 0.012669333052690657
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[orientation,shape]",
+      "kind": "descriptive",
+      "trajectory_mode": "orientation",
+      "statistic": "shape",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.048,
+            "se": 0.009559916317625379
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 1.0,
+            "se": 0.0
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 1.0,
+            "se": 0.0
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 1.0,
+            "se": 0.0
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.998,
+            "se": 0.001997998998998749
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[shape,delta]",
+      "kind": "descriptive",
+      "trajectory_mode": "shape",
+      "statistic": "delta",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.036,
+            "se": 0.008331146379700696
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.806,
+            "se": 0.017684117167673367
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.874,
+            "se": 0.01484075469779081
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.934,
+            "se": 0.01110351295761841
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.954,
+            "se": 0.009368457717255283
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[shape,angle]",
+      "kind": "descriptive",
+      "trajectory_mode": "shape",
+      "statistic": "angle",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.046,
+            "se": 0.00936845771725528
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.692,
+            "se": 0.020646355610615643
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.816,
+            "se": 0.017328819925199756
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.8,
+            "se": 0.017888543819998316
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.796,
+            "se": 0.018021320706318945
+          }
+        ]
+      }
+    },
+    {
+      "rule": "diagnostic_completeness",
+      "kind": "completeness",
+      "trajectory_mode": "*",
+      "statistic": "*",
+      "cell_id": null,
+      "effect_size": null,
+      "met": true,
+      "detail": "All expected records and mandatory diagnostics present",
+      "observations": {
+        "records": 9500,
+        "completed": 9500,
+        "failed": 0,
+        "expected_units": 9500,
+        "pls_records": 9500,
+        "missing_integration_metadata": 0,
+        "missing_realized_geometry": 0,
+        "attribution_eligible": 2000,
+        "attribution_incomplete": 0
+      }
+    }
+  ]
+}

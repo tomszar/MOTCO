@@ -70,11 +70,30 @@ _STATISTICS: tuple[str, ...] = ("delta", "angle", "shape")
 _MAX_ANGLE_DEGREES = 180.0
 _COMPONENTS: tuple[str, ...] = ("observed", "pls_captured", "residual")
 
-#: Descriptive-only materiality threshold for localization, on the scale-free
-#: statistic described in :func:`localize_off_diagonal`: a checkpoint counts as
-#: material when its normalized value exceeds the zero-effect null at that same
-#: checkpoint by at least this much. It gates nothing.
+#: Descriptive-only materiality threshold for localization under the legacy
+#: ``"absolute"`` rule, on the scale-free statistic described in
+#: :func:`localize_off_diagonal`: a checkpoint counts as material when its
+#: normalized value exceeds the zero-effect null at that same checkpoint by at
+#: least this much. It gates nothing.
 DEFAULT_MATERIALITY_THRESHOLD = 0.05
+
+#: Materiality threshold for the ``"null_dispersion"`` rule, in units of the
+#: zero-effect null's dispersion at the same checkpoint.
+DEFAULT_MATERIALITY_DISPERSION_UNITS = 3.0
+
+#: A null dispersion at or below this counts as degenerate: an analytically null
+#: construction leaves a population checkpoint's dispersion at exact zero or
+#: floating-point dust (measured on the Phase 5 records at
+#: ``population_standardized``: ``delta`` sd exactly 0.0, ``angle`` sd 8.7e-07,
+#: ``shape`` sd 3.5e-16). Dividing by those is a zero-division or a meaningless
+#: ratio, so the rule falls back to "excess exceeds this tolerance" — the limit
+#: of the dispersion rule as the null variance goes to zero.
+MATERIALITY_DUST_ATOL = 1e-6
+
+#: Materiality rules :func:`localize_off_diagonal` accepts. ``"absolute"`` is the
+#: rule every already-reported run was judged under and stays the default, so a
+#: committed report keeps regenerating identically.
+MATERIALITY_RULES: tuple[str, ...] = ("absolute", "null_dispersion")
 
 
 class Phase4SummaryError(ValueError):
@@ -562,7 +581,9 @@ def localize_off_diagonal(
     records: Sequence[SimulationReplicateResult],
     *,
     scope: str = "joint",
-    materiality_threshold: float = DEFAULT_MATERIALITY_THRESHOLD,
+    materiality_threshold: float | None = None,
+    rule: str = "absolute",
+    dust_atol: float = MATERIALITY_DUST_ATOL,
 ) -> pd.DataFrame:
     """First checkpoint at which each off-diagonal response becomes material.
 
@@ -576,11 +597,28 @@ def localize_off_diagonal(
       orientation difference; and
     - ``shape`` is already a Procrustes distance on centroid-scaled configurations.
 
-    A response is material at a checkpoint when its normalized value exceeds the
-    shared zero-effect anchor's normalized value *at that same checkpoint* by at
-    least ``materiality_threshold``. Comparing an excess rather than a ratio
-    matters: an exactly-null construction leaves the anchor's angle at roughly
-    1e-8, and any ratio against that is meaningless.
+    Two ``rule`` values decide when that excess counts as material:
+
+    - ``"absolute"`` (the default, and the rule every already-reported run was
+      judged under): material when the excess is at least
+      ``materiality_threshold``, defaulting to
+      :data:`DEFAULT_MATERIALITY_THRESHOLD`. One absolute cut cannot serve all
+      three statistics — ``shape`` responses run ~1e-2 while the cut is 5e-2, so
+      a ``shape`` response the RRPP test rejects at high rate still reports
+      ``not_material``. Kept as the default only so committed reports keep
+      reproducing.
+    - ``"null_dispersion"``: material when the excess is at least
+      ``materiality_threshold`` (defaulting to
+      :data:`DEFAULT_MATERIALITY_DISPERSION_UNITS`) times the anchor's dispersion
+      at the same checkpoint, which puts the three statistics in common units.
+      Where that dispersion is degenerate — zero or dust, as it is at every
+      population checkpoint for an analytically null construction — the rule
+      falls back to "excess exceeds ``dust_atol``" rather than dividing by dust.
+      ``materiality_basis`` records which path decided each row.
+
+    Comparing an excess rather than a ratio matters throughout: an exactly-null
+    construction leaves the anchor's angle at roughly 1e-8, and any ratio against
+    that is meaningless.
 
     The emitted classification labels where a response first appears —
     construction, sampling/preprocessing, or projection. It is descriptive, not
@@ -600,6 +638,33 @@ def localize_off_diagonal(
         "normalized_excess",
         "measurement_space",
     ]
+    # The legacy rule keeps the legacy schema exactly. Adding columns under it
+    # would change every already-committed `phase4_localization.csv`, and a
+    # frozen report is asserted to regenerate byte-identically; the extra
+    # columns describe the new rule's reasoning, so they travel with it.
+    if rule != "absolute":
+        columns = [
+            *columns[:5],
+            "materiality_rule",
+            "materiality_threshold",
+            "materiality_basis",
+            "normalized_value",
+            "normalized_null",
+            "normalized_excess",
+            "null_dispersion",
+            "excess_in_dispersion_units",
+            "measurement_space",
+        ]
+    if rule not in MATERIALITY_RULES:
+        raise Phase4SummaryError(
+            f"Unknown materiality rule {rule!r}; expected one of {MATERIALITY_RULES}."
+        )
+    if materiality_threshold is None:
+        materiality_threshold = (
+            DEFAULT_MATERIALITY_THRESHOLD
+            if rule == "absolute"
+            else DEFAULT_MATERIALITY_DISPERSION_UNITS
+        )
     if geometry.empty:
         return pd.DataFrame(columns=columns)
 
@@ -614,6 +679,12 @@ def localize_off_diagonal(
     null_reference = {
         (checkpoint, statistic): value
         for (cell_id, checkpoint, statistic), value in normalized.items()
+        if cell_id in anchor_cells
+    }
+    dispersion = _normalized_geometry(scoped, column="sd")
+    null_dispersion = {
+        (checkpoint, statistic): value
+        for (cell_id, checkpoint, statistic), value in dispersion.items()
         if cell_id in anchor_cells
     }
 
@@ -638,6 +709,9 @@ def localize_off_diagonal(
         observed: float | None = None
         null_value: float | None = None
         excess: float | None = None
+        spread: float | None = None
+        excess_units: float | None = None
+        basis: str | None = None
         for checkpoint in CHECKPOINT_ORDER:
             value = by_checkpoint.get(checkpoint)
             reference = null_reference.get((checkpoint, statistic))
@@ -645,44 +719,75 @@ def localize_off_diagonal(
                 continue
             baseline = 0.0 if reference is None else reference
             candidate_excess = value - baseline
-            if candidate_excess >= materiality_threshold:
+            candidate_spread = null_dispersion.get((checkpoint, statistic))
+            candidate_units: float | None = None
+            if rule == "absolute":
+                candidate_basis = "absolute_excess"
+                material = candidate_excess >= materiality_threshold
+            elif candidate_spread is not None and candidate_spread > dust_atol:
+                # Usable null dispersion: judge in its units.
+                candidate_basis = "null_dispersion"
+                candidate_units = candidate_excess / candidate_spread
+                material = candidate_units >= materiality_threshold
+            else:
+                # Degenerate null (analytically zero at population checkpoints):
+                # any excess above dust is material. Never divide by dust.
+                candidate_basis = "degenerate_null_dust_floor"
+                material = candidate_excess > dust_atol
+            if material:
                 first_checkpoint = checkpoint
                 observed = value
                 null_value = reference
                 excess = candidate_excess
+                spread = candidate_spread
+                excess_units = candidate_units
+                basis = candidate_basis
                 break
-        rows.append(
-            {
-                "trajectory_mode": mode,
-                "effect_size": effect_size,
-                "statistic": statistic,
-                "first_material_checkpoint": first_checkpoint,
-                "classification": (
-                    CHECKPOINT_CLASSIFICATION.get(first_checkpoint, "unclassified")
-                    if first_checkpoint is not None
-                    else "not_material"
-                ),
-                "materiality_threshold": materiality_threshold,
-                "normalized_value": observed,
-                "normalized_null": null_value,
-                "normalized_excess": excess,
-                "measurement_space": (
-                    MEASUREMENT_SPACES.get(first_checkpoint) if first_checkpoint is not None else None
-                ),
-            }
-        )
+        localization_row: dict[str, Any] = {
+            "trajectory_mode": mode,
+            "effect_size": effect_size,
+            "statistic": statistic,
+            "first_material_checkpoint": first_checkpoint,
+            "classification": (
+                CHECKPOINT_CLASSIFICATION.get(first_checkpoint, "unclassified")
+                if first_checkpoint is not None
+                else "not_material"
+            ),
+            "materiality_threshold": materiality_threshold,
+            "normalized_value": observed,
+            "normalized_null": null_value,
+            "normalized_excess": excess,
+            "measurement_space": (
+                MEASUREMENT_SPACES.get(first_checkpoint) if first_checkpoint is not None else None
+            ),
+        }
+        if rule != "absolute":
+            localization_row["materiality_rule"] = rule
+            localization_row["materiality_basis"] = basis
+            localization_row["null_dispersion"] = spread
+            localization_row["excess_in_dispersion_units"] = excess_units
+        rows.append(localization_row)
     frame = pd.DataFrame(rows, columns=columns)
     if frame.empty:
         return frame
     return frame.sort_values(["trajectory_mode", "statistic", "effect_size"]).reset_index(drop=True)
 
 
-def _normalized_geometry(scoped: pd.DataFrame) -> dict[tuple[str, str, str], float]:
+def _normalized_geometry(
+    scoped: pd.DataFrame,
+    *,
+    column: str = "mean",
+) -> dict[tuple[str, str, str], float]:
     """Scale-free statistic per (cell, checkpoint, statistic).
 
     ``delta`` is expressed relative to the mean group path length measured at the
     same checkpoint and ``angle`` relative to its 180-degree maximum; ``shape``
     is already dimensionless.
+
+    ``column`` selects which summary of the replicate distribution is normalized:
+    ``"mean"`` for the location used as the null reference, ``"sd"`` for its
+    dispersion. The path-length scale always comes from the mean, so a location
+    and its dispersion are expressed in the same units.
     """
 
     path_scale: dict[tuple[str, str], list[float]] = {}
@@ -698,7 +803,7 @@ def _normalized_geometry(scoped: pd.DataFrame) -> dict[tuple[str, str, str], flo
         statistic = str(row.statistic)
         if statistic not in _STATISTICS:
             continue
-        value = _as_float(row.mean)
+        value = _as_float(getattr(row, column))
         if value is None:
             continue
         key = (str(row.cell_id), str(row.checkpoint), statistic)
@@ -1334,7 +1439,10 @@ __all__ = [
     "build_driver_report",
     "CHECKPOINT_CLASSIFICATION",
     "CHECKPOINT_ORDER",
+    "DEFAULT_MATERIALITY_DISPERSION_UNITS",
     "DEFAULT_MATERIALITY_THRESHOLD",
+    "MATERIALITY_DUST_ATOL",
+    "MATERIALITY_RULES",
     "DIAGONAL_STATISTIC",
     "MEASUREMENT_SPACES",
     "GateObservation",
