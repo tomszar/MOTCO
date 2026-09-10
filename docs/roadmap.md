@@ -273,7 +273,7 @@ Deliverables:
 
 **Run status:** executed 2026-09-10 as job 880599 on `ing` (19 cells × 500 replicates × 999 permutations = 9,500 units, 100 shards, 3 h 04 m wall, 182.7 core-hours, 0 failures, 0 censored surgeries). Gate decision **HOLD** on the two magnitude mandatory controls; all three mandatory power diagonals and all 21 Type I checks met. See the [findings report](reports/phase5-paper-grade-2026-09-10.md) and `results/phase5-2026-09-10/`.
 
-**Exit gate:** conclusions are stable at paper-grade Monte Carlo precision, all deviations from preregistered targets are explained, and the report distinguishes statistical operating characteristics from biological construction cross-talk. *Stability and explanation are satisfied; the gate is open pending the four revisions the HOLD implies.*
+**Exit gate:** conclusions are stable at paper-grade Monte Carlo precision, all deviations from preregistered targets are explained, and the report distinguishes statistical operating characteristics from biological construction cross-talk. **CLOSED 2026-09-10 as a conditional pass** ([exit review](reports/phase5-exit-review-2026-09-10.md)): all three criteria met; the Phase 4 gate's HOLD stands as recorded and resolves to a construction defect with a known fix; the magnitude specificity claim is withheld pending re-measurement of the corrected construction.
 
 ## Phase 6 — Real-data case study
 
@@ -295,6 +295,8 @@ Work:
 **Purpose:** use SNF according to graph geometry rather than forcing Euclidean MOTCO statistics onto spectral coordinates.
 
 This is not on the critical path for the PLS production workflow.
+
+**Status: deferred, and the question is closed rather than pending** ([Phase 5 exit review](reports/phase5-exit-review-2026-09-10.md), §5). Nothing in the paper-grade run or the magnitude-construction diagnostic bears on SNF — the study measured the PLS latent space throughout and `concat` appeared only as a baseline — so the deferral does not await further Phase 5 evidence. It awaits a decision to define graph-native path-length and angle statistics, which is independent work.
 
 Candidate work:
 
@@ -331,6 +333,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Phase 5 exit review.** The paper-grade run completed 2026-09-10 and the gate returned **HOLD** ([report](reports/phase5-paper-grade-2026-09-10.md)); the [magnitude-construction diagnostic](reports/magnitude-construction-diagnostic-2026-09-10.md) has since supplied every input it needs. Both magnitude control failures resolve to a **method revision** (block-asymmetric δ scaling, with a uniform-δ construction shown exactly size-pure); the orientation/`shape` label and the strictly-monotone orientation power claim resolve to **claim revisions**. The materiality-threshold prerequisite is discharged.
-2. **Adopt the size-pure magnitude construction.** Promote the uniform-δ probe to a production `magnitude_kind` (it is currently diagnostic-only and refused by the config loader), calibrate its effect axis — at e = 1.00 it reaches joint `delta` 44.80 against production's 18.14, so the axes are not comparable — and re-measure the magnitude controls. This is the gating item for the paper's specificity section.
-3. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the recorded eigengap and null-width dispersion reported beside every orientation result — and, given the eigengap stratification, against the cohort's own eigengap rather than the pooled power figure.
+1. **Adopt the size-pure magnitude construction.** Promote the uniform-δ probe to a production `magnitude_kind` (it is currently diagnostic-only and refused by the config loader), calibrate its effect axis — at e = 1.00 it reaches joint `delta` 44.80 against production's 18.14, so the axes are not comparable — and re-measure the magnitude controls. This is the gating item for the paper's specificity section, which the [exit review](reports/phase5-exit-review-2026-09-10.md) withheld.
+2. **Start the Phase 6 real-data case study.** Authorised by the exit review, under one binding condition: report orientation power against the cohort's **own recorded eigengap**, never the pooled 0.840 — stratified by tercile it is 0.754 / 0.886 / 0.880, so the lowest third sits below the 0.80 floor. Carry the n-conditional and non-ρ-invariant limitations.
+3. **Consider defaulting the null-dispersion materiality rule.** Opt-in today so the committed Phase 5 `report/` keeps regenerating byte-identically; switching the default is a reporting change needing a recorded re-issue of affected localization output.
