@@ -1,0 +1,23 @@
+{
+  "driver_component": "observed",
+  "cross_replicate_driver_agreement": "descriptive",
+  "n_jobs_override": "forbid",
+  "n_jobs": 1,
+  "config_n_jobs": 1,
+  "zero_effect_anchor": {
+    "cell_id": "power_primary-d74045b65506",
+    "resolves_modes": [
+      "magnitude",
+      "orientation",
+      "shape",
+      "translation"
+    ],
+    "counted_as": 1
+  },
+  "statements": {
+    "driver_component": "Driver tables (driver_report.csv) and the attribution figure present the 'observed' attribution component only. phase4_attribution.csv keeps every component.",
+    "cross_replicate_driver_agreement": "Cross-replicate top-k Jaccard and sign agreement are descriptive: they remain in phase4_attribution.csv, are absent from driver_report.csv and the attribution figure, and are not a driver-stability claim. The driver set is re-drawn every replicate, so no cross-replicate stability claim is made.",
+    "n_jobs": "Every record was produced with n_jobs = 1, the configured value. The run-time override policy is 'forbid'.",
+    "zero_effect_anchor": "Cell power_primary-d74045b65506 is the shared zero-effect anchor; every mode in ['magnitude', 'orientation', 'shape', 'translation'] reads its 0.00 power point from it, and it is counted as one measurement (one cell), not once per mode."
+  }
+}

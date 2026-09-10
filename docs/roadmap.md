@@ -26,11 +26,12 @@ The roadmap prioritizes interpretability and validation before larger simulation
 
 ### Not yet established
 
-- The production orientation and shape feature-surgery modes are not geometrically pure before integration; orientation's `shape` response (0.99–1.00 at the design point under CV rank) is predeclared as projection-associated cross-talk, not as evidence about the shape estimator ([ladder report](reports/latent-rank-ladder-2026-09-08.md), §6).
-- The orientation power claim is n-conditional at the isotropic endpoint: 0.85–0.88 at n = 1200, ρ = 0 across two independent matched-seed families ([design-point report](reports/phase5-design-point-pilot-2026-09-08.md), [ladder report](reports/latent-rank-ladder-2026-09-08.md)); it has not been measured at paper-grade Monte Carlo precision (500 replicates × 999 permutations).
+- The production orientation and shape feature-surgery modes are not geometrically pure before integration; orientation's `shape` response (0.998 at paper grade, 0.99–1.00 at the design point under CV rank) is a descriptive gate role, not evidence about the shape estimator ([ladder report](reports/latent-rank-ladder-2026-09-08.md), §6). Its predeclared "projection-associated" label did **not** survive the paper-grade run: `phase4_localization.csv` classifies orientation/`shape` as construction-present in standardized feature space and orientation/`delta` as the projection-associated pair, so the label must be reconciled before the paper repeats it ([paper-grade report](reports/phase5-paper-grade-2026-09-10.md), §6).
+- The orientation power claim is n-conditional at the isotropic endpoint and eigengap-dependent: 0.840 ± 0.016 at n = 1200, ρ = 0 at paper-grade precision (500 × 999), agreeing with the two pilots' 0.85–0.88 ([paper-grade report](reports/phase5-paper-grade-2026-09-10.md), §5; [design-point report](reports/phase5-design-point-pilot-2026-09-08.md), [ladder report](reports/latent-rank-ladder-2026-09-08.md)). Stratified by recorded eigengap the pooled figure straddles the 0.80 floor — 0.754 / 0.886 / 0.880 by tercile — so a real-data result must be read against its own eigengap, never the pooled number.
 - The `angle` null tracks its own observed statistic (slope 0.811) and is load-bearing rather than corrigible ([report](reports/angle-null-pivotality-2026-09-01.md)); the recorded eigengap and null-width dispersion must accompany any real-data orientation result.
 - Cross-replicate driver stability has no design that holds the driver set fixed, so it is not claimable.
-- The 500-replicate paper-grade grid has not run. Its config is committed (`examples/trajectory_power_study/phase5_power_study.json`: the ladder's CV column at 500 × 999 with the Phase 4 gate, attribution, and a declared report contract) together with the findings-report template it must follow; only the run, its `PROVENANCE.txt`, and the dated report are outstanding.
+- The magnitude surgery is not size-pure: at paper-grade precision it moves `angle` (0.276) and `shape` (0.742) far past the α + 2·SE control bound, which is what holds the Phase 4 gate at **HOLD** ([paper-grade report](reports/phase5-paper-grade-2026-09-10.md), §6). magnitude/`angle` localizes as construction-present in standardized feature space; magnitude/`shape` is a real but numerically small response that the 0.05 normalized materiality threshold mis-reports as `not_material`, so that threshold needs recalibration to the statistic's scale before the pair can be classified.
+- Orientation `angle` power does not rise with effect: it saturates at 0.84–0.88 from e = 0.25 because the `angle` null widens with the observed statistic, so the strictly-monotone form of the power claim is unsupported (the 0.80 floor is still cleared).
 
 ## Priority sequence
 
@@ -258,7 +259,7 @@ Planned baseline:
   responses rose. Magnitude and shape were re-measured there under CV (`delta` 1.00, `shape` ≥ 0.95).
 - 500 replicates per cell
 - 999 permutations per test
-- Resumable, sharded execution using `examples/trajectory_power_study/study.json`
+- Resumable, sharded execution using `examples/trajectory_power_study/phase5_power_study.json` (`study.json` is the superseded historical config)
 - Predeclared acceptance targets and parameter signatures
 
 Deliverables:
@@ -270,7 +271,9 @@ Deliverables:
 - Runtime, failure, and reproducibility report
 - Paper-ready figures and a versioned study report tied to the exact code revision and configuration
 
-**Exit gate:** conclusions are stable at paper-grade Monte Carlo precision, all deviations from preregistered targets are explained, and the report distinguishes statistical operating characteristics from biological construction cross-talk.
+**Run status:** executed 2026-09-10 as job 880599 on `ing` (19 cells × 500 replicates × 999 permutations = 9,500 units, 100 shards, 3 h 04 m wall, 182.7 core-hours, 0 failures, 0 censored surgeries). Gate decision **HOLD** on the two magnitude mandatory controls; all three mandatory power diagonals and all 21 Type I checks met. See the [findings report](reports/phase5-paper-grade-2026-09-10.md) and `results/phase5-2026-09-10/`.
+
+**Exit gate:** conclusions are stable at paper-grade Monte Carlo precision, all deviations from preregistered targets are explained, and the report distinguishes statistical operating characteristics from biological construction cross-talk. *Stability and explanation are satisfied; the gate is open pending the four revisions the HOLD implies.*
 
 ## Phase 6 — Real-data case study
 
@@ -319,7 +322,8 @@ These items support every scientific phase:
 ## Explicitly deferred
 
 - Expanding SNF use before graph-native metrics are defined
-- Running the 500-replicate study before orientation/shape gates pass
+- Reading the pooled orientation power figure as applicable at any eigengap
+- Claiming `angle` or `shape` specificity against a pure size change while the magnitude controls fail
 - Interpreting pooled VIP scores as orientation drivers
 - Fitting separate, unaligned PLS spaces per group
 - Claiming that a latent-space reconstruction is a unique or causal molecular inverse
@@ -327,6 +331,6 @@ These items support every scientific phase:
 
 ## Next three changes
 
-1. **Run the paper-grade Phase 5 study.** Cluster execution of `examples/trajectory_power_study/phase5_power_study.json` (9,500 units) with `--error-policy record` and no `STUDY_N_JOBS`, committed `report/` (including `report_contract.json` and `driver_report.csv`) and `PROVENANCE.txt`, and a dated findings report that follows `phase5_report_template.md`, reading power beside the recorded eigengap and `angle` null width. Readiness item 5 closed 2026-09-09 with the config, contract, and template.
-2. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the eigengap and null-width dispersion reported beside every orientation result.
-3. **Phase 5 exit review.** Explain every deviation from the predeclared targets in the dated report (method or claim revision, never Monte Carlo size), close the Phase 5 exit gate, and decide whether Phase 7 (SNF-native trajectory statistics) opens or stays deferred.
+1. **Phase 5 exit review.** The paper-grade run completed 2026-09-10 and the gate returned **HOLD** ([report](reports/phase5-paper-grade-2026-09-10.md)). Resolve the four recorded deviations as method or claim revisions (never Monte Carlo size): the two magnitude control failures, the unsupported strictly-monotone orientation claim, and the orientation/`shape` localization label. Recalibrating the localization materiality threshold to the `shape` statistic's scale is the diagnostic prerequisite for the second of these.
+2. **Decide the magnitude surgery's fate.** Either correct it to be size-pure or drop the specificity claim for `angle` and `shape` against a pure size change, and re-measure whichever is chosen. This is the gating item for the paper's specificity section.
+3. **Start the Phase 6 real-data case study.** Apply the committed configuration to a real multi-omic cohort with the recorded eigengap and null-width dispersion reported beside every orientation result — and, given the eigengap stratification, against the cohort's own eigengap rather than the pooled power figure.

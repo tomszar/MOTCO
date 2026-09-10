@@ -1,6 +1,6 @@
 # Phase 5 readiness worklist
 
-Work to complete before launching the paper-grade study. Derived from the
+Work completed before launching the paper-grade study (which ran 2026-09-10). Derived from the
 [Phase 4 medium PLS pilot](reports/phase4-medium-pls-pilot-2026-08-27.md) (run 2026-08-27, gate decision
 **HOLD**). Every number below comes from `results/phase4-2026-08-27/report/`.
 
@@ -8,7 +8,10 @@ Work to complete before launching the paper-grade study. Derived from the
 ([latent-rank ladder report](reports/latent-rank-ladder-2026-09-08.md); committed rank rule: stage-supervised
 double CV), item 4 resolved 2026-09-08, item 5 resolved 2026-09-09 (report contract, paper-grade profile
 `examples/trajectory_power_study/phase5_power_study.json`, and report template committed). All five items are
-closed; the next change is the paper-grade run.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
+closed, and the paper-grade run executed 2026-09-10 — gate decision **HOLD** on the two magnitude
+mandatory controls, with all three mandatory power diagonals and all Type I checks met
+([findings report](reports/phase5-paper-grade-2026-09-10.md)). This worklist is closed; the next change is
+the Phase 5 exit review.** Phase 4 is complete; these are its follow-ups. The blocking item is closed — `angle` proceeds as
 specified — and the 0.80 orientation power floor, handed to item 4, is **met at the chosen design point
 ρ = 0, n = 1200** (orientation `angle` power 0.88, 1·SE lower bound 0.85; see the
 [design-point pilot report](reports/phase5-design-point-pilot-2026-09-08.md)). See also
