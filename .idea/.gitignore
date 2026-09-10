@@ -8,5 +8,8 @@
 /dataSources.local.xml
 # Machine-local language server settings
 /LanguageServersSettings.xml
-# Machine-local module SDK reference
-/motco.iml
+# Machine-local module SDK reference. Globbed: PyCharm regenerates this under a
+# disambiguated name (motco@1.iml) whenever the file is absent from disk.
+/motco*.iml
+# Registers the machine-local .iml modules above, so it carries no shared config.
+/modules.xml
