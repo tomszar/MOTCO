@@ -172,10 +172,26 @@ def generate_semisynthetic_trajectory(
     params: SemiSyntheticTrajectoryParams,
     *,
     reference: IntersimReference | None = None,
+    _probe_uniform_delta: bool = False,
 ) -> SemiSyntheticTrajectoryDataset:
-    """Generate a semi-synthetic trajectory dataset using the numpy generator."""
+    """Generate a semi-synthetic trajectory dataset using the numpy generator.
+
+    ``_probe_uniform_delta`` is a **diagnostic-only** variant of the ``magnitude``
+    mode that scales *every* omic's delta by ``1 + group_effect_size`` instead of
+    methylation's alone. It exists to answer whether a size-pure magnitude change
+    is realizable under per-block standardization, and it is deliberately not a
+    ``magnitude_kind`` value: a study configuration builds
+    :class:`SemiSyntheticTrajectoryParams` and cannot reach this keyword, so no
+    committed profile can acquire it silently. Adopting it as a production mode is
+    a separate decision (see the Phase 5 exit review).
+    """
 
     _validate_params(params)
+    if _probe_uniform_delta and params.trajectory_mode != "magnitude":
+        raise SemiSyntheticTrajectoryError(
+            "_probe_uniform_delta applies to the magnitude mode only; "
+            f"got trajectory_mode={params.trajectory_mode!r}."
+        )
     ref = reference if reference is not None else load_reference()
     rng = np.random.default_rng(params.seed)
 
@@ -183,7 +199,9 @@ def generate_semisynthetic_trajectory(
     group_a_sizes, group_b_sizes = _group_stage_sizes(stage_sizes, params)
 
     methyl_a = _baseline_methyl(rng, ref, params)
-    methyl_b, deltas_b, transform_meta = _transform_group_b(rng, ref, params, methyl_a)
+    methyl_b, deltas_b, transform_meta = _transform_group_b(
+        rng, ref, params, methyl_a, probe_uniform_delta=_probe_uniform_delta
+    )
     deltas_a = (params.delta_methyl, params.delta_expr, params.delta_protein)
 
     indicators_a = _derive_group(methyl_a, ref)
@@ -318,6 +336,8 @@ def _transform_group_b(
     ref: IntersimReference,
     params: SemiSyntheticTrajectoryParams,
     methyl_a: np.ndarray,
+    *,
+    probe_uniform_delta: bool = False,
 ) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
     """Return group B's methylation indicators, per-omic deltas, and truth notes."""
 
@@ -332,6 +352,8 @@ def _transform_group_b(
         return _translation_methyl(rng, ref, params, methyl_a)
 
     if mode == "magnitude":
+        if probe_uniform_delta:
+            return _magnitude_uniform_probe(methyl_a, e, params)
         return _magnitude_methyl(methyl_a, e, params)
 
     if mode == "orientation":
@@ -413,6 +435,43 @@ def _magnitude_methyl(
 
     scaled = (float((1.0 + e) * params.delta_methyl), params.delta_expr, params.delta_protein)
     return methyl_a.copy(), scaled, {"magnitude_kind": "all", "delta_methyl_scale": 1.0 + e}
+
+
+def _magnitude_uniform_probe(
+    methyl_a: np.ndarray,
+    e: float,
+    params: SemiSyntheticTrajectoryParams,
+) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
+    """Diagnostic-only: scale every omic's delta by the same factor.
+
+    The production ``magnitude_kind='all'`` scales ``delta_methyl`` alone, so
+    group B grows in one block of the concatenated measurement space and not the
+    others — which rotates and reshapes the pooled trajectory even though each
+    block on its own is exactly size-scaled. Scaling all three deltas together is
+    the candidate for a genuinely size-only change; whether it survives per-block
+    standardization is the question this probe answers.
+
+    Not reachable from ``magnitude_kind``: see
+    :func:`generate_semisynthetic_trajectory`.
+    """
+
+    scale = 1.0 + e
+    scaled = (
+        float(scale * params.delta_methyl),
+        float(scale * params.delta_expr),
+        float(scale * params.delta_protein),
+    )
+    return (
+        methyl_a.copy(),
+        scaled,
+        {
+            "magnitude_kind": "uniform_probe",
+            "delta_methyl_scale": scale,
+            "delta_expr_scale": scale,
+            "delta_protein_scale": scale,
+            "probe_only": True,
+        },
+    )
 
 
 def _resolve_surgery_size(

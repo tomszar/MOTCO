@@ -7,17 +7,31 @@ through the MOTCO trajectory test with RRPP, and reports the per-statistic
 rejection rate plus a group-vs-stage projection diagnostic (how much of the
 injected group signal lands in the disease/stage-discriminant subspace).
 
-This is a *descriptive* tool, not a pass/fail gate: cross-talk (e.g. magnitude
-bending shape via the methylation ``rev.logit`` nonlinearity) and even
+This is a *descriptive* tool, not a pass/fail gate: cross-talk and even
 non-detection are findings, not failures. The heavier cluster-run study
 produces the definitive specificity matrix and power curves.
+
+The magnitude mode's off-target ``angle``/``shape`` response is **not** the
+methylation ``rev.logit`` nonlinearity, as this module previously stated: the
+per-omic population geometry of a scaled-delta trajectory is exactly
+size-only (``angle`` and ``shape`` are 0 to machine precision at
+``population_native``). It is block asymmetry — ``magnitude_kind='all'``
+scales ``delta_methyl`` alone while the measurement space standardizes and
+concatenates all three omic blocks, so the pooled trajectory rotates purely
+because one component grew and the others did not. See
+:func:`decompose_block_response`, which reads that decomposition out of
+recorded geometry.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+import pandas as pd
 
 from motco.simulations.evaluation import (
     SimulationEvaluationParams,
@@ -30,6 +44,9 @@ from motco.simulations.semisynthetic import (
     TrajectoryMode,
     generate_semisynthetic_trajectory,
 )
+
+if TYPE_CHECKING:  # imported lazily at runtime to keep the module import cycle-free
+    from motco.simulations.grid import SimulationReplicateResult
 
 STATISTICS: tuple[str, ...] = ("delta", "angle", "shape")
 
@@ -349,3 +366,267 @@ def target_leads(report: ModeSpecificity) -> bool:
         return max(rates.values()) <= 0.5
     others = [v for k, v in rates.items() if k != target]
     return rates[target] >= max(others) and rates[target] >= 0.5
+
+
+#: Scope name for the concatenated (all-omic) measurement, as recorded in
+#: ``realized_geometry``. Every other scope is one omic block.
+JOINT_SCOPE = "joint"
+
+
+def _anchor_cell_ids(records: Sequence[SimulationReplicateResult]) -> set[str]:
+    """Cell ids serving as the shared zero-effect reference.
+
+    Mirrors the rule used by the study's localization reader: the explicitly
+    flagged anchor, plus any ``type_i_*`` cell carrying no trajectory mode.
+    """
+
+    return {
+        record.cell_id
+        for record in records
+        if (record.cell_metadata or {}).get("zero_effect_anchor")
+        or (record.phase.startswith("type_i_") and not (record.cell_metadata or {}).get("trajectory_mode"))
+    }
+
+
+def decompose_block_response(
+    records: Sequence[SimulationReplicateResult] | str | Path,
+    *,
+    mode: str,
+    statistics: Sequence[str] = STATISTICS,
+) -> pd.DataFrame:
+    """Pooled-versus-per-block realized geometry for one trajectory mode.
+
+    Answers "does this mode's response live in a single omic block, or only in
+    the concatenation of the blocks?" — the question that separates a construction
+    that is impure *within* an omic from one that is impure only *across* omics.
+
+    ``records`` is either a sequence of replicate results or a path to a merged
+    JSONL file. The returned frame carries one row per (checkpoint, scope,
+    statistic, effect_size) for ``mode``, with the shared zero-effect anchor's
+    value at the same checkpoint/scope/statistic alongside, so an effect-driven
+    response is distinguishable from a sampling noise floor. ``is_joint`` marks
+    the concatenated scope.
+
+    A checkpoint that records some scopes but not others (``pls_latent`` is
+    joint-only) yields rows only for the scopes present: a missing scope is
+    absent, never zero-filled, because 0 is a meaningful value here.
+    """
+
+    from motco.simulations.grid import read_replicate_results
+    from motco.simulations.study.phase4 import summarize_realized_geometry
+
+    resolved: Sequence[SimulationReplicateResult] = (
+        read_replicate_results(Path(records))
+        if isinstance(records, (str, Path))
+        else records
+    )
+    if not resolved:
+        raise ValueError("No replicate records supplied.")
+
+    geometry = summarize_realized_geometry(resolved)
+    wanted = [s for s in statistics if s in set(geometry["statistic"])]
+    if not wanted:
+        raise ValueError(f"None of {tuple(statistics)} present in the recorded geometry.")
+
+    anchors = _anchor_cell_ids(resolved)
+    anchor_geometry = geometry[geometry["cell_id"].isin(anchors)]
+    anchor_value = {
+        (row.checkpoint, row.scope, row.statistic): row.median
+        for row in anchor_geometry.itertuples(index=False)
+    }
+
+    block = geometry[
+        (geometry["trajectory_mode"] == mode)
+        & (~geometry["cell_id"].isin(anchors))
+        & (geometry["statistic"].isin(wanted))
+    ]
+    if block.empty:
+        raise ValueError(f"No non-anchor records for trajectory mode {mode!r}.")
+
+    rows: list[dict[str, Any]] = []
+    for row in block.itertuples(index=False):
+        rows.append(
+            {
+                "trajectory_mode": mode,
+                "effect_size": row.effect_size,
+                "checkpoint": row.checkpoint,
+                "measurement_space": row.measurement_space,
+                "scope": row.scope,
+                "is_joint": row.scope == JOINT_SCOPE,
+                "statistic": row.statistic,
+                "median": row.median,
+                "mean": row.mean,
+                "sd": row.sd,
+                "n_available": row.n_available,
+                "anchor_median": anchor_value.get((row.checkpoint, row.scope, row.statistic)),
+            }
+        )
+
+    frame = pd.DataFrame(rows)
+    frame["excess_over_anchor"] = frame["median"] - frame["anchor_median"]
+    return frame.sort_values(
+        ["statistic", "checkpoint", "is_joint", "scope", "effect_size"],
+        ignore_index=True,
+    )
+
+
+#: A per-block response at or below this magnitude counts as flat. The
+#: analytically-zero cases arrive as floating-point dust from the Procrustes and
+#: eigen routines (``shape`` at ``population_native`` lands near 1e-17), so an
+#: exact ``== 0`` test would miss precisely the constructions that *are* pure.
+#: Well below any real response: recorded ``shape`` values run ~1e-2.
+BLOCK_FLAT_ATOL = 1e-12
+
+
+def summarize_block_localization(
+    frame: pd.DataFrame,
+    *,
+    flat_atol: float = BLOCK_FLAT_ATOL,
+) -> pd.DataFrame:
+    """Per (checkpoint, statistic): does the response require the concatenation?
+
+    Collapses :func:`decompose_block_response` to one row per checkpoint and
+    statistic, reporting the largest per-block response and the joint response
+    at the top effect size. ``joint_only`` is True when every individual block
+    is flat (within ``flat_atol``) while the joint scope moves — the signature of
+    a response created by concatenating blocks that were scaled unequally.
+
+    A checkpoint recording no joint scope (``population_native``) cannot be
+    joint-only: there is no concatenated measurement to compare against, so the
+    flag stays False rather than being inferred.
+    """
+
+    if frame.empty:
+        return pd.DataFrame(
+            columns=[
+                "checkpoint",
+                "statistic",
+                "top_effect_size",
+                "max_block_response",
+                "joint_response",
+                "joint_only",
+            ]
+        )
+
+    rows: list[dict[str, Any]] = []
+    for (checkpoint, statistic), group in frame.groupby(["checkpoint", "statistic"], sort=True):
+        effects = [e for e in group["effect_size"].dropna().unique()]
+        top = max(effects) if effects else None
+        at_top = group[group["effect_size"] == top] if top is not None else group
+        blocks = at_top[~at_top["is_joint"]]
+        joint = at_top[at_top["is_joint"]]
+        # Per-block response is measured against the anchor so a constant
+        # sampling floor does not read as a construction response.
+        block_excess = blocks["excess_over_anchor"].abs()
+        max_block = float(block_excess.max()) if not block_excess.empty else None
+        joint_excess = joint["excess_over_anchor"].abs()
+        joint_value = float(joint_excess.max()) if not joint_excess.empty else None
+        joint_only = (
+            max_block is not None
+            and joint_value is not None
+            and max_block <= flat_atol
+            and joint_value > flat_atol
+        )
+        rows.append(
+            {
+                "checkpoint": checkpoint,
+                "statistic": statistic,
+                "top_effect_size": top,
+                "max_block_response": max_block,
+                "joint_response": joint_value,
+                "joint_only": joint_only,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+@dataclass(frozen=True)
+class UniformDeltaComparison:
+    """Population-standardized geometry of one magnitude construction.
+
+    ``construction`` is ``"production"`` (``magnitude_kind='all'``, methylation's
+    delta only) or ``"uniform_probe"`` (every omic's delta scaled together).
+    ``joint_*`` is the concatenated measurement — the space the trajectory
+    statistics are actually computed in — and ``max_block_*`` is the largest
+    single-omic value, which is 0 to machine precision for a construction that is
+    size-pure within each block.
+    """
+
+    construction: str
+    effect_size: float
+    joint_delta: float
+    joint_angle: float | None
+    joint_shape: float | None
+    max_block_angle: float
+    max_block_shape: float
+
+
+def compare_uniform_delta_construction(
+    *,
+    effect_sizes: Sequence[float] = (0.0, 0.25, 0.5, 0.75, 1.0),
+    n_samples: int = 1200,
+    n_stages: int = 4,
+    p_dmp: float = 0.1,
+    baseline_continuity: float = 0.0,
+    seed: int = 2,
+    reference: IntersimReference | None = None,
+) -> list[UniformDeltaComparison]:
+    """Is a size-pure magnitude change realizable after per-block standardization?
+
+    Measures the *population* trajectory geometry at the standardized checkpoint
+    for both the production magnitude construction and the uniform-delta probe.
+    No sampling, no RRPP and no PLS fit are involved: the question is whether the
+    concatenated trajectory rotates at all, which the analytic population means
+    answer directly.
+
+    An effect size of 0 is the anchor — both constructions reduce to the identity
+    there, so its joint angle and shape are the floating-point floor against which
+    the nonzero effects are read.
+    """
+
+    from motco.simulations.diagnostics import geometry_from_means
+    from motco.simulations.preprocessing import (
+        OMIC_LAYERS,
+        concatenate_blocks,
+        fit_omics_preprocessor,
+    )
+
+    ref = reference if reference is not None else load_reference()
+    out: list[UniformDeltaComparison] = []
+    for effect in effect_sizes:
+        for construction, uniform in (("production", False), ("uniform_probe", True)):
+            params = SemiSyntheticTrajectoryParams(
+                seed=seed,
+                trajectory_mode="magnitude",
+                n_samples=n_samples,
+                n_stages=n_stages,
+                group_effect_size=float(effect),
+                p_dmp=p_dmp,
+                baseline_continuity=baseline_continuity,
+            )
+            dataset = generate_semisynthetic_trajectory(
+                params, reference=ref, _probe_uniform_delta=uniform
+            )
+            population = dataset.population_trajectories
+            if population is None:  # pragma: no cover - generator always builds these
+                raise ValueError("Generator did not expose population trajectories.")
+            groups = sorted(dataset.metadata["group"].astype(str).unique().tolist())
+            stages = sorted(dataset.metadata["stage"].astype(str).unique().tolist())
+            standardized = fit_omics_preprocessor(dataset).transform_population(population)
+            joint = geometry_from_means(concatenate_blocks(standardized), groups, stages)
+            blocks = [
+                geometry_from_means(standardized[layer], groups, stages)
+                for layer in OMIC_LAYERS
+            ]
+            out.append(
+                UniformDeltaComparison(
+                    construction=construction,
+                    effect_size=float(effect),
+                    joint_delta=joint.delta,
+                    joint_angle=joint.angle,
+                    joint_shape=joint.shape,
+                    max_block_angle=max(abs(b.angle or 0.0) for b in blocks),
+                    max_block_shape=max(abs(b.shape or 0.0) for b in blocks),
+                )
+            )
+    return out
