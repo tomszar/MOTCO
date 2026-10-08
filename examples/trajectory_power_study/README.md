@@ -602,8 +602,21 @@ exactly; it is *not* rescaled to the `all` curve — the realized joint `delta`
 recorded per replicate relates the two axes): the three smallest points bracket
 the measured rise, 0.02 is its saturation, 0.25 is the `all` construction's
 first Phase 5 point, and 1.00 is the control stress point (2.47 × the production
-construction's realized size). 9 cells, 4,500 units, ≈ 80–100 core-hours,
-about 1 h wall on 100 single-CPU shards.
+construction's realized size). 9 cells, 4,500 units; the 2026-10-08 run took
+106.7 core-hours and 2 h 06 m wall on 100 single-CPU shards (node contention;
+per-unit median 88.7 s against Phase 5's 61.5 s).
+
+**Run 2026-10-08** — see the
+[addendum](../../docs/reports/phase5-magnitude-remeasurement-2026-10-08.md) and
+the committed outputs under `results/phase5-magnitude-2026-10-08/` (`report/`
+and `PROVENANCE.txt`). 4,500 / 4,500 units, 0 failures. Reduced gate
+**PROCEED**: magnitude/`delta` 1.000 at the top with the rise resolved at
+0.130 / 0.384 / 0.836 / 0.996 over e = 0.0025–0.02; magnitude/`angle` 0.024 and
+magnitude/`shape` 0.000 at e = 1.00 against the 0.0695 bound (Phase 5's `all`
+construction: 0.276 / 0.742); the anchor reproduces the Phase 5 anchor at all
+500 replicate indices including every p-value (`report/anchor_reproduction.csv`,
+`scripts/anchor_reproduction.py`). The withheld magnitude-specificity claim is
+lifted for `joint`; `all` remains the default until a separate change flips it.
 
 Both profiles copy `generator` (except `magnitude_kind`),
 `evaluation.integration_params`, `base_seed` 600, and the matched-seed family
