@@ -11,7 +11,6 @@ to what it was before the value existed.
 
 from __future__ import annotations
 
-import hashlib
 import json
 
 import numpy as np
@@ -35,14 +34,6 @@ def _params(mode: str = "magnitude", **overrides) -> SemiSyntheticTrajectoryPara
     base = dict(seed=7, trajectory_mode=mode, n_samples=240, n_stages=3, group_effect_size=0.6)
     base.update(overrides)
     return SemiSyntheticTrajectoryParams(**base)  # type: ignore[arg-type]
-
-
-def _dataset_digest(dataset) -> str:
-    digest = hashlib.sha256()
-    for block in (dataset.methylation, dataset.expression, dataset.proteomics):
-        digest.update(np.ascontiguousarray(block.to_numpy()).tobytes())
-    digest.update(dataset.metadata.to_csv().encode())
-    return digest.hexdigest()
 
 
 def _assert_datasets_equal(left, right) -> None:
@@ -152,18 +143,39 @@ def test_joint_at_zero_effect_equals_none(reference) -> None:
     assert joint.truth["indicator_counts"] == none.truth["indicator_counts"]
 
 
-# Digests computed at revision f90230c (before ``joint`` existed) with
-# seed=7, n_samples=240, n_stages=3, group_effect_size=0.6.
-_PRE_JOINT_DATASET_DIGESTS = {
-    "all": "f02de0f7ae3abe12dff6ddb5f5d06a1482bd1a6f74c154fe733b701727109a08",
-    "extremes": "7b9595ebfbbe72721a4968b84eaa82e9ae1c3d0bc2d7b5c1721dd2f734684522",
+# Block sums and three sampled entries per block, computed at revision f90230c
+# (before ``joint`` existed) with seed=7, n_samples=240, n_stages=3,
+# group_effect_size=0.6. Pinned at a relative tolerance of 1e-9: a byte-level
+# digest would be machine-specific (BLAS/CPU last-bit differences), whereas any
+# change to the RNG call sequence moves these values at order one.
+_PRE_JOINT_BLOCK_STATS = {
+    "all": {
+        "methylation": (24750.791527663598, 0.04542578069960075, 0.04370102732882042, 0.02840071546721136),
+        "expression": (26266.179618364564, -0.7122378696242087, 0.6074954636986026, 0.6264035808155781),
+        "proteomics": (31468.24446498954, -0.7131403871940891, 0.048633068616348446, 0.7131239345683809),
+    },
+    "extremes": {
+        "methylation": (24217.696802519327, 0.04542578069960075, 0.04370102732882042, 0.02840071546721136),
+        "expression": (26266.179618364564, -0.7122378696242087, 0.6074954636986026, 0.6264035808155781),
+        "proteomics": (31468.24446498954, -0.7131403871940891, 0.048633068616348446, 0.7131239345683809),
+    },
 }
 
 
-@pytest.mark.parametrize("kind", sorted(_PRE_JOINT_DATASET_DIGESTS))
-def test_existing_magnitude_kinds_are_byte_identical(reference, kind) -> None:
+def _block_stats(dataset) -> dict[str, tuple[float, float, float, float]]:
+    out = {}
+    for name in ("methylation", "expression", "proteomics"):
+        a = getattr(dataset, name).to_numpy()
+        out[name] = (float(a.sum()), float(a[0, 0]), float(a[-1, -1]), float(a[117, 5]))
+    return out
+
+
+@pytest.mark.parametrize("kind", sorted(_PRE_JOINT_BLOCK_STATS))
+def test_existing_magnitude_kinds_are_unchanged(reference, kind) -> None:
     dataset = generate_semisynthetic_trajectory(_params(magnitude_kind=kind), reference=reference)
-    assert _dataset_digest(dataset) == _PRE_JOINT_DATASET_DIGESTS[kind]
+    observed = _block_stats(dataset)
+    for name, expected in _PRE_JOINT_BLOCK_STATS[kind].items():
+        np.testing.assert_allclose(observed[name], expected, rtol=1e-9, atol=0.0, err_msg=f"{kind}/{name}")
 
 
 # Parameter signatures of the Phase 5 paper-grade profile's anchor and
