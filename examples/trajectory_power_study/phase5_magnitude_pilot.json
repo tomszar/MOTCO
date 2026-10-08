@@ -28,6 +28,9 @@
   ],
   "effect_sizes": [
     0.0,
+    0.0025,
+    0.005,
+    0.01,
     0.02,
     0.05,
     0.1,
@@ -67,9 +70,22 @@
     "derives_from": "examples/trajectory_power_study/phase5_power_study.json",
     "bracket": {
       "source": "results/magnitude-axis-bracket-2026-10-08/effect_axis_bracket.csv",
-      "effect_grid": [0.0, 0.02, 0.05, 0.1, 0.25, 1.0],
+      "effect_grid": [
+        0.0,
+        0.0025,
+        0.005,
+        0.01,
+        0.02,
+        0.05,
+        0.1,
+        0.25,
+        1.0
+      ],
       "realized_joint_delta_population_standardized": {
         "0.0": 0.0,
+        "0.0025": 0.164,
+        "0.005": 0.328,
+        "0.01": 0.655,
         "0.02": 1.306,
         "0.05": 3.229,
         "0.1": 6.34,
@@ -78,20 +94,23 @@
       },
       "realized_all_delta_population_standardized": {
         "0.0": 0.0,
+        "0.0025": 0.064,
+        "0.005": 0.127,
+        "0.01": 0.254,
         "0.02": 0.507,
         "0.05": 1.259,
         "0.1": 2.486,
         "0.25": 5.946,
         "1.0": 18.136
       },
-      "rule": "design D5 of adopt-joint-magnitude-construction: include 0.00 and 1.00, and at least two nonzero values below 0.25 whose realized joint delta straddles the realized size at which the all construction's Phase 5 delta power is already 1.000 (5.946 at e = 0.25). 0.05 (3.229) and 0.10 (6.340) straddle it; 0.02 (1.306) sits inside the expected rise."
+      "rule": "design D5 of adopt-joint-magnitude-construction: include 0.00 and 1.00, and at least two nonzero values below 0.25 whose realized joint delta straddles the realized size at which the all construction's Phase 5 delta power is already 1.000 (5.946 at e = 0.25). Submission 1 ran 0.02 / 0.05 / 0.10 / 0.25 / 1.00 (0.05 at 3.229 and 0.10 at 6.340 straddle 5.946) and found delta power 1.000 already at e = 0.02 (realized PLS-latent joint delta median 1.38 against a delta null q95 near 0.40): the rise lies below the bracket-chosen points, because the population bracket cannot see the null width, which is the sampled quantity the pilot adds. Submission 2 extended the grid downward with 0.0025 / 0.005 / 0.01 (realized 0.164 / 0.328 / 0.655, the bracket regenerated at step 0.0025), placed from the pilot's own measurement: realized PLS-latent delta is about 68 x e at small e while the delta null's 95th percentile is about 0.40, so power 0.5 is expected near e = 0.006."
     },
     "notes": [
       "generator (other than magnitude_kind), evaluation.integration_params, base_seed (600), and the matched-seed family (phase5-primary) are copied verbatim from phase5_power_study.json, so every group A baseline and the shared zero-effect anchor are byte-identical to the Phase 5 paper-grade records at the same replicate index. No non-magnitude mode reads magnitude_kind and the anchor is generated at effect 0, so the anchor's datasets equal Phase 5's exactly; only the record-level parameter_signature differs (the dataclass differs in magnitude_kind and the anchor resolves one mode instead of four).",
-      "Effect axis 0/0.02/0.05/0.10/0.25/1.00 is the joint construction's NATIVE axis: e is the per-omic size ratio minus one, exactly, and is not rescaled to the all construction's realized sizes. The realized joint delta recorded per replicate at every geometry checkpoint is the covariate that relates the two axes; the population-standardized values from the bracket are listed above.",
+      "Effect axis 0/0.0025/0.005/0.01/0.02/0.05/0.10/0.25/1.00 (submission 1: 0/0.02/0.05/0.10/0.25/1.00; submission 2 added 0.0025/0.005/0.01 into the same run directory, resuming the completed units by their signature-guarded shard files) is the joint construction's NATIVE axis: e is the per-omic size ratio minus one, exactly, and is not rescaled to the all construction's realized sizes. The realized joint delta recorded per replicate at every geometry checkpoint is the covariate that relates the two axes; the population-standardized values from the bracket are listed above.",
       "Magnitude-only profile: trajectory_modes names magnitude only, attribution is absent, the gate is disabled, and no power or specificity targets are declared (pilot). surgery_censoring is left at its default ('error'); magnitude is not pool-limited, so no cell can be censored.",
-      "Cells and cost: 2 Type I baselines (none at 0 and the translation negative control at the top effect, both enumerated by the study engine for every profile) + 1 shared zero-effect anchor + 5 nonzero magnitude cells = 8 cells, 400 work units at about 56 s each (design-point pilot measurement at n = 1200, 199 permutations) — roughly 6 EPYC core-hours. The translation control is a separately seeded Type I cell (its control seed family hashes the cell, which now names magnitude_kind = joint), not a re-run of Phase 5's translation records. Pin BLAS to one thread and do not pass --n-jobs.",
-      "Reading the pilot (design D5/D6): the delta power curve must rise across the sub-0.25 points, both controls must sit within alpha + 2 SE at every effect, the anchor must reproduce the Phase 5 anchor's observed statistics at the same replicate indices, and selected PLS rank is recorded per replicate. The paper-grade grid equals this grid unless the pilot shows the rise was misplaced, in which case the adjustment and its reason are recorded in results/phase5-magnitude-pilot-<date>/NOTES.md and the addendum."
+      "Cells and cost: 2 Type I baselines (none at 0 and the translation negative control at the top effect, both enumerated by the study engine for every profile; the translation control is a separately seeded Type I cell, not a re-run of Phase 5's translation records) + 1 shared zero-effect anchor + 8 nonzero magnitude cells = 11 cells, 550 work units; submission 1 measured a median 78.5 s per unit (node contention; the design-point pilot measured 56 s), about 12 EPYC core-hours in all. Pin BLAS to one thread and do not pass --n-jobs.",
+      "Reading the pilot (design D5/D6): the delta power curve must rise across the sub-0.25 points, both controls must sit within alpha + 2 SE at every effect, the anchor must reproduce the Phase 5 anchor's observed statistics at the same replicate indices, and selected PLS rank is recorded per replicate. The paper-grade grid is chosen from the pilot and the reason is recorded in results/phase5-magnitude-pilot-2026-10-08/NOTES.md and the addendum: the paper-grade profile keeps 0.0025 / 0.005 / 0.01 / 0.02 (the measured rise and its saturation), 0.25 (the all construction's first Phase 5 point, for the axis relation) and 1.00 (the control stress point), and drops 0.05 and 0.10, which the pilot measured at power 1.000 with both controls at the floor."
     ]
   }
 }

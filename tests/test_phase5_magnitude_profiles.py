@@ -25,7 +25,8 @@ PHASE5 = Path("examples/trajectory_power_study/phase5_power_study.json")
 PILOT = Path("examples/trajectory_power_study/phase5_magnitude_pilot.json")
 PAPER = Path("examples/trajectory_power_study/phase5_magnitude_remeasurement.json")
 BRACKET = Path("results/magnitude-axis-bracket-2026-10-08/effect_axis_bracket.csv")
-GRID = [0.0, 0.02, 0.05, 0.1, 0.25, 1.0]
+PILOT_GRID = [0.0, 0.0025, 0.005, 0.01, 0.02, 0.05, 0.1, 0.25, 1.0]
+PAPER_GRID = [0.0, 0.0025, 0.005, 0.01, 0.02, 0.25, 1.0]
 
 
 def _anchor(grid):
@@ -48,7 +49,7 @@ def test_profiles_derive_from_the_phase5_paper_grade_profile(path: Path) -> None
     assert raw["base_seed"] == phase5["base_seed"]
     assert raw["matched_seeds"] == phase5["matched_seeds"]
     assert raw["trajectory_modes"] == ["magnitude"]
-    assert raw["effect_sizes"] == GRID
+    assert raw["effect_sizes"] == (PILOT_GRID if path == PILOT else PAPER_GRID)
     assert raw["attribution"] == {"enabled": False}
     assert "design_grid" not in raw and raw["axes"] == {}
     assert "surgery_censoring" not in raw["generator"]
@@ -56,8 +57,8 @@ def test_profiles_derive_from_the_phase5_paper_grade_profile(path: Path) -> None
 
     bracket = raw["metadata"]["bracket"]
     assert bracket["source"] == str(BRACKET)
-    assert bracket["effect_grid"] == GRID
-    assert set(bracket["realized_joint_delta_population_standardized"]) == {str(e) for e in GRID}
+    assert bracket["effect_grid"] == raw["effect_sizes"]
+    assert set(bracket["realized_joint_delta_population_standardized"]) == {str(e) for e in raw["effect_sizes"]}
 
     config = load_study_config(path)
     assert config.generator.magnitude_kind == "joint"
@@ -78,8 +79,8 @@ def test_bracket_csv_backs_the_metadata_values() -> None:
     frame = pd.read_csv(BRACKET)
     assert set(frame["construction"]) == {"all", "joint"}
     counts = frame.groupby("construction")["effect_size"].nunique()
-    assert counts["all"] == counts["joint"] >= 101
-    for e in GRID:
+    assert counts["all"] == counts["joint"] >= 401
+    for e in PILOT_GRID:
         assert ((frame["effect_size"] - e).abs() < 1e-9).sum() == 2, e
     joint = frame[frame["construction"] == "joint"]
     anchor = frame[(frame["construction"] == "all") & (frame["effect_size"] == 0.0)].iloc[0]
@@ -102,8 +103,8 @@ def test_pilot_enumerates_fifty_by_199_with_the_gate_disabled() -> None:
 
     grid = enumerate_study(config)
     phases = Counter(cell.phase for cell in grid.cells)
-    assert phases == {"type_i_baseline": 2, "power_primary": 1 + 5}
-    assert sum(cell.n_replicates for cell in grid.cells) == 8 * 50
+    assert phases == {"type_i_baseline": 2, "power_primary": 1 + 8}
+    assert sum(cell.n_replicates for cell in grid.cells) == 11 * 50
     anchor = _anchor(grid)
     assert anchor.metadata["resolves_modes"] == ["magnitude"]
     nonzero = sorted(
@@ -111,7 +112,7 @@ def test_pilot_enumerates_fifty_by_199_with_the_gate_disabled() -> None:
         for cell in grid.cells
         if cell.phase == "power_primary" and cell.metadata["trajectory_mode"] == "magnitude"
     )
-    assert nonzero == GRID[1:]
+    assert nonzero == PILOT_GRID[1:]
     assert all(cell.evaluation_params.permutations == 199 for cell in grid.cells)
     assert all(cell.n_replicates == 50 for cell in grid.cells)
 
@@ -152,18 +153,21 @@ def test_paper_grade_enumerates_500_by_999_with_the_reduced_gate() -> None:
 
     grid = enumerate_study(config)
     phases = Counter(cell.phase for cell in grid.cells)
-    assert phases == {"type_i_baseline": 2, "power_primary": 1 + 5}
-    assert sum(cell.n_replicates for cell in grid.cells) == 8 * 500
+    assert phases == {"type_i_baseline": 2, "power_primary": 1 + 6}
+    assert sum(cell.n_replicates for cell in grid.cells) == 9 * 500
     assert all(cell.evaluation_params.permutations == 999 for cell in grid.cells)
     assert all(cell.evaluation_params.n_jobs == 1 for cell in grid.cells)
     assert all(not cell.evaluation_params.attribution.enabled for cell in grid.cells)
 
 
-def test_profile_grids_match_each_other() -> None:
+def test_paper_grade_grid_is_a_pilot_measured_subset() -> None:
+    """Every paper-grade effect was measured in the pilot (design D5)."""
+
     pilot = json.loads(PILOT.read_text(encoding="utf-8"))
     paper = json.loads(PAPER.read_text(encoding="utf-8"))
-    assert pilot["effect_sizes"] == paper["effect_sizes"]
+    assert set(paper["effect_sizes"]) <= set(pilot["effect_sizes"])
     assert paper["metadata"]["pilot"] == str(PILOT)
+    assert "pilot_rise" in paper["metadata"]["bracket"]
 
 
 def test_anchor_shares_phase5_anchor_seeds_at_every_replicate_index() -> None:

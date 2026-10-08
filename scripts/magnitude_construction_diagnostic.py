@@ -172,7 +172,7 @@ def _run_bracket(args: argparse.Namespace) -> int:
     for effect in sorted(set(args.effect_sizes)):
         at = bracket[bracket["effect_size"] == round(float(effect), 6)].set_index("construction")
         print(
-            f"  e={effect:.2f}: all delta {at.loc['all', 'joint_delta']:.3g}, "
+            f"  e={effect:g}: all delta {at.loc['all', 'joint_delta']:.3g}, "
             f"joint delta {at.loc['joint', 'joint_delta']:.3g} "
             f"(ratio {at.loc['joint', 'ratio_to_all']:.3g})"
         )
