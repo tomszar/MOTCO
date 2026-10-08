@@ -1,0 +1,97 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 1200,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0,
+    "magnitude_kind": "joint"
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.02,
+    0.05,
+    0.1,
+    0.25,
+    1.0
+  ],
+  "axes": {},
+  "n_replicates": 50,
+  "base_seed": 600,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase5-primary",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [],
+    "specificity": [],
+    "gate": {
+      "enabled": false
+    }
+  },
+  "metadata": {
+    "name": "trajectory-power-phase5-magnitude-pilot",
+    "phase": 5,
+    "intent": "Phase 5 magnitude re-measurement pilot: the magnitude mode under the joint magnitude construction (magnitude_kind = joint, every omic's delta scaled by 1 + e) at the Phase 5 paper-grade design point, 50 replicates x 199 permutations, gate disabled. Confirms the analytic effect-axis bracket against the real delta null, checks that the two magnitude controls (angle, shape) sit at alpha before paper-grade spend, and surfaces any small-e interaction with CV rank selection, before phase5_magnitude_remeasurement.json is submitted.",
+    "derives_from": "examples/trajectory_power_study/phase5_power_study.json",
+    "bracket": {
+      "source": "results/magnitude-axis-bracket-2026-10-08/effect_axis_bracket.csv",
+      "effect_grid": [0.0, 0.02, 0.05, 0.1, 0.25, 1.0],
+      "realized_joint_delta_population_standardized": {
+        "0.0": 0.0,
+        "0.02": 1.306,
+        "0.05": 3.229,
+        "0.1": 6.34,
+        "0.25": 14.962,
+        "1.0": 44.798
+      },
+      "realized_all_delta_population_standardized": {
+        "0.0": 0.0,
+        "0.02": 0.507,
+        "0.05": 1.259,
+        "0.1": 2.486,
+        "0.25": 5.946,
+        "1.0": 18.136
+      },
+      "rule": "design D5 of adopt-joint-magnitude-construction: include 0.00 and 1.00, and at least two nonzero values below 0.25 whose realized joint delta straddles the realized size at which the all construction's Phase 5 delta power is already 1.000 (5.946 at e = 0.25). 0.05 (3.229) and 0.10 (6.340) straddle it; 0.02 (1.306) sits inside the expected rise."
+    },
+    "notes": [
+      "generator (other than magnitude_kind), evaluation.integration_params, base_seed (600), and the matched-seed family (phase5-primary) are copied verbatim from phase5_power_study.json, so every group A baseline and the shared zero-effect anchor are byte-identical to the Phase 5 paper-grade records at the same replicate index. No non-magnitude mode reads magnitude_kind and the anchor is generated at effect 0, so the anchor's datasets equal Phase 5's exactly; only the record-level parameter_signature differs (the dataclass differs in magnitude_kind and the anchor resolves one mode instead of four).",
+      "Effect axis 0/0.02/0.05/0.10/0.25/1.00 is the joint construction's NATIVE axis: e is the per-omic size ratio minus one, exactly, and is not rescaled to the all construction's realized sizes. The realized joint delta recorded per replicate at every geometry checkpoint is the covariate that relates the two axes; the population-standardized values from the bracket are listed above.",
+      "Magnitude-only profile: trajectory_modes names magnitude only, attribution is absent, the gate is disabled, and no power or specificity targets are declared (pilot). surgery_censoring is left at its default ('error'); magnitude is not pool-limited, so no cell can be censored.",
+      "Cells and cost: 2 Type I baselines (none at 0 and the translation negative control at the top effect, both enumerated by the study engine for every profile) + 1 shared zero-effect anchor + 5 nonzero magnitude cells = 8 cells, 400 work units at about 56 s each (design-point pilot measurement at n = 1200, 199 permutations) — roughly 6 EPYC core-hours. The translation control is a separately seeded Type I cell (its control seed family hashes the cell, which now names magnitude_kind = joint), not a re-run of Phase 5's translation records. Pin BLAS to one thread and do not pass --n-jobs.",
+      "Reading the pilot (design D5/D6): the delta power curve must rise across the sub-0.25 points, both controls must sit within alpha + 2 SE at every effect, the anchor must reproduce the Phase 5 anchor's observed statistics at the same replicate indices, and selected PLS rank is recorded per replicate. The paper-grade grid equals this grid unless the pilot shows the rise was misplaced, in which case the adjustment and its reason are recorded in results/phase5-magnitude-pilot-<date>/NOTES.md and the addendum."
+    ]
+  }
+}

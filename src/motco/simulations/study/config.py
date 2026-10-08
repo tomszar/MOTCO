@@ -719,9 +719,9 @@ def _build_generator(raw: Mapping[str, Any]) -> SemiSyntheticTrajectoryParams:
             value = tuple(float(v) for v in value)
         kwargs[f.name] = value
     # Reject an unknown construction variant at load time rather than letting
-    # every work unit fail at generation. Diagnostic-only constructions (the
-    # uniform-delta magnitude probe) are deliberately absent from the selectable
-    # set, so a committed profile cannot acquire one.
+    # every work unit fail at generation. The selectable set is the generator's
+    # own (`all`, `extremes`, `joint`); a profile that omits the key resolves to
+    # the generator default (`all`), so historical configs are unchanged.
     magnitude_kind = kwargs.get("magnitude_kind")
     if magnitude_kind is not None and magnitude_kind not in _MAGNITUDE_KINDS:
         raise StudyConfigError(
