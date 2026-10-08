@@ -1,0 +1,36 @@
+# Phase 5 magnitude re-measurement pilot (joint construction) provenance
+date_utc: 2026-10-08T19:15:43Z (first launch); run directory named for the UTC launch date
+config: examples/trajectory_power_study/phase5_magnitude_pilot.json
+host: cluster.ing.uc.cl (SLURM), partition 512x1024, AMD EPYC 7662 compute nodes; venv python 3.11.16, motco 0.6.0, numpy 2.3.5, scikit-learn 1.8.0, scipy 1.16.3, pandas 2.3.3, uv 0.12.10 (cluster, where the records were produced); python 3.11.15 and the same package versions on the workstation, where the report was rendered
+blas_threads: OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 (exported at submit); STUDY_N_JOBS unset (verified before submit)
+error_policy: record (from the sbatch template)
+shard layout: N_SHARDS=100, --array=0-99, --n-shards 100; units mapped to shards by the stable (cell_id, replicate_index) hash
+n_jobs: 1 in every record, equal to evaluation.n_jobs = 1
+
+## Submission 1 — grid 0 / 0.02 / 0.05 / 0.10 / 0.25 / 1.00 (the bracket-chosen grid)
+code_revision: b109597447076d5b02e84b174be773580ee084bb (branch feat/adopt-joint-magnitude-construction); clean tree on the cluster (git status --porcelain reported only the untracked logs/ directory)
+config_sha256: cf0eb5229c1e6fa03dd10025249ab1648b16dcf8b34f9e42ed10c6a5d62a83ce
+launch: sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=4:00:00 --array=0-99 --export=ALL,OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,STUDY_CONFIG=/home1/tgonza/MOTCO/examples/trajectory_power_study/phase5_magnitude_pilot.json,STUDY_OUT=/home1/tgonza/MOTCO/results/phase5-magnitude-pilot-2026-10-08,N_SHARDS=100 scripts/motco_study_array.sbatch
+job_id: 905656
+units: 8 cells x 50 replicates = 400 (2 Type I baselines + 1 shared zero-effect anchor + 5 nonzero magnitude cells); 199 permutations per unit
+outcome: all 100 array tasks COMPLETED with exit 0:0 and empty stderr; 400/400 units present exactly once; all 8 enumerated cell ids present with exactly 50 replicates each; 0 failed records; 0 censored surgeries (the translation Type I control realized 37 = nominal 37 sites at every replicate; magnitude is not pool-limited)
+wall: 2026-10-08T19:15:43Z -> 19:40:24Z (24 m 41 s); tasks landed on n11 (61), n1 (24), n3 (11), n2 (4); longest task 905656_55 at 24:41, shortest 905656_9 at 02:29
+unit_timings: 400 units, median 78.5 s (min 41.2, max 122.1, mean 78.6), 8.74 recorded core-hours — above the 56 s design-point-pilot figure because 61 of the 100 tasks shared node n11
+merge: python scripts/motco_study.py merge --out-dir results/phase5-magnitude-pilot-2026-10-08 (run on the cluster; 400 records); merged.jsonl sha256 0b71879688db47aebcc84868e5432a78d84c8ed05aead30706d9a6b74f524131, verified byte-identical after rsync to the workstation; merged.jsonl and shard_*.jsonl remain gitignored
+report: python scripts/motco_study.py report --config examples/trajectory_power_study/phase5_magnitude_pilot.json --out-dir results/phase5-magnitude-pilot-2026-10-08 (workstation; gate disabled, so no phase4_* outputs)
+anchor_reproduction: python scripts/anchor_reproduction.py --candidate results/phase5-magnitude-pilot-2026-10-08/merged.jsonl --reference <Phase 5 merged.jsonl, anchor cell power_primary-d74045b65506> --out results/phase5-magnitude-pilot-2026-10-08/report/anchor_reproduction.csv — 50/50 replicate indices: generator seeds identical, selected PLS rank identical, observed delta/angle/shape within 1e-11 absolute (max 5.8e-12 on angle); p-values not comparable (199 vs 999 permutations; mean absolute difference 0.016-0.021, max 0.085)
+reading: delta power 1.000 at every nonzero effect including e = 0.02 (realized PLS-latent joint delta median 1.38, min 0.76, against a delta null q95 median 0.40); magnitude/angle 0.00-0.02 and magnitude/shape 0.00-0.10 at every effect (anchor 0.02 / 0.10 at 50 replicates; bound alpha + 2 SE = 0.135 for a 0.10 rate) — the bracket placed the rise too high. See NOTES.md.
+
+## Submission 2 — grid extended downward with 0.0025 / 0.005 / 0.01 (resume into the same run directory)
+code_revision: 25757d3a4aee372a07d6a913e3e9ebf3bf01c5e6 (branch feat/adopt-joint-magnitude-construction); clean tree on the cluster (only the untracked logs/ directory)
+config_sha256: a6969904a7a2687b9d5f2d9055e7ef2c304f8eb9844e864f13f4ef9fe3d5d86e (the same file with effect_sizes 0/0.0025/0.005/0.01/0.02/0.05/0.10/0.25/1.00 and the bracket/notes metadata updated; generator, evaluation, base_seed, and matched-seed family unchanged, so every submission-1 cell keeps its parameter signature)
+launch: sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=4:00:00 --array=0-99 --export=ALL,OMP_NUM_THREADS=1,OPENBLAS_NUM_THREADS=1,MKL_NUM_THREADS=1,STUDY_CONFIG=/home1/tgonza/MOTCO/examples/trajectory_power_study/phase5_magnitude_pilot.json,STUDY_OUT=/home1/tgonza/MOTCO/results/phase5-magnitude-pilot-2026-10-08,N_SHARDS=100 scripts/motco_study_array.sbatch (STUDY_N_JOBS unset)
+job_id: 905762
+units: 3 new cells x 50 replicates = 150 new units; the 400 submission-1 units were skipped by the signature-guarded resume (the shard partition hashes (cell_id, replicate_index), so every completed unit stayed in its shard file); 11 cells x 50 = 550 units in all
+outcome: all 100 array tasks COMPLETED with exit 0:0 and empty stderr; shard logs report 150 new completed, 0 failed; 550/550 units present exactly once; all 11 cell ids present with exactly 50 replicates; 0 failed records; 0 censored surgeries
+wall: 2026-10-08T19:53:12Z -> 20:16:56Z (23 m 44 s); tasks landed on n11 (58), n2 (31), n1 (8), n3 (3); longest task 905762_47 at 23:44, shortest 905762_6 at 01:49
+unit_timings: 150 new units, median 64.4 s (min 42.3, max 102.0), 2.75 recorded core-hours; 11.49 recorded core-hours over both submissions
+merge: python scripts/motco_study.py merge --out-dir results/phase5-magnitude-pilot-2026-10-08 (cluster; 550 records); merged.jsonl sha256 a41f474c338f4beb0c25b3cbbb9b5e79e34374e081ef574a81f870efa5b46d74, verified byte-identical after rsync to the workstation
+report: python scripts/motco_study.py report --config examples/trajectory_power_study/phase5_magnitude_pilot.json --out-dir results/phase5-magnitude-pilot-2026-10-08 (workstation; the committed report/ is this re-render over all 550 records)
+anchor_reproduction: re-run over the merged 550 records — unchanged, 50/50 (report/anchor_reproduction.csv)
+reading: see NOTES.md — the rise is measured (delta power 0.22 / 0.46 / 0.84 / 1.00 at e = 0.0025 / 0.005 / 0.01 / 0.02) with both controls at the anchor's level at every effect; the paper-grade grid is 0/0.0025/0.005/0.01/0.02/0.25/1.00

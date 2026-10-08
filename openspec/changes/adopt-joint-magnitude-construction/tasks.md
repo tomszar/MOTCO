@@ -20,8 +20,8 @@
 
 ## 4. Pilot run
 
-- [ ] 4.1 Fast-forward `/home1/tgonza/MOTCO` on `ing` to the change revision, sync the venv, run the fast test suite there, and submit the pilot as a SLURM array (`scripts/motco_study_array.sbatch`, partition `512x1024`, one CPU and 2 GB per task, BLAS pinned, no `--n-jobs`). Verify: shards complete with zero failures under `--error-policy record`.
-- [ ] 4.2 Merge and report the pilot into `results/phase5-magnitude-pilot-<date>/` and read it against design D5: the `delta` curve rises across the sub-0.25 points, both controls sit within α + 2·SE at every effect, the anchor's records reproduce the Phase 5 anchor's observed statistics at the same replicate indices, and selected PLS rank is recorded. Verify: a short pilot note (`results/.../NOTES.md`) states whether the paper-grade grid equals the pilot grid and, if not, why; adjust `phase5_magnitude_remeasurement.json`'s grid before task 5.1 only on that recorded basis.
+- [x] 4.1 Fast-forward `/home1/tgonza/MOTCO` on `ing` to the change revision, sync the venv, run the fast test suite there, and submit the pilot as a SLURM array (`scripts/motco_study_array.sbatch`, partition `512x1024`, one CPU and 2 GB per task, BLAS pinned, no `--n-jobs`). Verify: shards complete with zero failures under `--error-policy record`.
+- [x] 4.2 Merge and report the pilot into `results/phase5-magnitude-pilot-<date>/` and read it against design D5: the `delta` curve rises across the sub-0.25 points, both controls sit within α + 2·SE at every effect, the anchor's records reproduce the Phase 5 anchor's observed statistics at the same replicate indices, and selected PLS rank is recorded. Verify: a short pilot note (`results/.../NOTES.md`) states whether the paper-grade grid equals the pilot grid and, if not, why; adjust `phase5_magnitude_remeasurement.json`'s grid before task 5.1 only on that recorded basis.
 
 ## 5. Paper-grade run and addendum
 
