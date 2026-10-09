@@ -40,6 +40,7 @@ from motco.simulations.preprocessing import (
     FittedOmicsPreprocessor,
     concatenate_blocks,
     fit_omics_preprocessor,
+    selected_layers,
 )
 from motco.simulations.semisynthetic import OmicsLayer, SemiSyntheticTrajectoryDataset
 from motco.stats.design import _sort_levels, build_ls_means, get_model_matrix
@@ -49,8 +50,6 @@ from motco.stats.snf import SNF, get_affinity_matrix, get_spectral
 from motco.stats.trajectory import estimate_difference
 
 IntegrationMethod = Literal["concat", "snf", "pls"]
-
-_OMICS_ATTRS: tuple[str, ...] = tuple(OMIC_LAYERS)
 
 
 class SimulationEvaluationError(ValueError):
@@ -183,7 +182,7 @@ def evaluate_semisynthetic_trajectory(
     _validate_evaluation_params(params)
     start = perf_counter()
 
-    preprocessor = fit_omics_preprocessor(dataset)
+    preprocessor = fit_omics_preprocessor(dataset, _measured_layers(params.integration_params))
     observed_blocks = preprocessor.transform_dataset(dataset)
     latent = integrate_semisynthetic_dataset(
         dataset,
@@ -329,6 +328,7 @@ def _attribution_diagnostics(
             selected_components=latent.metadata.get("selected_lv"),
             feature_order_signature=latent.metadata.get("feature_order_signature"),
             methylation_units=artifacts.methylation_units,
+            layers=_measured_layers(params.integration_params),
         )
     except AttributionDiagnosticError as exc:
         # A diagnostic is auxiliary evidence: a replicate whose attribution
@@ -355,7 +355,14 @@ def integrate_semisynthetic_dataset(
     """
 
     _validate_dataset(dataset, params.group_col, params.stage_col)
-    preprocessor = preprocessor or fit_omics_preprocessor(dataset)
+    layers = _measured_layers(params.integration_params)
+    if preprocessor is None:
+        preprocessor = fit_omics_preprocessor(dataset, layers)
+    else:
+        try:
+            preprocessor.require_layers(layers)
+        except ValueError as exc:
+            raise SimulationEvaluationError(str(exc)) from exc
     if observed_blocks is None:
         observed_blocks = preprocessor.transform_dataset(dataset)
     method = params.integration_method
@@ -418,7 +425,29 @@ def _validate_evaluation_params(params: SimulationEvaluationParams) -> None:
         raise SimulationEvaluationError("permutations must be greater than or equal to 0.")
     if params.n_jobs == 0:
         raise SimulationEvaluationError("n_jobs must be None, -1, or a non-zero integer.")
+    _measured_layers(params.integration_params)
     _validate_attribution_settings(params.attribution, params.integration_method)
+
+
+def _measured_layers(integration_params: Mapping[str, Any]) -> tuple[OmicsLayer, ...]:
+    """The omic blocks this evaluation measures (``integration_params["layers"]``)."""
+
+    try:
+        return selected_layers(integration_params)
+    except ValueError as exc:
+        raise SimulationEvaluationError(str(exc)) from exc
+
+
+def _layers_metadata(integration_params: Mapping[str, Any]) -> dict[str, Any]:
+    """The ``layers`` metadata entry — present only when a selection was declared.
+
+    Absent selection adds nothing, so the metadata of an evaluation that never
+    set the key is unchanged.
+    """
+
+    if integration_params.get("layers") is None:
+        return {}
+    return {"layers": list(_measured_layers(integration_params))}
 
 
 def _validate_attribution_settings(
@@ -448,7 +477,7 @@ def _validate_dataset(dataset: SemiSyntheticTrajectoryDataset, group_col: str, s
     expected = dataset.metadata["sample_id"].astype(str).tolist()
     if len(expected) == 0:
         raise SimulationEvaluationError("metadata must contain at least one sample.")
-    for layer in _OMICS_ATTRS:
+    for layer in OMIC_LAYERS:
         matrix = getattr(dataset, layer)
         if matrix.shape[0] != len(expected):
             raise SimulationEvaluationError(f"{layer} rows must match metadata rows.")
@@ -487,12 +516,13 @@ def _concat_integration(
     observed_blocks: Mapping[OmicsLayer, pd.DataFrame],
 ) -> LatentIntegrationResult:
     standardize = bool(integration_params.get("standardize", True))
-    layer_feature_counts = {layer: int(getattr(dataset, layer).shape[1]) for layer in _OMICS_ATTRS}
+    layers = _measured_layers(integration_params)
+    layer_feature_counts = {layer: int(getattr(dataset, layer).shape[1]) for layer in layers}
     if standardize:
         latent = concatenate_blocks(observed_blocks)
     else:
         frames = []
-        for layer in _OMICS_ATTRS:
+        for layer in layers:
             matrix = getattr(dataset, layer).astype(float)
             values = matrix.to_numpy(dtype=float)
             if layer == "methylation":
@@ -505,7 +535,7 @@ def _concat_integration(
         metadata={
             "integration_method": "concat",
             "integration_role": "baseline",
-            "integration_params": {"standardize": standardize},
+            "integration_params": {"standardize": standardize, **_layers_metadata(integration_params)},
             "shape": tuple(latent.shape),
             "n_samples": int(latent.shape[0]),
             "n_features": int(latent.shape[1]),
@@ -536,7 +566,7 @@ def _snf_integration(
     layers = [
         logit(getattr(dataset, layer).to_numpy(dtype=float)) if layer == "methylation"
         else getattr(dataset, layer).to_numpy(dtype=float)
-        for layer in _OMICS_ATTRS
+        for layer in _measured_layers(integration_params)
     ]
     affinities = get_affinity_matrix(layers, K=K, eps=eps)
     fused = SNF(affinities, k=k, t=t)
@@ -557,6 +587,7 @@ def _snf_integration(
                 "k": k,
                 "t": t,
                 "spectral_components": n_components,
+                **_layers_metadata(integration_params),
             },
             "shape": tuple(latent.shape),
             "n_samples": int(latent.shape[0]),
@@ -596,7 +627,9 @@ def _pls_integration(
             f"PLS integration requires stage column {stage_col!r} in dataset metadata."
         )
 
-    layer_feature_counts = {layer: int(getattr(dataset, layer).shape[1]) for layer in _OMICS_ATTRS}
+    layer_feature_counts = {
+        layer: int(getattr(dataset, layer).shape[1]) for layer in _measured_layers(integration_params)
+    }
     X = concatenate_blocks(observed_blocks).reset_index(drop=True)
     n_samples, n_features = X.shape
     y = dataset.metadata[stage_col].reset_index(drop=True).astype(str)
@@ -686,6 +719,7 @@ def _pls_integration(
                 "stage_col": stage_col,
                 "selected_lv": selected_lv,
                 **cv_params,
+                **_layers_metadata(integration_params),
             },
             "component_selection": "forced" if forced_components is not None else "cv",
             "cv_mean_auroc": mean_auroc,
@@ -724,7 +758,7 @@ def _joint_original_scales(preprocessor: FittedOmicsPreprocessor, columns: pd.In
     contract; the unit basis is labeled wherever these are used.
     """
 
-    scales = np.concatenate([preprocessor.scalers[layer].scale for layer in OMIC_LAYERS])
+    scales = np.concatenate([preprocessor.scalers[layer].scale for layer in preprocessor.layers])
     if scales.shape[0] != len(columns):
         raise SimulationEvaluationError(
             f"Fitted scales ({scales.shape[0]}) do not align to the joint feature matrix ({len(columns)})."

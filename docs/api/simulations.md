@@ -103,6 +103,26 @@ flag has the same default):
 `'extremes'` and the shape mode's `shape_kind='magnitude'` remain methylation-only scalings; the
 joint default does not extend to them.
 
+**Explicit group × stage sizes.** `group_stage_sizes` replaces proportional sizing
+(`n_samples` × `stage_sample_prop` × `group_ratio`) with an exact table: one tuple of per-stage
+counts per group, rows ordered as `group_labels` and columns as stages. Every group-stage cell gets
+exactly the stated number of samples, and truth metadata records the realized table under
+`truth["group_stage_sizes"]`. Use it when the imbalance varies by stage, as in a real cohort:
+
+```python
+SemiSyntheticTrajectoryParams(
+    seed=1,
+    n_stages=3,
+    group_stage_sizes=((11, 10, 28), (9, 10, 12)),  # 80 samples, the SEA-AD MTG design
+)
+```
+
+The table must have two rows of `n_stages` integers, each at least 1. Setting it together with a
+non-default `n_samples`, `stage_sample_prop` or `group_ratio` is an error that names the
+conflicting settings. When the table is absent (the default `None`), generation, truth metadata,
+cell ids and parameter signatures are byte-identical to the generator before the field existed:
+hash payloads omit the field while it is `None`.
+
 **Migration.** Before `default-joint-magnitude-construction` the default was `'all'`. Code that
 relied on the default and wants the old construction must pass `magnitude_kind="all"` (or
 `--magnitude-kind all`). The committed historical study configs under
@@ -137,6 +157,16 @@ Supported integration methods:
 |--------|----------|
 | `concat` | Column-binds methylation, expression, and proteomics matrices after deterministic per-feature standardization by default |
 | `snf` | Builds per-omic affinity matrices, fuses them with SNF, and uses spectral embedding as the trajectory outcome matrix |
+
+**Block selection.** `integration_params["layers"]` names the omic blocks the evaluation measures,
+for every integration method: e.g. `{"layers": ["methylation", "expression"]}`. All three blocks are
+still generated; only the selected ones enter pooled preprocessing, integration, every
+realized-geometry checkpoint (per-block scopes for the selected blocks only, joint scopes over them)
+and orientation attribution. The selection is normalized to canonical order (methylation,
+expression, proteomics) and must be non-empty, duplicate-free and known; integration metadata
+records it as `integration_params.layers`. When the key is absent, all three blocks are measured and
+the evaluation result is byte-identical to the harness before the key existed (no `layers` metadata
+entry is added).
 
 Set `permutations=0` for observed statistics only. When `permutations > 0`, the harness runs RRPP and computes upper-tail empirical p-values with plus-one correction:
 

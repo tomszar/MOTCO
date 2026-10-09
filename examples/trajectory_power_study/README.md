@@ -87,6 +87,8 @@ guard (parameter signature) skips already-completed replicates.
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 | `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
+| `generator.group_stage_sizes` | Exact group × stage sample sizes, `[[A per stage], [B per stage]]`; replaces `n_samples`/`stage_sample_prop`/`group_ratio` (which must then be omitted). Absent = proportional sizing, byte-identical to before (see the Phase 6 small-n study) |
+| `evaluation.integration_params.layers` | Omic blocks to measure, e.g. `["methylation", "expression"]`; absent = all three, byte-identical to before. Usable as a design-grid axis (`null` = all three) whose columns share data |
 | `generator.magnitude_kind` | Magnitude construction (`joint` default, `all`, `extremes`); every committed config names it, and a new config must choose it deliberately (see below) |
 | `report_contract` | Declared reporting/execution rules (`driver_component`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid`/`warn`); adds `report_contract.json` + `driver_report.csv` and, under `forbid`, makes the runner refuse `--n-jobs` (see the Phase 5 paper-grade study) |
 
@@ -684,3 +686,51 @@ The findings go in a dated addendum,
 `phase5_report_template.md` section for section with the non-magnitude sections
 marked not applicable; it lifts the withheld magnitude-specificity claim or
 reports it as failed on the construction's own terms.
+
+## Phase 6 small-n operating study (SEA-AD design)
+
+Phase 6 applies MOTCO to SEA-AD MTG astrocytes: donor pseudobulks of RNA and
+ATAC, Sex as the group, three merged ADNC stages (Not AD + Low / Intermediate /
+High), 80 donors at ≥30 nuclei (F 11/10/28, M 9/10/12). Every operating
+characteristic measured so far used three blocks, four balanced stages and
+n = 300–1200, so this study measures `delta`/`angle`/`shape` Type I and power
+at the cohort's own design before any SEA-AD result is interpreted. The
+simulation is a structural analogue, not an RNA/ATAC emulator.
+
+Two keys make the design expressible; both are byte-identical when absent:
+
+- `generator.group_stage_sizes` — the exact donor table (group A = F, group
+  B = M, so the surgery lands on the smaller group: the conservative choice).
+- `evaluation.integration_params.layers = ["methylation", "expression"]` — all
+  three InterSIM blocks are generated and two are measured. Methylation stays
+  because every surgery acts on methylation indicators; it is the regulatory
+  analogue of ATAC.
+
+**Pilot** `phase6_small_n_pilot.json`: baseline column only, 100 × 199, gate
+disabled, shared log-spaced effect axis 0 / 0.005 / 0.01 / 0.02 / 0.05 / 0.10 /
+0.25 / 0.50 / 1.00 for all four modes, `magnitude_kind: joint`, new matched-seed
+family `phase6-small-n` (base seed 800). 35 cells (2 Type I baselines + 1 shared
+zero-effect anchor + 4 × 8), 3,500 units. A local smoke at 9 permutations ran
+at about 15 s per unit on a workstation; the pilot records the cluster median.
+It brackets where each mode's target statistic rises at n = 80, and the paper
+grade axis is chosen from it (recorded in
+`results/phase6-small-n-pilot-<date>/NOTES.md`).
+
+**Paper grade** `phase6_small_n_study.json` (written after the pilot): ≥ 500 ×
+999, the Phase 5 report contract, the Phase 4 gate rules as advisory targets, and
+a three-column design grid that varies one factor at a time — the baseline, the
+≥50-nuclei table `[[10, 9, 25], [9, 9, 12]]` (n = 74), and the baseline table
+measured on all three blocks (`layers: null`). The findings report separates the
+cohort-size and block-count effects and ends with a per-statistic
+interpretability statement for the case study.
+
+```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+RUN=results/phase6-small-n-pilot-$(date -u +%F)
+CFG=examples/trajectory_power_study/phase6_small_n_pilot.json
+sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/$CFG,STUDY_OUT=$(pwd)/$RUN,N_SHARDS=100 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir $RUN
+python scripts/motco_study.py report --config $CFG --out-dir $RUN
+```

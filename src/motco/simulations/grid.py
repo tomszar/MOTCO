@@ -853,9 +853,20 @@ def _stable_digest(payload: Any, *, length: int | None = None) -> str:
     return digest[:length] if length is not None else digest
 
 
+#: Dataclass fields left out of every hash payload while they hold ``None``.
+#: A field added after studies were committed would otherwise change every
+#: committed cell id and signature even when unused; listing it here keeps an
+#: absent value byte-identical to the field never having existed.
+_SIGNATURE_OMIT_WHEN_NONE: frozenset[str] = frozenset({"group_stage_sizes"})
+
+
 def _to_jsonable(value: Any) -> Any:
     if dataclasses.is_dataclass(value):
-        return {field.name: _to_jsonable(getattr(value, field.name)) for field in dataclasses.fields(value)}
+        return {
+            field.name: _to_jsonable(getattr(value, field.name))
+            for field in dataclasses.fields(value)
+            if not (field.name in _SIGNATURE_OMIT_WHEN_NONE and getattr(value, field.name) is None)
+        }
     if isinstance(value, Mapping):
         return {str(key): _to_jsonable(value[key]) for key in sorted(value, key=str)}
     if isinstance(value, tuple | list):
