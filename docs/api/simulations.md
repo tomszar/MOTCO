@@ -87,9 +87,27 @@ where `0` is the null for every mode):
 |------|---------------------------------|
 | `none` | Identical to baseline; useful for Type I error scenarios |
 | `translation` | Constant observed-space location offset |
-| `magnitude` | Scales δ (size); `magnitude_kind='all'` (default) scales the methylation δ at every stage, `'extremes'` scales only the endpoint stages' methylation indicators, `'joint'` scales every omic's δ by the same `1 + e` (size-pure in the joint standardized space, not only within each block) |
+| `magnitude` | Scales δ (size); see the `magnitude_kind` table below |
 | `orientation` | One global per-omic feature permutation (rotation) |
 | `shape` | Permutes interior stages only (bend); requires at least three stages |
+
+`magnitude_kind` selects how `magnitude` scales group B (the `motco simulate --magnitude-kind`
+flag has the same default):
+
+| `magnitude_kind` | Construction |
+|------------------|--------------|
+| `'joint'` (default) | Scales every omic's δ (methylation, expression, proteomics) by the same `1 + e`. Size-pure in the joint standardized space, not only within each block. This is the construction the Phase 5 magnitude re-measurement validated. |
+| `'all'` | Scales the methylation δ alone at every stage. Size-pure within the methylation block but rotates the concatenated trajectory. |
+| `'extremes'` | Scales only the endpoint stages' methylation indicators. |
+
+`'extremes'` and the shape mode's `shape_kind='magnitude'` remain methylation-only scalings; the
+joint default does not extend to them.
+
+**Migration.** Before `default-joint-magnitude-construction` the default was `'all'`. Code that
+relied on the default and wants the old construction must pass `magnitude_kind="all"` (or
+`--magnitude-kind all`). The committed historical study configs under
+`examples/trajectory_power_study/` already pin `"all"`, so their cells, signatures and datasets are
+unchanged.
 
 ## Evaluation harness
 

@@ -43,7 +43,9 @@ def test_profiles_derive_from_the_phase5_paper_grade_profile(path: Path) -> None
     assert raw["metadata"]["derives_from"] == str(PHASE5)
     generator = dict(raw["generator"])
     assert generator.pop("magnitude_kind") == "joint"
-    assert generator == phase5["generator"], "generator must be copied from Phase 5 except magnitude_kind"
+    phase5_generator = dict(phase5["generator"])
+    assert phase5_generator.pop("magnitude_kind") == "all"
+    assert generator == phase5_generator, "generator must be copied from Phase 5 except magnitude_kind"
     assert raw["evaluation"]["integration_params"] == phase5["evaluation"]["integration_params"]
     assert raw["evaluation"]["integration_method"] == "pls"
     assert raw["base_seed"] == phase5["base_seed"]
@@ -211,8 +213,8 @@ def test_anchor_dataset_at_replicate_zero_equals_the_phase5_anchor() -> None:
 def test_phase5_artefacts_are_untouched() -> None:
     """Adding the profiles edits nothing Phase 5 committed."""
 
+    root = Path(__file__).resolve().parents[1]
     paths = [
-        str(PHASE5),
         "results/phase5-2026-09-10",
         "examples/trajectory_power_study/phase5_report_template.md",
         "docs/reports/phase5-paper-grade-2026-09-10.md",
@@ -221,8 +223,21 @@ def test_phase5_artefacts_are_untouched() -> None:
     try:
         diff = subprocess.run(
             ["git", "diff", "--stat", "HEAD", "--", *paths],
-            capture_output=True, text=True, check=True, cwd=Path(__file__).resolve().parents[1],
+            capture_output=True, text=True, check=True, cwd=root,
+        )
+        committed = subprocess.run(
+            ["git", "show", f"HEAD:{PHASE5}"], capture_output=True, text=True, check=True, cwd=root,
         )
     except (OSError, subprocess.CalledProcessError):  # pragma: no cover - no git in the sandbox
         pytest.skip("git is not available")
     assert diff.stdout.strip() == "", diff.stdout
+
+    # The Phase 5 config may differ only by the historical ``magnitude_kind: "all"``
+    # pin (``default-joint-magnitude-construction``), which
+    # ``tests/test_magnitude_default_pins.py`` proves is signature-neutral.
+    def unpinned(text: str) -> dict:
+        raw = json.loads(text)
+        assert raw["generator"].pop("magnitude_kind", "all") == "all"
+        return raw
+
+    assert unpinned((root / PHASE5).read_text(encoding="utf-8")) == unpinned(committed.stdout)

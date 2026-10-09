@@ -189,7 +189,7 @@ def test_duplicate_datasets_inside_the_family_are_still_rejected() -> None:
     ok = _config(design_grid=DesignGrid(axes={"evaluation.permutations": (0, 9)}))
     assert any(cell.phase == DESIGN_PHASE for cell in enumerate_study(ok).cells)
     with pytest.raises(StudyConfigError, match="identical datasets"):
-        enumerate_study(_config(design_grid=DesignGrid(axes={"generator.magnitude_kind": ("all", "extremes")})))
+        enumerate_study(_config(design_grid=DesignGrid(axes={"generator.magnitude_kind": ("joint", "extremes")})))
 
 
 def test_headroom_is_enforced_at_each_design_point() -> None:

@@ -87,6 +87,7 @@ guard (parameter signature) skips already-completed replicates.
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 | `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
+| `generator.magnitude_kind` | Magnitude construction (`joint` default, `all`, `extremes`); every committed config names it, and a new config must choose it deliberately (see below) |
 | `report_contract` | Declared reporting/execution rules (`driver_component`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid`/`warn`); adds `report_contract.json` + `driver_report.csv` and, under `forbid`, makes the runner refuse `--n-jobs` (see the Phase 5 paper-grade study) |
 
 Unknown top-level keys are rejected by name, so a misspelled block cannot be
@@ -126,6 +127,41 @@ pairs.
 default and choose an effect axis that respects the headroom — lower the axis
 top, lower `p_dmp`, or use fewer stages. Enumeration reports the saturating
 effect for the offending cell, which is the number to design against.
+
+### `generator.magnitude_kind` — why the historical configs pin `"all"`
+
+`magnitude_kind` defaults to `"joint"`, which scales every omic's δ by the same
+`1 + e`. It became the default after the
+[Phase 5 magnitude re-measurement](../../docs/reports/phase5-magnitude-remeasurement-2026-10-08.md)
+showed that it meets the magnitude controls and that the former default, `"all"`
+(methylation δ alone), does not. Ten configs in this directory predate the flip and
+named no kind, so they ran under `"all"`: `angle_pivotality_diagnostic.json`,
+`orientation_signfix_rerun_100x199.json`, `phase4_pilot_100x199.json`,
+`phase4_smoke.json`, `phase5_design_point_pilot.json`,
+`phase5_latent_rank_ladder.json`, `phase5_power_study.json`, `pilot_50x199.json`,
+`smoke.json` and `study.json`. Each now carries an explicit
+`"magnitude_kind": "all"` so it still describes what was run. The two magnitude
+re-measurement profiles name `"joint"`.
+
+**The pin is behavior-neutral.** `parameter_signature` hashes the resolved
+generator parameters, so an explicit `"all"` serializes exactly like the old
+implicit default. Every cell id, parameter signature, matched seed and shard
+assignment is unchanged, and committed results stay resumable.
+`tests/test_magnitude_default_pins.py` checks this against
+`tests/data/historical_config_signatures.json`, a fixture captured on the
+pre-flip code with the configs unedited.
+
+**Committed provenance hashes.** Pinning changed these files' bytes, so their
+sha256 no longer matches the `config_sha256` recorded in committed
+`PROVENANCE.txt` files. Those hashes refer to the config as it stood when each
+run executed, at the code revision its `PROVENANCE.txt` names; the provenance
+files are frozen outputs and were not rewritten. The pin is the only edit.
+
+**A new config must not copy the pin.** Choose `magnitude_kind` deliberately:
+`"joint"` is the construction the paper describes as a size change; `"all"`
+reproduces only the historical methylation-only construction. The same test
+requires every committed config here to name the key, so a config that omits it
+fails.
 
 ## Phase 4 pilot
 

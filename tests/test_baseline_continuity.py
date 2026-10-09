@@ -228,7 +228,8 @@ PINNED_PRECHANGE: tuple[tuple[dict, str, list[int], dict], ...] = (
         },
     ),
     (
-        {"trajectory_mode": "magnitude", "group_effect_size": 0.5},
+        # The pre-axis generator defaulted to the methylation-only construction.
+        {"trajectory_mode": "magnitude", "group_effect_size": 0.5, "magnitude_kind": "all"},
         "77859bd89c6c3974",
         [82, 75, 63, 80],
         {"delta_methyl_scale": 1.5, "magnitude_kind": "all"},

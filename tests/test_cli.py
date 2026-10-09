@@ -452,14 +452,27 @@ def test_simulate_wires_trajectory_params(tmp_path: Path) -> None:
     assert traj_params.magnitude_kind == "extremes"
 
 
-def test_simulate_magnitude_kind_defaults_to_all(tmp_path: Path) -> None:
+def test_simulate_magnitude_kind_defaults_to_joint(tmp_path: Path) -> None:
     fake_dataset = _make_fake_simulate_dataset(n=30, seed=0)
     with patch("motco.simulations.reference.load_reference", return_value=object()), \
          patch("motco.simulations.semisynthetic.generate_semisynthetic_trajectory",
                return_value=fake_dataset) as generate_mock:
         main(["simulate", "--seed", "0", "--out-dir", str(tmp_path)])
     (traj_params,) = generate_mock.call_args.args
-    assert traj_params.magnitude_kind == "all"
+    assert traj_params.magnitude_kind == "joint"
+
+
+@pytest.mark.parametrize(("flag", "expected"), [([], "joint"), (["--magnitude-kind", "all"], "all")])
+def test_simulate_truth_records_magnitude_kind(tmp_path: Path, flag: list[str], expected: str) -> None:
+    """Unmocked: the written truth follows the generator default unless the flag overrides it."""
+
+    main([
+        "simulate", "--seed", "0", "--out-dir", str(tmp_path),
+        "--trajectory-mode", "magnitude", "--n-samples", "60", "--effect-size", "0.5",
+        *flag,
+    ])
+    truth = json.loads((tmp_path / "truth.json").read_text())
+    assert truth["magnitude_kind"] == expected
 
 
 def test_simulate_cluster_mean_shift_fans_out_to_all_omics(tmp_path: Path) -> None:
