@@ -1,0 +1,198 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_stages": 3,
+    "group_effect_size": 0.0,
+    "group_stage_sizes": [
+      [
+        11,
+        10,
+        28
+      ],
+      [
+        9,
+        10,
+        12
+      ]
+    ],
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0,
+    "magnitude_kind": "joint"
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "layers": [
+        "methylation",
+        "expression"
+      ],
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 999,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.02,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "axes": {},
+  "design_grid": {
+    "axes": {
+      "generator.group_stage_sizes": [
+        [
+          [
+            11,
+            10,
+            28
+          ],
+          [
+            9,
+            10,
+            12
+          ]
+        ],
+        [
+          [
+            10,
+            9,
+            25
+          ],
+          [
+            9,
+            9,
+            12
+          ]
+        ]
+      ],
+      "evaluation.integration_params.layers": [
+        [
+          "methylation",
+          "expression"
+        ],
+        null
+      ]
+    }
+  },
+  "n_replicates": 500,
+  "base_seed": 800,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase6-small-n",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "delta",
+        "min_power_at_top": 0.8
+      }
+    ],
+    "specificity": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "angle",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "shape",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "gate": {
+      "enabled": true,
+      "alpha": 0.05,
+      "control_se_tolerance": 2.0,
+      "monotonicity_se_tolerance": 2.0,
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "max_marginal_exceedances": 1,
+      "require_complete_records": true,
+      "control_modes": [
+        "none"
+      ],
+      "rules": [
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "delta",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "angle",
+          "role": "mandatory_control"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "shape",
+          "role": "mandatory_control"
+        }
+      ]
+    }
+  },
+  "report_contract": {
+    "driver_component": "observed",
+    "cross_replicate_driver_agreement": "descriptive",
+    "n_jobs_override": "forbid"
+  },
+  "metadata": {
+    "name": "trajectory-power-phase6-small-n-magnitude",
+    "phase": 6,
+    "intent": "Phase 6 small-n paper-grade study, magnitude profile: Type I and power of the delta / angle / shape RRPP tests for the magnitude mode (joint construction) at the SEA-AD MTG astrocyte design (three stages; donor table F 11/10/28, M 9/10/12; methylation + expression measured; pooled PLS with stage-supervised double-CV rank), 500 replicates x 999 permutations, across a four-column design grid (>=30 / >=50 nuclei x two / three blocks). The Phase 4 gate is declared as advisory acceptance (design D6): the binding output is the findings report's per-statistic interpretability statement.",
+    "derives_from": "examples/trajectory_power_study/phase6_small_n_pilot.json",
+    "split_profile_of": "examples/trajectory_power_study/phase6_small_n_study.json",
+    "pilot": {
+      "directory": "results/phase6-small-n-pilot-2026-10-09",
+      "config": "examples/trajectory_power_study/phase6_small_n_pilot.json",
+      "notes": "results/phase6-small-n-pilot-2026-10-09/NOTES.md",
+      "code_revision": "e0ec8d8fee0a35a68e8d2f962b5a7f895ffb15a2",
+      "median_unit_seconds_199_permutations": 8.0
+    },
+    "effect_axis": {
+      "0.0": "shared zero-effect anchor (byte-identical datasets to the pilot's and the sibling profile's anchor at the same replicate index)",
+      "0.02": "start of the measured rise (pilot delta power 0.09)",
+      "0.05": "rise (pilot 0.17)",
+      "0.1": "rise midpoint (pilot 0.58)",
+      "0.25": "near saturation (pilot 0.93)",
+      "0.5": "saturation (pilot 1.00)",
+      "1.0": "control stress point for magnitude/angle and magnitude/shape (pilot 0.01 / 0.00)",
+      "dropped": "0.005 and 0.01 measured at the anchor's rate (0.05 / 0.04)"
+    },
+    "notes": [
+      "Split profile (spec 'Phase 6 small-n study profiles', split rule): the pilot found magnitude's delta rise in e = 0.02-0.25 while orientation and shape move only in 0.50-1.00, at the relocation construction's ceiling (fraction clamped at 1.0). This profile carries the magnitude axis; phase6_small_n_study.json carries orientation, shape and translation. Both share generator, evaluation, base_seed 800 and the matched-seed family phase6-small-n with the pilot, so the shared zero-effect anchors are the same datasets in every profile.",
+      "generator and evaluation are copied from phase6_small_n_pilot.json; only evaluation.permutations rises from 199 to 999. n_samples, stage_sample_prop and group_ratio stay absent (group_stage_sizes fixes every cell).",
+      "Design grid: generator.group_stage_sizes x evaluation.integration_params.layers. The engine crosses design-grid axes, so there are four columns: baseline (>=30 nuclei, methylation + expression), >=50 nuclei [[10, 9, 25], [9, 9, 12]] on two blocks, >=30 nuclei on all three blocks (layers null = key absent), and >=50 nuclei on three blocks (accepted 2026-10-09 in place of an explicit-points engine mode). Read the cohort-size contrast as baseline vs >=50 nuclei at two blocks and the block-count contrast as baseline vs three blocks at n = 80; columns differing only in layers evaluate the same generated datasets.",
+      "Gate reduced to the magnitude rules, as in the Phase 5 re-measurement: magnitude/delta mandatory power, magnitude/angle and magnitude/shape mandatory control, control_modes [none]. Advisory (design D6).",
+      "Report contract copied from phase5_power_study.json. Attribution is disabled here (orientation attribution lives in the sibling profile). Do not pass --n-jobs; the contract forbids it.",
+      "Cells and cost: 2 Type I baselines + 4 columns x (1 anchor + 6 effects) = 30 cells, 15,000 units. Pilot median 8.0 s per unit at 199 permutations; planning figure 10 s at 999 permutations -> about 42 core-hours, 50 with a 20% contention margin. Pin BLAS to one thread."
+    ]
+  }
+}

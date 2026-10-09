@@ -30,7 +30,8 @@ blocks, while the case study has two.
 - **A version-controlled small-n study profile.** It matches the SEA-AD design: 3 stages,
   `group_stage_sizes` from the ≥30-nuclei cohort, two blocks, pooled PLS with cross-validated rank, and the
   `joint` magnitude construction. A design grid adds the ≥50-nuclei cohort (n = 74: F 10/9/25, M 9/9/12) and a
-  three-block column. The three-block column keeps the block-count effect separate from the n effect.
+  three-block column, crossed (four columns; design D4). The three-block column keeps the block-count effect
+  separate from the n effect.
 - **An effect-axis bracket pilot before the paper-grade run.** At n = 80 the Phase 5 effect axes do not
   transfer. Magnitude in particular saturated at e = 0.02 with n = 1200. The final effect grid is fixed from
   recorded pilot evidence, as the Phase 5 magnitude re-measurement did.
@@ -69,7 +70,7 @@ Out of scope:
   `attribution_diagnostics.py`: iterate over the selected layers instead of `OMIC_LAYERS`.
 - `src/motco/simulations/study/config.py` and `enumerate.py`: JSON lists coerced to tuples for the new
   generator field. The design-grid axis needs to work with a tuple-valued field.
-- `examples/trajectory_power_study/`: new `phase6_small_n_pilot.json` and `phase6_small_n_study.json`, plus a
+- `examples/trajectory_power_study/`: new `phase6_small_n_pilot.json`, `phase6_small_n_study.json` and its split sibling `phase6_small_n_magnitude.json`, plus a
   README entry.
 - `tests/`: generator sizing, conflict validation, byte-identity when absent; layer-subset evaluation and
   default byte-identity; config round-trip.

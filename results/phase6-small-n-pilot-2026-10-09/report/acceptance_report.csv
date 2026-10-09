@@ -1,0 +1,7 @@
+target_name,target_kind,met,rationale,obs_cell_id,obs_phase,obs_trajectory_mode,obs_statistic,obs_alpha_target,obs_se_tolerance,obs_rejection_rate,obs_monte_carlo_se,obs_available_replicates,obs_deviation,obs_bound
+"type_i_control[type_i_baseline-1dafa7daa331,delta]",type_i_control,True,|rate - alpha| = 0.0000 <= 2.00·SE (0.0436),type_i_baseline-1dafa7daa331,type_i_baseline,,delta,0.05,2.0,0.05,0.021794494717703367,100,0.0,0.04358898943540673
+"type_i_control[type_i_baseline-1dafa7daa331,angle]",type_i_control,False,|rate - alpha| = 0.0400 > 2.00·SE (0.0199),type_i_baseline-1dafa7daa331,type_i_baseline,,angle,0.05,2.0,0.01,0.0099498743710662,100,0.04,0.0198997487421324
+"type_i_control[type_i_baseline-1dafa7daa331,shape]",type_i_control,False,|rate - alpha| = 0.0400 > 2.00·SE (0.0199),type_i_baseline-1dafa7daa331,type_i_baseline,,shape,0.05,2.0,0.01,0.0099498743710662,100,0.04,0.0198997487421324
+"type_i_control[type_i_baseline-3d629d9bc07c,delta]",type_i_control,False,|rate - alpha| = 0.0300 > 2.00·SE (0.0280),type_i_baseline-3d629d9bc07c,type_i_baseline,translation,delta,0.05,2.0,0.02,0.014,100,0.030000000000000002,0.028
+"type_i_control[type_i_baseline-3d629d9bc07c,angle]",type_i_control,False,|rate - alpha| = 0.0500 > 2.00·SE (0.0000),type_i_baseline-3d629d9bc07c,type_i_baseline,translation,angle,0.05,2.0,0.0,0.0,100,0.05,0.0
+"type_i_control[type_i_baseline-3d629d9bc07c,shape]",type_i_control,False,|rate - alpha| = 0.0500 > 2.00·SE (0.0000),type_i_baseline-3d629d9bc07c,type_i_baseline,translation,shape,0.05,2.0,0.0,0.0,100,0.05,0.0

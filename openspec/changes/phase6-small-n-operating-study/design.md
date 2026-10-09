@@ -99,15 +99,21 @@ regenerate byte-identically. With the key present, metadata records the canonica
 The table's rows are `(F, M)`, so group A (baseline) is female (n = 49) and group B (transformed) is male
 (n = 31). This mirrors the cohort. The statistics are symmetric in the two groups, but the surgery is applied
 to B, so B's smaller cells add to the transformed group's estimation noise. That is the less favorable and
-therefore conservative assignment. The design grid has three columns, varying one factor at a time:
+therefore conservative assignment. The design grid crosses the two size tables with the two block
+selections:
 
 | Column | `group_stage_sizes` | `layers` |
 |---|---|---|
 | baseline | ((11, 10, 28), (9, 10, 12)) | methylation, expression |
 | ≥50 nuclei | ((10, 9, 25), (9, 9, 12)) | methylation, expression |
 | three blocks | ((11, 10, 28), (9, 10, 12)) | all three |
+| ≥50 nuclei, three blocks | ((10, 9, 25), (9, 9, 12)) | all three |
 
-A full cross (2 × 2) adds a fourth column that answers no question the case study asks. It is omitted.
+The case study's questions need only the first three, read one factor at a time: cohort size is baseline vs
+≥50 nuclei, block count is baseline vs three blocks. The study engine's design grid always crosses its axes,
+and running the fourth column (about 10k units) was cheaper than adding an explicit-points mode to the
+engine, so it is kept (decided 2026-10-09, after the pilot). It reports the size × block-count interaction
+and is not used for either contrast.
 
 ### D5 — Pilot-first effect axis, then paper grade
 
@@ -120,7 +126,7 @@ re-measurement's bracket → pilot → paper-grade precedent. The headroom check
 and its pool is independent of n.
 
 Cost: per-unit time should fall sharply from Phase 5's 61.5 s, since PLS CV and RRPP at n = 80 are much
-cheaper than at n = 1200. The pilot measures the real figure. A rough paper-grade envelope is ~3 columns ×
+cheaper than at n = 1200. The pilot measures the real figure. A rough paper-grade envelope (written before the pilot, and before the grid became four columns) is ~3 columns ×
 ~35 cells × 500 replicates ≈ 50k units. At ~5–10 s per unit that is ~70–140 core-hours, the same order as
 Phase 5. The final budget is set from the pilot's median unit time.
 

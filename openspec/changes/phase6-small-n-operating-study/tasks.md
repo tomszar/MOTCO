@@ -34,9 +34,9 @@
 
 ## 6. Pilot run and effect-axis decision
 
-- [ ] 6.1 Run the pilot on `ing` (per the SLURM handbook) and merge and report it into `results/phase6-small-n-pilot-<date>/`; verify zero failures and a recorded median per-unit time
-- [ ] 6.2 Choose the paper-grade effect axis per mode from the pilot curves (rise and saturation of each target statistic) and decide whether the per-axis split applies; record the reasoning in `results/phase6-small-n-pilot-<date>/NOTES.md`
-- [ ] 6.3 Write `phase6_small_n_study.json` (and the split profile if 6.2 requires it) with the three-column design grid, ≥ 500 × 999, Phase 5 report contract, advisory gate rules, and metadata naming the pilot evidence; verify it loads and enumerates, that the anchor is shared across split profiles, and that the cost estimate from the 6.1 unit time is recorded
+- [x] 6.1 Run the pilot on `ing` (per the SLURM handbook) and merge and report it into `results/phase6-small-n-pilot-<date>/`; verify zero failures and a recorded median per-unit time
+- [x] 6.2 Choose the paper-grade effect axis per mode from the pilot curves (rise and saturation of each target statistic) and decide whether the per-axis split applies; record the reasoning in `results/phase6-small-n-pilot-<date>/NOTES.md`
+- [x] 6.3 Write `phase6_small_n_study.json` (and the split profile if 6.2 requires it) with the design grid (four crossed columns; see design D4), ≥ 500 × 999, Phase 5 report contract, advisory gate rules, and metadata naming the pilot evidence; verify it loads and enumerates, that the anchor is shared across split profiles, and that the cost estimate from the 6.1 unit time is recorded
 
 ## 7. Paper-grade run and findings
 

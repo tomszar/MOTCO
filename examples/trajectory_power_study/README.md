@@ -712,17 +712,36 @@ disabled, shared log-spaced effect axis 0 / 0.005 / 0.01 / 0.02 / 0.05 / 0.10 /
 family `phase6-small-n` (base seed 800). 35 cells (2 Type I baselines + 1 shared
 zero-effect anchor + 4 × 8), 3,500 units. A local smoke at 9 permutations ran
 at about 15 s per unit on a workstation; the pilot records the cluster median.
-It brackets where each mode's target statistic rises at n = 80, and the paper
-grade axis is chosen from it (recorded in
-`results/phase6-small-n-pilot-<date>/NOTES.md`).
+It brackets where each mode's target statistic rises at n = 80.
 
-**Paper grade** `phase6_small_n_study.json` (written after the pilot): ≥ 500 ×
-999, the Phase 5 report contract, the Phase 4 gate rules as advisory targets, and
-a three-column design grid that varies one factor at a time — the baseline, the
-≥50-nuclei table `[[10, 9, 25], [9, 9, 12]]` (n = 74), and the baseline table
-measured on all three blocks (`layers: null`). The findings report separates the
-cohort-size and block-count effects and ends with a per-statistic
-interpretability statement for the case study.
+**Pilot run 2026-10-09** (`results/phase6-small-n-pilot-2026-10-09/`, `NOTES.md`
+and `PROVENANCE.txt`): 3,500 / 3,500 units, 0 failures, median 8.0 s per unit
+(8.6 core-hours). Type I is controlled. Magnitude/`delta` rises over e =
+0.02–0.25 (0.09 → 0.93) and saturates at 0.50. Orientation/`angle` and
+shape/`shape` reach only 0.24 and 0.18 at e = 1.00, the relocation
+construction's ceiling (the fraction is clamped at 1). At three stages the
+stage-mean eigengap is small (anchor median 0.11), so the `angle` null is very
+wide, and the stage-supervised PLS space attenuates the rotation.
+
+**Paper grade**, split per the pilot (spec split rule), both at 500 × 999 with
+the Phase 5 report contract and the Phase 4 gate rules as advisory targets:
+
+- `phase6_small_n_magnitude.json` — magnitude, effects 0 / 0.02 / 0.05 / 0.10 /
+  0.25 / 0.50 / 1.00; reduced magnitude gate. 30 cells, 15,000 units.
+- `phase6_small_n_study.json` — orientation, shape, translation, effects 0 /
+  0.25 / 0.50 / 0.75 / 1.00; orientation attribution. 54 cells, 27,000 units.
+
+Both copy the pilot's generator, evaluation (permutations raised to 999), base
+seed and matched-seed family, so all three profiles share their zero-effect
+anchor datasets. Each crosses `generator.group_stage_sizes` (≥30 nuclei, ≥50
+nuclei `[[10, 9, 25], [9, 9, 12]]`, n = 74) with
+`evaluation.integration_params.layers` (two blocks, `null` = three) into four
+columns. The design grid always crosses its axes, so the ≥50-nuclei
+three-block column runs too, although neither contrast needs it. The findings
+report reads cohort size as baseline vs ≥50 nuclei at two blocks and block count
+as baseline vs three blocks at n = 80, and ends with a per-statistic
+interpretability statement for the case study. Planning cost: about 10 s per
+unit, about 117 core-hours, 140 with a 20% margin.
 
 ```bash
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1

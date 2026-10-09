@@ -66,3 +66,79 @@ def test_every_pilot_cell_runs_end_to_end() -> None:
         assert integration["layer_feature_counts"] == {"methylation": 367, "expression": 131}
         assert record.truth_metadata["group_stage_sizes"] == {"A": [11, 10, 28], "B": [9, 10, 12]}
         assert set(record.p_values) == {"delta", "angle", "shape"}
+
+
+# ── Paper-grade split profiles ───────────────────────────────────────────────
+
+CONFIG_DIR = PILOT.parent
+MAGNITUDE = CONFIG_DIR / "phase6_small_n_magnitude.json"
+STUDY = CONFIG_DIR / "phase6_small_n_study.json"
+SEA_AD_50 = ((10, 9, 25), (9, 9, 12))
+SIZES = "generator.group_stage_sizes"
+LAYERS = "evaluation.integration_params.layers"
+PILOT_DIR = "results/phase6-small-n-pilot-2026-10-09"
+
+
+@pytest.mark.parametrize(
+    ("path", "modes", "effects", "n_cells"),
+    [
+        (MAGNITUDE, ("magnitude",), (0.0, 0.02, 0.05, 0.1, 0.25, 0.5, 1.0), 2 + 4 * (1 + 6)),
+        (STUDY, ("orientation", "shape", "translation"), (0.0, 0.25, 0.5, 0.75, 1.0), 2 + 4 * (1 + 3 * 4)),
+    ],
+    ids=["magnitude", "orientation-shape-translation"],
+)
+def test_paper_grade_profiles_follow_the_pilot(path, modes, effects, n_cells) -> None:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    pilot = json.loads(PILOT.read_text(encoding="utf-8"))
+    assert raw["generator"] == pilot["generator"]
+    evaluation = dict(raw["evaluation"])
+    assert evaluation.pop("permutations") == 999
+    assert evaluation == {key: value for key, value in pilot["evaluation"].items() if key != "permutations"}
+    assert (raw["base_seed"], raw["matched_seeds"]) == (pilot["base_seed"], pilot["matched_seeds"])
+    assert raw["report_contract"] == {
+        "driver_component": "observed",
+        "cross_replicate_driver_agreement": "descriptive",
+        "n_jobs_override": "forbid",
+    }
+    assert raw["metadata"]["pilot"]["directory"] == PILOT_DIR
+    assert set(raw["metadata"]["effect_axis"]) >= {str(effect) for effect in effects}
+
+    config = load_study_config(path)
+    assert config.trajectory_modes == modes
+    assert config.effect_sizes == effects
+    assert (config.n_replicates, config.evaluation.permutations) == (500, 999)
+    assert config.acceptance.gate.enabled
+    assert config.design_grid.axes == {
+        SIZES: (SEA_AD, SEA_AD_50),
+        LAYERS: (MEASURED, None),
+    }
+    grid = enumerate_study(config)  # rejects any over-headroom cell
+    assert len(grid.cells) == n_cells
+    assert grid.metadata["design_grid"]["n_points"] == 4
+    assert sum(1 for cell in grid.cells if cell.metadata.get("zero_effect_anchor")) == 4
+
+
+def test_split_profiles_and_pilot_share_their_anchor_datasets() -> None:
+    def anchor(path):
+        grid = enumerate_study(load_study_config(path))
+        (cell,) = [c for c in grid.cells if c.metadata.get("zero_effect_anchor") and c.phase == "power_primary"]
+        return cell
+
+    anchors = [anchor(path) for path in (PILOT, MAGNITUDE, STUDY)]
+    reference = anchors[0]
+    for cell in anchors[1:]:
+        assert cell.generator_params == reference.generator_params
+        for index in range(3):
+            assert derive_replicate_seed(cell, index) == derive_replicate_seed(reference, index)
+
+
+def test_design_columns_realize_their_cell_sizes() -> None:
+    grid = enumerate_study(load_study_config(STUDY))
+    for cell in grid.cells:
+        if not cell.metadata.get("zero_effect_anchor"):
+            continue
+        params = replace(cell.generator_params, seed=derive_replicate_seed(cell, 0))
+        counts = generate_semisynthetic_trajectory(params).metadata.groupby(["group", "stage"]).size()
+        expected = cell.generator_params.group_stage_sizes
+        assert [[int(counts[(g, s)]) for s in range(3)] for g in ("A", "B")] == [list(row) for row in expected]
+        assert int(counts.sum()) in (80, 74)
