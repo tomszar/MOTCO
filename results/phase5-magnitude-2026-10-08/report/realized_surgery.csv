@@ -1,0 +1,10 @@
+cell_id,phase,trajectory_mode,effect_size,completed_replicates,nominal_size,realized_mean,realized_min,realized_max,censored_replicates,censored_fraction,duplicate_of,duplicate_construction
+power_primary-3617b140aa5a,power_primary,magnitude,0.0025,500,,,,,,,,False
+power_primary-299cb406aa96,power_primary,magnitude,0.005,500,,,,,,,,False
+power_primary-50559e32f2d8,power_primary,magnitude,0.01,500,,,,,,,,False
+power_primary-e4cb568a74d3,power_primary,magnitude,0.02,500,,,,,,,,False
+power_primary-3538a571bada,power_primary,magnitude,0.25,500,,,,,,,,False
+power_primary-8bf1d7f9bca2,power_primary,magnitude,1.0,500,,,,,,,,False
+power_primary-b68bc66d33f4,power_primary,none,0.0,500,,,,,,,,False
+type_i_baseline-36ead8565098,type_i_baseline,none,,500,,,,,,,,False
+type_i_baseline-34269dbb2cc2,type_i_baseline,translation,1.0,500,37.0,37.0,37.0,37.0,0.0,0.0,,False

@@ -553,3 +553,98 @@ uv run python scripts/motco_study.py report \
 
 Commit `report/` and a hand-written `PROVENANCE.txt` (fields listed in the
 template); the shard and merged JSONL stay gitignored.
+
+## Phase 5 magnitude re-measurement (`joint` construction)
+
+The Phase 5 paper-grade run held the gate on its two magnitude mandatory
+controls (`magnitude`→`angle` 0.276, `magnitude`→`shape` 0.742 at e = 1.00
+against a bound near 0.07). The
+[magnitude-construction diagnostic](../../docs/reports/magnitude-construction-diagnostic-2026-09-10.md)
+traced that to the construction, not the statistics: `magnitude_kind='all'`
+scales methylation's δ alone, which is size-pure *within* every omic block and
+impure only as the geometry of concatenating one block that grew with two that
+did not. `magnitude_kind='joint'` scales all three per-omic δ by the same
+`1 + e`, so group B's native-space trajectory is exactly `1 + e` times group A's
+in every block — size-pure in the joint standardized space as well (population
+`angle` ~1e-6, `shape` ~1e-15, the anchor's floor). The re-measurement runs the
+magnitude mode under `joint` on a three-rung ladder; `'all'` remains the default
+and no historical config changes.
+
+**Rung 1 — analytic bracket** (`results/magnitude-axis-bracket-2026-10-08/`).
+`scripts/magnitude_construction_diagnostic.py --bracket` evaluates the
+population-standardized joint geometry of both constructions over e = 0…1
+(steps of 0.0025) at the Phase 5 design point (minutes on a workstation, no
+sampling, no cluster, no R) and writes `effect_axis_bracket.csv`. It relates the
+two effect axes — joint's realized size is 2.47–2.58 × the `all` construction's
+at the same nominal e — and gave the pilot its first grid: the `all`
+construction's `delta` power is already 1.000 at its first Phase 5 point
+(e = 0.25, realized size 5.95), and joint realizes 3.23 at e = 0.05 and 6.34 at
+e = 0.10, so the bracket placed the rise between those. The bracket is
+population geometry and cannot see the RRPP null width; the pilot can.
+
+**Rung 2 — pilot** `phase5_magnitude_pilot.json`: 50 × 199, gate disabled.
+Submission 1 ran 0 / 0.02 / 0.05 / 0.10 / 0.25 / 1.00 and measured `delta`
+power 1.000 from e = 0.02 (realized PLS-latent joint `delta` ≈ 68 × e against a
+`delta` null 95th percentile near 0.40, so the rise sits near e ≈ 0.006);
+submission 2 extended the grid with 0.0025 / 0.005 / 0.01, resuming the
+completed units in the same run directory. 11 cells (2 Type I baselines + 1
+shared zero-effect anchor + 8 magnitude cells), 550 units, ≈ 12 core-hours. Its
+note (`results/phase5-magnitude-pilot-2026-10-08/NOTES.md`) records the grid
+chosen for paper grade and why.
+
+**Rung 3 — paper grade** `phase5_magnitude_remeasurement.json`: 500 × 999,
+`n_jobs = 1` with overrides forbidden, the Phase 5 `report_contract`, and the
+Phase 4 gate reduced to exactly the three magnitude rules (`magnitude`/`delta`
+mandatory power; `magnitude`/`angle` and `magnitude`/`shape` mandatory control;
+`control_modes = ["none"]`). Effect grid **0 / 0.0025 / 0.005 / 0.01 / 0.02 /
+0.25 / 1.00** on joint's native axis (e is the per-omic size ratio minus one,
+exactly; it is *not* rescaled to the `all` curve — the realized joint `delta`
+recorded per replicate relates the two axes): the three smallest points bracket
+the measured rise, 0.02 is its saturation, 0.25 is the `all` construction's
+first Phase 5 point, and 1.00 is the control stress point (2.47 × the production
+construction's realized size). 9 cells, 4,500 units; the 2026-10-08 run took
+106.7 core-hours and 2 h 06 m wall on 100 single-CPU shards (node contention;
+per-unit median 88.7 s against Phase 5's 61.5 s).
+
+**Run 2026-10-08** — see the
+[addendum](../../docs/reports/phase5-magnitude-remeasurement-2026-10-08.md) and
+the committed outputs under `results/phase5-magnitude-2026-10-08/` (`report/`
+and `PROVENANCE.txt`). 4,500 / 4,500 units, 0 failures. Reduced gate
+**PROCEED**: magnitude/`delta` 1.000 at the top with the rise resolved at
+0.130 / 0.384 / 0.836 / 0.996 over e = 0.0025–0.02; magnitude/`angle` 0.024 and
+magnitude/`shape` 0.000 at e = 1.00 against the 0.0695 bound (Phase 5's `all`
+construction: 0.276 / 0.742); the anchor reproduces the Phase 5 anchor at all
+500 replicate indices including every p-value (`report/anchor_reproduction.csv`,
+`scripts/anchor_reproduction.py`). The withheld magnitude-specificity claim is
+lifted for `joint`; `all` remains the default until a separate change flips it.
+
+Both profiles copy `generator` (except `magnitude_kind`),
+`evaluation.integration_params`, `base_seed` 600, and the matched-seed family
+`phase5-primary` from `phase5_power_study.json`, so the shared zero-effect
+anchor and every group A baseline are **byte-identical to the Phase 5 records
+at the same replicate index** (the anchor's reproduction of Phase 5's anchor is
+stated in the addendum as a reproducibility check). Orientation, shape, and
+translation cells are not re-run: matched seeds make them identical to the
+committed Phase 5 records and their findings stand.
+
+```bash
+# Bracket (workstation).
+python scripts/magnitude_construction_diagnostic.py --bracket \
+    --out-dir results/magnitude-axis-bracket-$(date -u +%F)
+
+# Pilot, then paper grade, on SLURM (partition/resource flags are cluster-specific).
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+RUN=results/phase5-magnitude-pilot-$(date -u +%F)    # or results/phase5-magnitude-$(date -u +%F)
+CFG=examples/trajectory_power_study/phase5_magnitude_pilot.json   # or phase5_magnitude_remeasurement.json
+sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/$CFG,STUDY_OUT=$(pwd)/$RUN,N_SHARDS=100 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir $RUN
+python scripts/motco_study.py report --config $CFG --out-dir $RUN
+```
+
+The findings go in a dated addendum,
+`docs/reports/phase5-magnitude-remeasurement-<date>.md`, following
+`phase5_report_template.md` section for section with the non-magnitude sections
+marked not applicable; it lifts the withheld magnitude-specificity claim or
+reports it as failed on the construction's own terms.

@@ -87,7 +87,7 @@ where `0` is the null for every mode):
 |------|---------------------------------|
 | `none` | Identical to baseline; useful for Type I error scenarios |
 | `translation` | Constant observed-space location offset |
-| `magnitude` | Scales δ (size); `magnitude_kind='all'` scales every stage, `'extremes'` scales only the endpoint stages' methylation indicators |
+| `magnitude` | Scales δ (size); `magnitude_kind='all'` (default) scales the methylation δ at every stage, `'extremes'` scales only the endpoint stages' methylation indicators, `'joint'` scales every omic's δ by the same `1 + e` (size-pure in the joint standardized space, not only within each block) |
 | `orientation` | One global per-omic feature permutation (rotation) |
 | `shape` | Permutes interior stages only (bend); requires at least three stages |
 

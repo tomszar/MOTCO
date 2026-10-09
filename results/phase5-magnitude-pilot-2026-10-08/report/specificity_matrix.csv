@@ -1,0 +1,10 @@
+trajectory_mode,statistic,effect_size,cell_id,phase,rejection_rate,monte_carlo_se,available_replicates,completed_replicates
+magnitude,angle,1.0,power_primary-1594bba3042f,power_primary,0.0,0.0,50,50
+magnitude,delta,1.0,power_primary-1594bba3042f,power_primary,1.0,0.0,50,50
+magnitude,shape,1.0,power_primary-1594bba3042f,power_primary,0.0,0.0,50,50
+none,angle,0.0,power_primary-959a17ce61fd,power_primary,0.02,0.01979898987322333,50,50
+none,delta,0.0,power_primary-959a17ce61fd,power_primary,0.04,0.027712812921102035,50,50
+none,shape,0.0,power_primary-959a17ce61fd,power_primary,0.1,0.042426406871192854,50,50
+translation,angle,1.0,type_i_baseline-13f017f83a05,type_i_baseline,0.06,0.03358571124749333,50,50
+translation,delta,1.0,type_i_baseline-13f017f83a05,type_i_baseline,0.02,0.01979898987322333,50,50
+translation,shape,1.0,type_i_baseline-13f017f83a05,type_i_baseline,0.08,0.03836665218650176,50,50

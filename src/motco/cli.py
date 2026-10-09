@@ -330,8 +330,9 @@ def build_parser() -> argparse.ArgumentParser:
                        help="Group effect size: magnitude scale, extra-set size, or relocated fraction (default: 1.0)")
     p_sim.add_argument("--shape-kind", type=str, default="relocate", choices=["relocate", "magnitude"],
                        help="Shape-mode single-stage perturbation: relocate sites or scale effect (default: relocate)")
-    p_sim.add_argument("--magnitude-kind", type=str, default="all", choices=["all", "extremes"],
-                       help="Magnitude-mode scope: scale all stages (uniform delta) or endpoints only (default: all)")
+    p_sim.add_argument("--magnitude-kind", type=str, default="all", choices=["all", "extremes", "joint"],
+                       help="Magnitude-mode scope: scale methylation delta at all stages, endpoint "
+                            "indicators only, or every omic's delta jointly (default: all)")
     p_sim.add_argument("--p-dmp", type=float, default=0.2,
                        help="Per-stage probability a methylation feature is differential (default: 0.2)")
     p_sim.add_argument("--cluster-mean-shift", type=float, default=None,

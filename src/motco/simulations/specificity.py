@@ -544,8 +544,9 @@ def summarize_block_localization(
 class UniformDeltaComparison:
     """Population-standardized geometry of one magnitude construction.
 
-    ``construction`` is ``"production"`` (``magnitude_kind='all'``, methylation's
-    delta only) or ``"uniform_probe"`` (every omic's delta scaled together).
+    ``construction`` is the ``magnitude_kind`` value that produced the row:
+    ``"all"`` (methylation's delta only, the production default) or ``"joint"``
+    (every omic's delta scaled together).
     ``joint_*`` is the concatenated measurement — the space the trajectory
     statistics are actually computed in — and ``max_block_*`` is the largest
     single-omic value, which is 0 to machine precision for a construction that is
@@ -569,15 +570,17 @@ def compare_uniform_delta_construction(
     p_dmp: float = 0.1,
     baseline_continuity: float = 0.0,
     seed: int = 2,
+    magnitude_kinds: Sequence[str] = ("all", "joint"),
     reference: IntersimReference | None = None,
 ) -> list[UniformDeltaComparison]:
     """Is a size-pure magnitude change realizable after per-block standardization?
 
     Measures the *population* trajectory geometry at the standardized checkpoint
-    for both the production magnitude construction and the uniform-delta probe.
-    No sampling, no RRPP and no PLS fit are involved: the question is whether the
-    concatenated trajectory rotates at all, which the analytic population means
-    answer directly.
+    for each magnitude construction in ``magnitude_kinds`` (by default the
+    production ``all`` and the joint-delta ``joint``), selected through the
+    public ``magnitude_kind`` generator parameter. No sampling, no RRPP and no
+    PLS fit are involved: the question is whether the concatenated trajectory
+    rotates at all, which the analytic population means answer directly.
 
     An effect size of 0 is the anchor — both constructions reduce to the identity
     there, so its joint angle and shape are the floating-point floor against which
@@ -594,7 +597,7 @@ def compare_uniform_delta_construction(
     ref = reference if reference is not None else load_reference()
     out: list[UniformDeltaComparison] = []
     for effect in effect_sizes:
-        for construction, uniform in (("production", False), ("uniform_probe", True)):
+        for construction in magnitude_kinds:
             params = SemiSyntheticTrajectoryParams(
                 seed=seed,
                 trajectory_mode="magnitude",
@@ -603,10 +606,9 @@ def compare_uniform_delta_construction(
                 group_effect_size=float(effect),
                 p_dmp=p_dmp,
                 baseline_continuity=baseline_continuity,
+                magnitude_kind=construction,  # type: ignore[arg-type]
             )
-            dataset = generate_semisynthetic_trajectory(
-                params, reference=ref, _probe_uniform_delta=uniform
-            )
+            dataset = generate_semisynthetic_trajectory(params, reference=ref)
             population = dataset.population_trajectories
             if population is None:  # pragma: no cover - generator always builds these
                 raise ValueError("Generator did not expose population trajectories.")

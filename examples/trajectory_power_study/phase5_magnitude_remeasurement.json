@@ -1,0 +1,152 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_samples": 1200,
+    "n_stages": 4,
+    "group_effect_size": 0.0,
+    "group_ratio": 0.5,
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0,
+    "magnitude_kind": "joint"
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 999,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.0025,
+    0.005,
+    0.01,
+    0.02,
+    0.25,
+    1.0
+  ],
+  "axes": {},
+  "n_replicates": 500,
+  "base_seed": 600,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase5-primary",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "delta",
+        "min_power_at_top": 0.8
+      }
+    ],
+    "specificity": [
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "angle",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      },
+      {
+        "trajectory_mode": "magnitude",
+        "statistic": "shape",
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "gate": {
+      "enabled": true,
+      "alpha": 0.05,
+      "control_se_tolerance": 2.0,
+      "monotonicity_se_tolerance": 2.0,
+      "min_power_at_top": 0.8,
+      "confirmation_se_threshold": 1.0,
+      "max_marginal_exceedances": 1,
+      "control_modes": [
+        "none"
+      ],
+      "require_complete_records": true,
+      "rules": [
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "delta",
+          "role": "mandatory_power"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "angle",
+          "role": "mandatory_control"
+        },
+        {
+          "trajectory_mode": "magnitude",
+          "statistic": "shape",
+          "role": "mandatory_control"
+        }
+      ]
+    }
+  },
+  "report_contract": {
+    "driver_component": "observed",
+    "cross_replicate_driver_agreement": "descriptive",
+    "n_jobs_override": "forbid"
+  },
+  "metadata": {
+    "name": "trajectory-power-phase5-magnitude",
+    "phase": 5,
+    "intent": "Phase 5 magnitude re-measurement at paper grade: the magnitude mode under the joint magnitude construction (magnitude_kind = joint, every omic's delta scaled by 1 + e) at the Phase 5 paper-grade design point, 500 replicates x 999 permutations, with the Phase 4 gate reduced to the three magnitude rules (mandatory power magnitude/delta; mandatory control magnitude/angle and magnitude/shape; control mode none) as the predeclared pass/fail for the paper's withheld magnitude-specificity claim, and the Phase 5 report contract.",
+    "derives_from": "examples/trajectory_power_study/phase5_power_study.json",
+    "pilot": "examples/trajectory_power_study/phase5_magnitude_pilot.json",
+    "bracket": {
+      "source": "results/magnitude-axis-bracket-2026-10-08/effect_axis_bracket.csv",
+      "effect_grid": [
+        0.0,
+        0.0025,
+        0.005,
+        0.01,
+        0.02,
+        0.25,
+        1.0
+      ],
+      "realized_joint_delta_population_standardized": {
+        "0.0": 0.0,
+        "0.0025": 0.164,
+        "0.005": 0.328,
+        "0.01": 0.655,
+        "0.02": 1.306,
+        "0.25": 14.962,
+        "1.0": 44.798
+      },
+      "pilot_rise": "pilot submission 1 (0/0.02/0.05/0.10/0.25/1.00) measured delta power 1.000 from e = 0.02; the sub-0.02 points come from pilot submission 2 — see results/phase5-magnitude-pilot-2026-10-08/NOTES.md"
+    },
+    "notes": [
+      "Same derivation as the pilot: generator (other than magnitude_kind), evaluation.integration_params, base_seed (600), and the matched-seed family (phase5-primary) are copied verbatim from phase5_power_study.json, so the shared zero-effect anchor and every group A baseline are byte-identical to the Phase 5 paper-grade records at the same replicate index. The anchor is re-run (500 units) because the gate requires its records present; the addendum states its reproduction of the Phase 5 anchor as a reproducibility check (generated data and RRPP outputs compared, not parameter signatures, which differ in magnitude_kind and the resolved-mode set).",
+      "Translation, orientation, and shape cells are NOT re-run: matched seeds make them byte-identical to the committed Phase 5 records and their findings already stand. Re-running the full 19-cell profile under a second config name would triple the compute to regenerate existing records.",
+      "Effect axis 0/0.0025/0.005/0.01/0.02/0.25/1.00 is the joint construction's native axis (e = per-omic size ratio minus one). The analytic bracket alone placed the rise between e = 0.05 and 0.10 (where joint's realized population size straddles the all construction's saturated 5.946), but the pilot measured delta power 1.000 already at e = 0.02 — the population bracket cannot see the delta null's width (q95 about 0.40 in the PLS latent space against a realized latent delta of about 68 x e) — so the grid was adjusted downward on the pilot's recorded basis (results/phase5-magnitude-pilot-2026-10-08/NOTES.md): 0.0025 / 0.005 / 0.01 bracket the expected rise near e = 0.006, 0.02 is its saturation, 0.25 is the all construction's first Phase 5 point (kept for the axis relation: joint realizes 14.96 there against all's 5.95), and 1.00 is the stress point for the two controls, realizing 2.47 x the production construction's size at the same nominal effect. 0.05 and 0.10 are dropped: the pilot measured them at power 1.000 with both controls at the floor.",
+      "Reduced gate: exactly three rules — magnitude/delta mandatory_power (floor 0.80 at the top effect), magnitude/angle and magnitude/shape mandatory_control (alpha + 2 SE at every effect) — with none as the only control mode; acceptance.specificity is exactly the two mandatory controls, acceptance.power is magnitude/delta at 0.8, acceptance.type_i as Phase 5. Gate roles, acceptance-target semantics, report contract, and template are unchanged from Phase 5; the gate outputs keep the phase4_* file names.",
+      "Cells and cost: 2 Type I baselines (none at 0 and the translation negative control at the top effect, both enumerated by the study engine for every profile; the translation control is a separately seeded Type I cell, not a re-run of Phase 5's translation records) + 1 shared zero-effect anchor + 6 nonzero magnitude cells = 9 cells, 4,500 work units; Phase 5 measured a median 61.5 s per unit at 999 permutations on an EPYC 7662 core and the pilot 78.5 s under node contention, so budget 80-100 core-hours, about 1 h wall on 100 single-CPU shards. Pin BLAS (OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1); do not pass --n-jobs (the contract forbids it and the runner exits 2). Run with --error-policy record.",
+      "Attribution is absent (it governs orientation drivers only; driver_report.csv is therefore empty of rows, and the report contract's driver items are recorded as not applicable in the addendum). The dated findings report must follow examples/trajectory_power_study/phase5_report_template.md section for section with the non-magnitude sections marked not applicable, and must state whether the withheld magnitude-specificity claim is lifted or failed on the construction's own terms."
+    ]
+  }
+}

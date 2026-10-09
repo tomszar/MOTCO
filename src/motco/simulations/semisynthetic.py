@@ -25,13 +25,16 @@ deterministic transform of A's **methylation** indicators:
   of methylation sites (disjoint from the stage-changing sites) differential at
   *every* B stage and at none of A's. A constant group offset → moves only the
   (untested) group main effect, not size/orientation/shape.
-- ``magnitude``   -- scaled methylation effect. ``magnitude_kind='all'`` (the
-  default) keeps the indicators and scales the global δ
+- ``magnitude``   -- scaled effect size. ``magnitude_kind='all'`` (the
+  default) keeps the indicators and scales the global methylation δ
   (``δ_methyl_B = (1 + e)·δ_methyl``) → uniformly enlarges every methylation
   step; ``magnitude_kind='extremes'`` instead leaves δ and scales A's
   methylation indicators at the first and last stages only → a size change
   localized to the endpoints (a probe of whether confining the scale reduces
-  shape co-movement).
+  shape co-movement); ``magnitude_kind='joint'`` keeps the indicators and
+  scales **every** omic's δ by the same ``1 + e`` → B's native-space trajectory
+  is exactly ``1 + e`` times A's in every block, a size change that is pure in
+  the joint standardized space as well as within each block.
 - ``orientation`` -- relocate a fraction ``e`` of the stage-changing sites to
   different CpGs, the **same relocation at every stage** → the per-stage pattern
   runs along different feature axes (a rotation).
@@ -79,13 +82,13 @@ from motco.simulations.reference import IntersimReference, load_reference
 OmicsLayer = Literal["methylation", "expression", "proteomics"]
 TrajectoryMode = Literal["none", "translation", "magnitude", "orientation", "shape"]
 ShapeKind = Literal["relocate", "magnitude"]
-MagnitudeKind = Literal["all", "extremes"]
+MagnitudeKind = Literal["all", "extremes", "joint"]
 SurgeryCensoring = Literal["error", "clamp"]
 
 _OMICS_LAYERS: tuple[OmicsLayer, ...] = ("methylation", "expression", "proteomics")
 _MODES = frozenset({"none", "translation", "magnitude", "orientation", "shape"})
 _SHAPE_KINDS = frozenset({"relocate", "magnitude"})
-_MAGNITUDE_KINDS = frozenset({"all", "extremes"})
+_MAGNITUDE_KINDS = frozenset({"all", "extremes", "joint"})
 _SURGERY_CENSORINGS = frozenset({"error", "clamp"})
 
 
@@ -110,8 +113,9 @@ class SemiSyntheticTrajectoryParams:
     mean-shift sizes (InterSIM's ``delta.*``). ``shape_kind`` selects the
     single-interior-stage perturbation used by ``shape``. ``magnitude_kind``
     selects whether ``magnitude`` scales group B's methylation effect at *all*
-    stages (the default, a uniform δ scale) or only at the *extreme* stages
-    (first and last), leaving interior stages at the baseline effect.
+    stages (the default, a uniform δ scale), only at the *extreme* stages
+    (first and last) leaving interior stages at the baseline effect, or scales
+    every omic's effect size together (``joint``).
     ``surgery_censoring`` is the policy for pool-limited surgeries described in
     the module docstring: ``"error"`` (default) refuses to realize a partial
     surgery, ``"clamp"`` realizes the largest surgery the pool allows. Use
@@ -172,26 +176,10 @@ def generate_semisynthetic_trajectory(
     params: SemiSyntheticTrajectoryParams,
     *,
     reference: IntersimReference | None = None,
-    _probe_uniform_delta: bool = False,
 ) -> SemiSyntheticTrajectoryDataset:
-    """Generate a semi-synthetic trajectory dataset using the numpy generator.
-
-    ``_probe_uniform_delta`` is a **diagnostic-only** variant of the ``magnitude``
-    mode that scales *every* omic's delta by ``1 + group_effect_size`` instead of
-    methylation's alone. It exists to answer whether a size-pure magnitude change
-    is realizable under per-block standardization, and it is deliberately not a
-    ``magnitude_kind`` value: a study configuration builds
-    :class:`SemiSyntheticTrajectoryParams` and cannot reach this keyword, so no
-    committed profile can acquire it silently. Adopting it as a production mode is
-    a separate decision (see the Phase 5 exit review).
-    """
+    """Generate a semi-synthetic trajectory dataset using the numpy generator."""
 
     _validate_params(params)
-    if _probe_uniform_delta and params.trajectory_mode != "magnitude":
-        raise SemiSyntheticTrajectoryError(
-            "_probe_uniform_delta applies to the magnitude mode only; "
-            f"got trajectory_mode={params.trajectory_mode!r}."
-        )
     ref = reference if reference is not None else load_reference()
     rng = np.random.default_rng(params.seed)
 
@@ -199,9 +187,7 @@ def generate_semisynthetic_trajectory(
     group_a_sizes, group_b_sizes = _group_stage_sizes(stage_sizes, params)
 
     methyl_a = _baseline_methyl(rng, ref, params)
-    methyl_b, deltas_b, transform_meta = _transform_group_b(
-        rng, ref, params, methyl_a, probe_uniform_delta=_probe_uniform_delta
-    )
+    methyl_b, deltas_b, transform_meta = _transform_group_b(rng, ref, params, methyl_a)
     deltas_a = (params.delta_methyl, params.delta_expr, params.delta_protein)
 
     indicators_a = _derive_group(methyl_a, ref)
@@ -336,8 +322,6 @@ def _transform_group_b(
     ref: IntersimReference,
     params: SemiSyntheticTrajectoryParams,
     methyl_a: np.ndarray,
-    *,
-    probe_uniform_delta: bool = False,
 ) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
     """Return group B's methylation indicators, per-omic deltas, and truth notes."""
 
@@ -352,8 +336,6 @@ def _transform_group_b(
         return _translation_methyl(rng, ref, params, methyl_a)
 
     if mode == "magnitude":
-        if probe_uniform_delta:
-            return _magnitude_uniform_probe(methyl_a, e, params)
         return _magnitude_methyl(methyl_a, e, params)
 
     if mode == "orientation":
@@ -415,7 +397,7 @@ def _magnitude_methyl(
     e: float,
     params: SemiSyntheticTrajectoryParams,
 ) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
-    """Scale group B's methylation effect: all stages (δ scale) or endpoints only.
+    """Scale group B's effect size: methylation δ, endpoint indicators, or every δ.
 
     ``magnitude_kind='all'`` (default) scales the global methylation δ, uniformly
     enlarging every methylation step (the original behavior). ``'extremes'``
@@ -423,7 +405,30 @@ def _magnitude_methyl(
     first and last stages only — a localized size change at the endpoints that
     leaves interior vertices at the baseline effect, probing whether confining
     the scale reduces the shape co-movement seen with the all-stage variant.
+    ``'joint'`` scales every omic's δ by the same ``1 + e``: ``'all'`` is
+    size-pure within each omic block but rotates the *concatenated* trajectory
+    (one block grew while the others did not), whereas ``'joint'`` is size-pure
+    in the joint standardized space as well. None of the branches consumes
+    randomness, so the RNG stream is identical across kinds.
     """
+
+    if params.magnitude_kind == "joint":
+        scale = 1.0 + e
+        scaled = (
+            float(scale * params.delta_methyl),
+            float(scale * params.delta_expr),
+            float(scale * params.delta_protein),
+        )
+        return (
+            methyl_a.copy(),
+            scaled,
+            {
+                "magnitude_kind": "joint",
+                "delta_methyl_scale": scale,
+                "delta_expr_scale": scale,
+                "delta_protein_scale": scale,
+            },
+        )
 
     if params.magnitude_kind == "extremes":
         methyl_b = methyl_a.astype(float).copy()
@@ -435,43 +440,6 @@ def _magnitude_methyl(
 
     scaled = (float((1.0 + e) * params.delta_methyl), params.delta_expr, params.delta_protein)
     return methyl_a.copy(), scaled, {"magnitude_kind": "all", "delta_methyl_scale": 1.0 + e}
-
-
-def _magnitude_uniform_probe(
-    methyl_a: np.ndarray,
-    e: float,
-    params: SemiSyntheticTrajectoryParams,
-) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
-    """Diagnostic-only: scale every omic's delta by the same factor.
-
-    The production ``magnitude_kind='all'`` scales ``delta_methyl`` alone, so
-    group B grows in one block of the concatenated measurement space and not the
-    others — which rotates and reshapes the pooled trajectory even though each
-    block on its own is exactly size-scaled. Scaling all three deltas together is
-    the candidate for a genuinely size-only change; whether it survives per-block
-    standardization is the question this probe answers.
-
-    Not reachable from ``magnitude_kind``: see
-    :func:`generate_semisynthetic_trajectory`.
-    """
-
-    scale = 1.0 + e
-    scaled = (
-        float(scale * params.delta_methyl),
-        float(scale * params.delta_expr),
-        float(scale * params.delta_protein),
-    )
-    return (
-        methyl_a.copy(),
-        scaled,
-        {
-            "magnitude_kind": "uniform_probe",
-            "delta_methyl_scale": scale,
-            "delta_expr_scale": scale,
-            "delta_protein_scale": scale,
-            "probe_only": True,
-        },
-    )
 
 
 def _resolve_surgery_size(
