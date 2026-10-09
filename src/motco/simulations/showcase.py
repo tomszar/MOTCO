@@ -45,7 +45,7 @@ TRAJECTORY_SHOWCASE_MODES: tuple[str, ...] = (
 _MODE_TITLES: dict[str, str] = {
     "none": "none — null (no group effect)",
     "translation": "translation — constant offset",
-    "magnitude": "magnitude — size (delta)",
+    "magnitude": "magnitude — size (delta), joint δ scaling",
     "orientation": "orientation — angle",
     "shape": "shape — localized bend",
 }
@@ -75,6 +75,10 @@ def generate_showcase_datasets(
     of the transform differ between modes (the sole common-random-numbers pair
     is ``none``↔``magnitude``, whose transforms draw nothing). ``none`` always
     gets a zero effect size (the null), regardless of ``effect_size``.
+
+    The ``magnitude`` panel follows the generator's default
+    ``magnitude_kind='joint'``: every omic's δ is scaled by the same ``1 + e``,
+    the size-pure construction the paper describes.
 
     The showcase deliberately opts into ``surgery_censoring="clamp"``: it renders
     the *largest* version of each transform for illustration, and at the default

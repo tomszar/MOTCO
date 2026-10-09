@@ -212,6 +212,8 @@ def run_rank_cell(
             group_effect_size=effect_size,
             p_dmp=p_dmp,
             surgery_censoring=surgery_censoring,  # type: ignore[arg-type]
+            # The probe predates the joint default; keep its magnitude construction.
+            magnitude_kind="all",
         )
         dataset = generate_semisynthetic_trajectory(params, reference=reference)
         try:

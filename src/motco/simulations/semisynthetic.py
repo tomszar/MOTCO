@@ -25,16 +25,19 @@ deterministic transform of A's **methylation** indicators:
   of methylation sites (disjoint from the stage-changing sites) differential at
   *every* B stage and at none of A's. A constant group offset → moves only the
   (untested) group main effect, not size/orientation/shape.
-- ``magnitude``   -- scaled effect size. ``magnitude_kind='all'`` (the
-  default) keeps the indicators and scales the global methylation δ
-  (``δ_methyl_B = (1 + e)·δ_methyl``) → uniformly enlarges every methylation
-  step; ``magnitude_kind='extremes'`` instead leaves δ and scales A's
-  methylation indicators at the first and last stages only → a size change
-  localized to the endpoints (a probe of whether confining the scale reduces
-  shape co-movement); ``magnitude_kind='joint'`` keeps the indicators and
-  scales **every** omic's δ by the same ``1 + e`` → B's native-space trajectory
-  is exactly ``1 + e`` times A's in every block, a size change that is pure in
-  the joint standardized space as well as within each block.
+- ``magnitude``   -- scaled effect size. ``magnitude_kind='joint'`` (the
+  default) keeps the indicators and scales **every** omic's δ by the same
+  ``1 + e`` → B's native-space trajectory is exactly ``1 + e`` times A's in
+  every block, a size change that is pure in the joint standardized space as
+  well as within each block. ``magnitude_kind='all'`` keeps the indicators and
+  scales the global methylation δ alone (``δ_methyl_B = (1 + e)·δ_methyl``) →
+  uniformly enlarges every methylation step but rotates the concatenated
+  trajectory; it was the default before the Phase 5 magnitude re-measurement
+  and is pinned explicitly by the historical study configs.
+  ``magnitude_kind='extremes'`` leaves δ and scales A's methylation indicators
+  at the first and last stages only → a size change localized to the
+  endpoints. ``extremes`` (like ``shape_kind='magnitude'`` below) remains a
+  methylation-only scaling; the joint default does not extend to it.
 - ``orientation`` -- relocate a fraction ``e`` of the stage-changing sites to
   different CpGs, the **same relocation at every stage** → the per-stage pattern
   runs along different feature axes (a rotation).
@@ -112,10 +115,11 @@ class SemiSyntheticTrajectoryParams:
     stage's marginal at ``p_dmp``. ``delta_*`` are the per-omic
     mean-shift sizes (InterSIM's ``delta.*``). ``shape_kind`` selects the
     single-interior-stage perturbation used by ``shape``. ``magnitude_kind``
-    selects whether ``magnitude`` scales group B's methylation effect at *all*
-    stages (the default, a uniform δ scale), only at the *extreme* stages
-    (first and last) leaving interior stages at the baseline effect, or scales
-    every omic's effect size together (``joint``).
+    selects whether ``magnitude`` scales every omic's effect size together
+    (``joint``, the default), group B's methylation effect alone at *all*
+    stages (``all``, a uniform methylation δ scale), or the methylation effect
+    only at the *extreme* stages (``extremes``, first and last) leaving interior
+    stages at the baseline effect.
     ``surgery_censoring`` is the policy for pool-limited surgeries described in
     the module docstring: ``"error"`` (default) refuses to realize a partial
     surgery, ``"clamp"`` realizes the largest surgery the pool allows. Use
@@ -137,7 +141,7 @@ class SemiSyntheticTrajectoryParams:
     delta_expr: float = 2.0
     delta_protein: float = 2.0
     shape_kind: ShapeKind = "relocate"
-    magnitude_kind: MagnitudeKind = "all"
+    magnitude_kind: MagnitudeKind = "joint"
     surgery_censoring: SurgeryCensoring = "error"
     stage_sample_prop: tuple[float, ...] | None = None
 
@@ -399,13 +403,13 @@ def _magnitude_methyl(
 ) -> tuple[np.ndarray, tuple[float, float, float], dict[str, Any]]:
     """Scale group B's effect size: methylation δ, endpoint indicators, or every δ.
 
-    ``magnitude_kind='all'`` (default) scales the global methylation δ, uniformly
+    ``magnitude_kind='all'`` scales the global methylation δ, uniformly
     enlarging every methylation step (the original behavior). ``'extremes'``
     instead leaves δ unchanged and scales A's methylation *indicators* at the
     first and last stages only — a localized size change at the endpoints that
     leaves interior vertices at the baseline effect, probing whether confining
     the scale reduces the shape co-movement seen with the all-stage variant.
-    ``'joint'`` scales every omic's δ by the same ``1 + e``: ``'all'`` is
+    ``'joint'`` (default) scales every omic's δ by the same ``1 + e``: ``'all'`` is
     size-pure within each omic block but rotates the *concatenated* trajectory
     (one block grew while the others did not), whereas ``'joint'`` is size-pure
     in the joint standardized space as well. None of the branches consumes

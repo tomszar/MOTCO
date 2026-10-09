@@ -59,6 +59,8 @@ def run_phase2_characterization(
                     group_effect_size=effect_size,
                     p_dmp=config.p_dmp,
                     shape_kind=shape_kind,  # type: ignore[arg-type]
+                    # Committed runs predate the joint default; keep their construction.
+                    magnitude_kind="all",
                 )
                 result = evaluate_semisynthetic_trajectory(
                     generate_semisynthetic_trajectory(params, reference=ref),

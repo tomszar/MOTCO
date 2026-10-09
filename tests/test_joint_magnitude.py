@@ -144,8 +144,9 @@ def test_joint_at_zero_effect_equals_none(reference) -> None:
 
 
 # Block sums and three sampled entries per block, computed at revision f90230c
-# (before ``joint`` existed) with seed=7, n_samples=240, n_stages=3,
-# group_effect_size=0.6. Pinned at a relative tolerance of 1e-9: a byte-level
+# (before ``joint`` existed, when ``all`` was the default) with seed=7,
+# n_samples=240, n_stages=3, group_effect_size=0.6. Explicit ``all`` must still
+# reproduce them after the default moved to ``joint``. Pinned at a relative tolerance of 1e-9: a byte-level
 # digest would be machine-specific (BLAS/CPU last-bit differences), whereas any
 # change to the RNG call sequence moves these values at order one.
 _PRE_JOINT_BLOCK_STATS = {
@@ -176,6 +177,15 @@ def test_existing_magnitude_kinds_are_unchanged(reference, kind) -> None:
     observed = _block_stats(dataset)
     for name, expected in _PRE_JOINT_BLOCK_STATS[kind].items():
         np.testing.assert_allclose(observed[name], expected, rtol=1e-9, atol=0.0, err_msg=f"{kind}/{name}")
+
+
+def test_unset_magnitude_kind_is_joint(reference) -> None:
+    unset = generate_semisynthetic_trajectory(_params(), reference=reference)
+    joint = generate_semisynthetic_trajectory(_params(magnitude_kind="joint"), reference=reference)
+    assert SemiSyntheticTrajectoryParams.__dataclass_fields__["magnitude_kind"].default == "joint"
+    assert unset.truth["magnitude_kind"] == "joint"
+    assert unset.truth["transform"]["magnitude_kind"] == "joint"
+    _assert_datasets_equal(unset, joint)
 
 
 # Parameter signatures of the Phase 5 paper-grade profile's anchor and

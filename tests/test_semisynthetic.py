@@ -81,7 +81,7 @@ def test_none_mode_uses_identical_group_indicators(reference) -> None:
 
 def test_magnitude_scales_only_methylation_delta_and_keeps_indicators(reference) -> None:
     dataset = generate_semisynthetic_trajectory(
-        make_params("magnitude", group_effect_size=1.0), reference=reference
+        make_params("magnitude", group_effect_size=1.0, magnitude_kind="all"), reference=reference
     )
     ind = dataset.truth["indicators"]
     np.testing.assert_array_equal(ind["A"]["methylation"], ind["B"]["methylation"])
@@ -91,11 +91,22 @@ def test_magnitude_scales_only_methylation_delta_and_keeps_indicators(reference)
     assert deltas["B"][1:] == deltas["A"][1:]
 
 
-def test_magnitude_kind_defaults_to_all_and_records_truth(reference) -> None:
+def test_magnitude_kind_defaults_to_joint_and_records_truth(reference) -> None:
     dataset = generate_semisynthetic_trajectory(
         make_params("magnitude", group_effect_size=1.0), reference=reference
     )
-    # Default is the all-stages variant; truth records it both top-level and in transform.
+    # Default is the joint variant; truth records it both top-level and in transform.
+    assert dataset.truth["magnitude_kind"] == "joint"
+    assert dataset.truth["transform"]["magnitude_kind"] == "joint"
+    for omic in ("methyl", "expr", "protein"):
+        assert dataset.truth["transform"][f"delta_{omic}_scale"] == 2.0
+
+
+def test_explicit_all_magnitude_kind_records_truth(reference) -> None:
+    dataset = generate_semisynthetic_trajectory(
+        make_params("magnitude", group_effect_size=1.0, magnitude_kind="all"), reference=reference
+    )
+    # The all-stages variant; truth records it both top-level and in transform.
     assert dataset.truth["magnitude_kind"] == "all"
     assert dataset.truth["transform"]["magnitude_kind"] == "all"
     assert dataset.truth["transform"]["delta_methyl_scale"] == 2.0

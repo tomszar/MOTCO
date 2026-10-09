@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -454,7 +456,11 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
     here; it last moved when the attribution diagnostic record gained the
     principal-orientation block (``align-orientation-attribution``, schema
     version 2), whose deliberate consequence is that pre-change shards refuse to
-    resume — the params hash *is* the version.
+    resume — the params hash *is* the version. It moved again when
+    ``magnitude_kind`` defaulted to ``joint`` (``default-joint-magnitude-construction``):
+    ``baseline_generator()`` names no kind, so it resolves to the new default.
+    Committed configs pin ``"all"`` and keep their signatures
+    (``tests/test_magnitude_default_pins.py``).
     """
 
     cell = make_simulation_cell(
@@ -464,7 +470,16 @@ def test_null_summary_does_not_enter_the_parameter_signature(tmp_path) -> None:
         n_replicates=2,
         cell_id="pinned",
     )
-    assert parameter_signature(cell) == "50c2c5416fb127b814dd93b781d686b1c132727b32db6474e11910205223e6b9"
+    assert parameter_signature(cell) == "655d20b127fc03f6682a90d6db5820973b219e5254d144df6d10db86ca6b282c"
+    # Pinning the former default restores the pre-flip digest exactly.
+    pinned_all = make_simulation_cell(
+        phase="type_i_baseline",
+        generator_params=replace(baseline_generator(), magnitude_kind="all"),
+        evaluation_params=baseline_evaluation(),
+        n_replicates=2,
+        cell_id="pinned",
+    )
+    assert parameter_signature(pinned_all) == "50c2c5416fb127b814dd93b781d686b1c132727b32db6474e11910205223e6b9"
 
     # Resume against a record written without the field must skip, not overwrite.
     import json

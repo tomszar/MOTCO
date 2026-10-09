@@ -311,7 +311,7 @@ def test_identical_generator_and_evaluation_identity_is_still_rejected() -> None
     # baseline on both identities and must still be refused.
     with pytest.raises(StudyConfigError, match="identical datasets"):
         enumerate_study(
-            _config(design_grid=DesignGrid(axes={"generator.magnitude_kind": ("all", "extremes")}))
+            _config(design_grid=DesignGrid(axes={"generator.magnitude_kind": ("joint", "extremes")}))
         )
 
 
