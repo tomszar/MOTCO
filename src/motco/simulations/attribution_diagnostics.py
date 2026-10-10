@@ -41,7 +41,7 @@ import numpy as np
 import pandas as pd
 
 from motco.simulations.preprocessing import OMIC_LAYERS
-from motco.simulations.semisynthetic import SemiSyntheticTrajectoryDataset
+from motco.simulations.semisynthetic import OmicsLayer, SemiSyntheticTrajectoryDataset
 from motco.stats.attribution import (
     AttributionError,
     OrientationAttributionResult,
@@ -89,6 +89,7 @@ def derive_truth_driver_features(
     dataset: SemiSyntheticTrajectoryDataset,
     feature_names: Sequence[str],
     stage_levels: Sequence[str],
+    layers: Sequence[OmicsLayer] = OMIC_LAYERS,
 ) -> TruthDrivers:
     """Aligned truth drivers from changed group-stage differential patterns.
 
@@ -106,7 +107,8 @@ def derive_truth_driver_features(
     ``magnitude_kind='all'``, where the indicators are identical between groups
     but the per-omic delta is not.
 
-    The global driver set is the union over transitions.
+    The global driver set is the union over transitions. ``layers`` names the
+    measured blocks, in canonical order, that make up the joint feature order.
     """
 
     truth = dataset.truth
@@ -131,7 +133,8 @@ def derive_truth_driver_features(
     label_a, label_b = (str(label) for label in group_labels)
     per_transition: dict[str, np.ndarray] = {}
     blocks: list[list[np.ndarray]] = [[] for _ in transition_ids]
-    for layer_index, layer in enumerate(OMIC_LAYERS):
+    for layer in layers:
+        layer_index = OMIC_LAYERS.index(layer)
         ind_a = np.asarray(indicators[label_a][layer], dtype=float)
         ind_b = np.asarray(indicators[label_b][layer], dtype=float)
         delta_a = float(deltas[label_a][layer_index])
@@ -178,6 +181,7 @@ def compute_attribution_diagnostics(
     selected_components: int | None,
     feature_order_signature: str | None,
     methylation_units: str = "mvalue",
+    layers: Sequence[OmicsLayer] = OMIC_LAYERS,
 ) -> dict[str, Any]:
     """Run frozen-model attribution and reduce it to a compact JSON-safe record."""
 
@@ -207,6 +211,7 @@ def compute_attribution_diagnostics(
         dataset,
         result.feature_names,
         list(result.config.stages),
+        layers,
     )
     transitions = _transition_records(result)
     top_features = _top_feature_records(result, int(settings.top_k))

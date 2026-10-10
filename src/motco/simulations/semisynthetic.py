@@ -120,6 +120,12 @@ class SemiSyntheticTrajectoryParams:
     stages (``all``, a uniform methylation δ scale), or the methylation effect
     only at the *extreme* stages (``extremes``, first and last) leaving interior
     stages at the baseline effect.
+    ``group_stage_sizes`` is the explicit alternative to ``n_samples`` /
+    ``stage_sample_prop`` / ``group_ratio``: one tuple of per-stage counts per
+    group, rows ordered as ``group_labels`` and columns as stages, realized
+    exactly. It may not be combined with a non-default proportional setting.
+    ``None`` (the default) keeps proportional sizing, byte-identical to the
+    generator before the table existed.
     ``surgery_censoring`` is the policy for pool-limited surgeries described in
     the module docstring: ``"error"`` (default) refuses to realize a partial
     surgery, ``"clamp"`` realizes the largest surgery the pool allows. Use
@@ -144,6 +150,11 @@ class SemiSyntheticTrajectoryParams:
     magnitude_kind: MagnitudeKind = "joint"
     surgery_censoring: SurgeryCensoring = "error"
     stage_sample_prop: tuple[float, ...] | None = None
+    group_stage_sizes: tuple[tuple[int, ...], tuple[int, ...]] | None = None
+
+
+#: Proportional sizing fields that conflict with an explicit ``group_stage_sizes``.
+_PROPORTIONAL_SIZING_FIELDS: tuple[str, ...] = ("n_samples", "stage_sample_prop", "group_ratio")
 
 
 @dataclass(frozen=True)
@@ -187,8 +198,11 @@ def generate_semisynthetic_trajectory(
     ref = reference if reference is not None else load_reference()
     rng = np.random.default_rng(params.seed)
 
-    stage_sizes = _stage_sizes(params)
-    group_a_sizes, group_b_sizes = _group_stage_sizes(stage_sizes, params)
+    if params.group_stage_sizes is not None:
+        group_a_sizes, group_b_sizes = (list(row) for row in params.group_stage_sizes)
+    else:
+        stage_sizes = _stage_sizes(params)
+        group_a_sizes, group_b_sizes = _group_stage_sizes(stage_sizes, params)
 
     methyl_a = _baseline_methyl(rng, ref, params)
     methyl_b, deltas_b, transform_meta = _transform_group_b(rng, ref, params, methyl_a)
@@ -207,6 +221,11 @@ def generate_semisynthetic_trajectory(
         ref, params, gen_a, gen_b, group_a_sizes, group_b_sizes
     )
     truth = _build_truth(params, indicators_a, indicators_b, deltas_a, deltas_b, transform_meta)
+    if params.group_stage_sizes is not None:
+        truth["group_stage_sizes"] = {
+            params.group_labels[0]: list(group_a_sizes),
+            params.group_labels[1]: list(group_b_sizes),
+        }
 
     return SemiSyntheticTrajectoryDataset(
         methylation=methylation,
@@ -261,6 +280,36 @@ def _validate_params(params: SemiSyntheticTrajectoryParams) -> None:
             raise SemiSyntheticTrajectoryError("stage_sample_prop must have one entry per stage.")
         if abs(sum(params.stage_sample_prop) - 1.0) > 1e-6:
             raise SemiSyntheticTrajectoryError("stage_sample_prop must sum to 1.")
+    if params.group_stage_sizes is not None:
+        _validate_group_stage_sizes(params)
+
+
+def _validate_group_stage_sizes(params: SemiSyntheticTrajectoryParams) -> None:
+    defaults = SemiSyntheticTrajectoryParams(seed=params.seed)
+    conflicts = [
+        name for name in _PROPORTIONAL_SIZING_FIELDS if getattr(params, name) != getattr(defaults, name)
+    ]
+    if conflicts:
+        raise SemiSyntheticTrajectoryError(
+            "group_stage_sizes fixes every group-stage cell size and cannot be combined with "
+            f"non-default proportional sizing: {', '.join(conflicts)}."
+        )
+    table = params.group_stage_sizes
+    assert table is not None
+    if len(table) != 2:
+        raise SemiSyntheticTrajectoryError(
+            f"group_stage_sizes must have exactly two rows (one per group label); got {len(table)}."
+        )
+    for label, row in zip(params.group_labels, table, strict=True):
+        if len(row) != params.n_stages:
+            raise SemiSyntheticTrajectoryError(
+                f"group_stage_sizes row for group {label!r} must have one entry per stage "
+                f"(n_stages={params.n_stages}); got {len(row)}."
+            )
+        if any(isinstance(n, bool) or not isinstance(n, int | np.integer) or n < 1 for n in row):
+            raise SemiSyntheticTrajectoryError(
+                f"group_stage_sizes cells must be integers >= 1; group {label!r} has {list(row)}."
+            )
 
 
 # --------------------------------------------------------------------------- #

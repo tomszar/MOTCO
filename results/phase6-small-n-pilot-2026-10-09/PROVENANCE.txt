@@ -1,0 +1,20 @@
+# Phase 6 small-n operating-study pilot (SEA-AD design) provenance
+date_utc: 2026-10-09T16:33:11Z (first array task start); run directory named for the launch date
+config: examples/trajectory_power_study/phase6_small_n_pilot.json
+config_sha256: 8eb5f2bdd873be1e66244d4ea246fe7749601c354a954b2f96b8c5d3b3096bfa (verified identical on the workstation and the cluster before submit)
+code_revision: e0ec8d8fee0a35a68e8d2f962b5a7f895ffb15a2 (branch feat/phase6-small-n-operating-study); clean tree on the cluster (git status --porcelain reported only the untracked logs/ directory)
+host: cluster.ing.uc.cl (SLURM), partition 512x1024, AMD EPYC 7662 compute nodes; venv python 3.11.16, motco 0.6.0, numpy 2.3.5, scikit-learn 1.8.0, scipy 1.16.3, pandas 2.3.3, uv 0.12.10
+pre-flight: full test suite on the cluster at the same tree (job 907725 on n4: ruff, mypy, pytest with MOTCO_TEST_PERMS=10000 MOTCO_N_JOBS=-1 -> 988 passed, 4 skipped [R/InterSIM/git unavailable], including the slow end-to-end run of every pilot cell). An earlier attempt (job 907720) hung in uninterruptible I/O on node n3 (about 0.9 GB free memory) and was cancelled; n3 was excluded from the pilot.
+blas_threads: OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 (exported at submit); STUDY_N_JOBS unset
+error_policy: record (from the sbatch template)
+launch: sbatch -p 512x1024 --exclude=n3 --job-name=motco-p6-pilot --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 --export=ALL,STUDY_CONFIG=/home1/tgonza/MOTCO/examples/trajectory_power_study/phase6_small_n_pilot.json,STUDY_OUT=/home1/tgonza/MOTCO/results/phase6-small-n-pilot-2026-10-09,N_SHARDS=100 scripts/motco_study_array.sbatch
+job_id: 907726
+shard layout: N_SHARDS=100, --array=0-99, --n-shards 100; units mapped to shards by the stable (cell_id, replicate_index) hash
+units: 35 cells x 100 replicates = 3,500 (2 Type I baselines + 1 shared zero-effect anchor + 4 modes x 8 nonzero effects); 199 permutations per unit
+n_jobs: 1 in every record, equal to evaluation.n_jobs = 1
+outcome: all 100 array tasks COMPLETED with exit 0:0 and empty stderr; 3,500/3,500 units present exactly once; all 35 enumerated cell ids present with exactly 100 replicates; 0 failed records; 0 censored surgeries; every record's truth carries group_stage_sizes A = [11, 10, 28], B = [9, 10, 12]
+wall: 2026-10-09T16:33:11Z -> 17:45:06Z (1 h 11 m 55 s; most tasks pending on priority while about 17 ran at once); tasks landed on n4 (82), n11 (11), n2 (7); shortest task 907726_68 at 05:27, longest 907726_43 at 26:35
+unit_timings: 3,500 units, median 8.0 s (min 7.7, mean 8.8, max 15.0), 8.59 recorded core-hours
+merge: python scripts/motco_study.py merge --out-dir results/phase6-small-n-pilot-2026-10-09 (cluster; 3,500 records); merged.jsonl sha256 c420fcb06e1fad40b4810c24fa8c47284b89f3b93238d59af14c721017ccad8a, verified byte-identical after rsync to the workstation; merged.jsonl and shard_*.jsonl remain gitignored
+report: python scripts/motco_study.py report --config examples/trajectory_power_study/phase6_small_n_pilot.json --out-dir results/phase6-small-n-pilot-2026-10-09 (cluster; gate disabled, so no phase4_* outputs); report/ rsynced to the workstation
+reading: see NOTES.md

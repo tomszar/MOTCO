@@ -161,6 +161,24 @@ the same generated dataset under different measurement settings. The
 duplicate-dataset guard accepts them on purpose (it keys on evaluation identity
 too), and the report states the pairing wherever such columns are compared.
 
+The second use is block selection, `evaluation.integration_params.layers`: a
+list of omic blocks to measure (`null` = all three). Columns that differ only
+in it evaluate the same generated dataset on different blocks — the Phase 6
+three-block column is paired with the two-block baseline this way.
+
+### Explicit group × stage sizes
+
+`generator.group_stage_sizes` takes the generator's exact size table as nested
+JSON lists (`[[11, 10, 28], [9, 10, 12]]`, rows = groups, columns = stages). The
+loader normalizes it, in the baseline block and as an `axes` or
+`design_grid.axes` value, to a tuple of int tuples, so equal tables give equal
+cell ids, signatures and matched seeds whatever their JSON spelling. A config
+that sets it must leave `n_samples`, `stage_sample_prop` and `group_ratio` out
+(the generator rejects the combination). Hash payloads, and dumped configs, omit
+the field while it is unset, so every config committed before it existed keeps
+its cell ids, signatures and matched seeds
+(`tests/test_committed_config_identity.py`).
+
 See `examples/trajectory_power_study/smoke.json` for a complete,
 minimal example.
 

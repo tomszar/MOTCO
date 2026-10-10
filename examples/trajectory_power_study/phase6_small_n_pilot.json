@@ -1,0 +1,96 @@
+{
+  "generator": {
+    "seed": 2,
+    "trajectory_mode": "magnitude",
+    "n_stages": 3,
+    "group_effect_size": 0.0,
+    "group_stage_sizes": [
+      [11, 10, 28],
+      [9, 10, 12]
+    ],
+    "p_dmp": 0.1,
+    "baseline_continuity": 0.0,
+    "magnitude_kind": "joint"
+  },
+  "evaluation": {
+    "integration_method": "pls",
+    "integration_params": {
+      "layers": [
+        "methylation",
+        "expression"
+      ],
+      "cv1_splits": 3,
+      "cv2_splits": 4,
+      "n_repeats": 5,
+      "max_components": 20,
+      "random_state": 1203
+    },
+    "permutations": 199,
+    "n_jobs": 1,
+    "seed": 3
+  },
+  "trajectory_modes": [
+    "magnitude",
+    "orientation",
+    "shape",
+    "translation"
+  ],
+  "effect_sizes": [
+    0.0,
+    0.005,
+    0.01,
+    0.02,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0
+  ],
+  "axes": {},
+  "n_replicates": 100,
+  "base_seed": 800,
+  "alpha": 0.05,
+  "matched_seeds": {
+    "enabled": true,
+    "version": 1,
+    "primary_family": "phase6-small-n",
+    "shared_zero_effect_anchor": true
+  },
+  "attribution": {
+    "enabled": false
+  },
+  "acceptance": {
+    "type_i": [
+      {
+        "alpha": 0.05,
+        "se_tolerance": 2.0
+      }
+    ],
+    "power": [],
+    "specificity": [],
+    "gate": {
+      "enabled": false
+    }
+  },
+  "metadata": {
+    "name": "trajectory-power-phase6-small-n-pilot",
+    "phase": 6,
+    "intent": "Phase 6 small-n effect-axis bracket pilot at the SEA-AD MTG astrocyte case-study design: three stages (Not AD + Low / Intermediate / High), the >=30-nuclei donor table F 11/10/28, M 9/10/12 (n = 80), methylation + expression as the two-block analogue of ATAC + RNA, pooled PLS on M-value methylation with the committed stage-supervised double-CV rank rule, joint magnitude construction. 100 replicates x 199 permutations over a wide log-spaced shared effect axis, baseline column only, gate disabled. It locates where each mode's target statistic rises and saturates at n = 80, so the paper-grade effect axis (phase6_small_n_study.json) is fixed from recorded evidence.",
+    "derives_from": "examples/trajectory_power_study/phase5_power_study.json",
+    "case_study": {
+      "cohort": "SEA-AD MTG astrocytes, donor pseudobulks, RNA + ATAC",
+      "group": "Sex (group A = F, group B = M; the surgery is applied to the smaller group, the conservative assignment)",
+      "stages": "ADNC merged: Not AD + Low / Intermediate / High",
+      "group_stage_sizes_ge30_nuclei": [[11, 10, 28], [9, 10, 12]],
+      "group_stage_sizes_ge50_nuclei": [[10, 9, 25], [9, 9, 12]]
+    },
+    "notes": [
+      "Baseline column only (design D5 of phase6-small-n-operating-study). The paper-grade profile adds the >=50-nuclei column and the three-block column as a design grid; the pilot only brackets the effect axis, which the two extra columns share.",
+      "generator: n_samples, stage_sample_prop and group_ratio are deliberately absent. group_stage_sizes fixes every cell exactly and the generator rejects it together with any non-default proportional setting. p_dmp = 0.1, baseline_continuity = 0 and the PLS cross-validation knobs are copied from phase5_power_study.json; n_stages drops to 3 to match the cohort. With a minimum stage count of 20 the CV folds stay feasible (cv2_splits 4, cv1_splits 3).",
+      "evaluation.integration_params.layers = [methylation, expression]: all three InterSIM blocks are generated and only these two are measured (preprocessing, PLS, realized geometry). Every trajectory surgery acts on methylation indicators, so keeping methylation keeps each mode's construction inside the measured space.",
+      "Effect axis 0/0.005/0.01/0.02/0.05/0.10/0.25/0.50/1.00, shared by all four modes. The Phase 5 axis does not transfer to n = 80: the delta null widens as n falls and the joint magnitude construction already saturated at e = 0.02 at n = 1200. surgery_censoring is left at its default ('error'); at p_dmp = 0.1 with three stages every pool-limited surgery is under headroom at e = 1.0, which enumeration checks.",
+      "base_seed 800 and the matched-seed family phase6-small-n are new, so this study is independent of every Phase 5 record. The paper-grade profile reuses them so its baseline column's zero-effect anchor is byte-identical to the pilot's at the same replicate index.",
+      "Cells and cost: 2 Type I baselines (none, translation negative control) + 1 shared zero-effect anchor + 4 modes x 8 nonzero effects = 35 cells, 3,500 work units. Each unit is one double-CV PLS fit at n = 80 on 498 features + 199 RRPP permutations; the pilot records the median per-unit time that sets the paper-grade budget. Pin BLAS to one thread and do not pass --n-jobs."
+    ]
+  }
+}

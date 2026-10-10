@@ -87,6 +87,8 @@ guard (parameter signature) skips already-completed replicates.
 | `attribution`     | Which cells get orientation-attribution diagnostics        |
 | `matched_seeds`   | Opt-in matched generator seeds across primary cells        |
 | `generator.surgery_censoring` | Pool-limited-surgery policy; leave at the `"error"` default (see below) |
+| `generator.group_stage_sizes` | Exact group × stage sample sizes, `[[A per stage], [B per stage]]`; replaces `n_samples`/`stage_sample_prop`/`group_ratio` (which must then be omitted). Absent = proportional sizing, byte-identical to before (see the Phase 6 small-n study) |
+| `evaluation.integration_params.layers` | Omic blocks to measure, e.g. `["methylation", "expression"]`; absent = all three, byte-identical to before. Usable as a design-grid axis (`null` = all three) whose columns share data |
 | `generator.magnitude_kind` | Magnitude construction (`joint` default, `all`, `extremes`); every committed config names it, and a new config must choose it deliberately (see below) |
 | `report_contract` | Declared reporting/execution rules (`driver_component`, `cross_replicate_driver_agreement: descriptive`, `n_jobs_override: forbid`/`warn`); adds `report_contract.json` + `driver_report.csv` and, under `forbid`, makes the runner refuse `--n-jobs` (see the Phase 5 paper-grade study) |
 
@@ -684,3 +686,87 @@ The findings go in a dated addendum,
 `phase5_report_template.md` section for section with the non-magnitude sections
 marked not applicable; it lifts the withheld magnitude-specificity claim or
 reports it as failed on the construction's own terms.
+
+## Phase 6 small-n operating study (SEA-AD design)
+
+Phase 6 applies MOTCO to SEA-AD MTG astrocytes: donor pseudobulks of RNA and
+ATAC, Sex as the group, three merged ADNC stages (Not AD + Low / Intermediate /
+High), 80 donors at ≥30 nuclei (F 11/10/28, M 9/10/12). Every operating
+characteristic measured so far used three blocks, four balanced stages and
+n = 300–1200, so this study measures `delta`/`angle`/`shape` Type I and power
+at the cohort's own design before any SEA-AD result is interpreted. The
+simulation is a structural analogue, not an RNA/ATAC emulator.
+
+Two keys make the design expressible; both are byte-identical when absent:
+
+- `generator.group_stage_sizes` — the exact donor table (group A = F, group
+  B = M, so the surgery lands on the smaller group: the conservative choice).
+- `evaluation.integration_params.layers = ["methylation", "expression"]` — all
+  three InterSIM blocks are generated and two are measured. Methylation stays
+  because every surgery acts on methylation indicators; it is the regulatory
+  analogue of ATAC.
+
+**Pilot** `phase6_small_n_pilot.json`: baseline column only, 100 × 199, gate
+disabled, shared log-spaced effect axis 0 / 0.005 / 0.01 / 0.02 / 0.05 / 0.10 /
+0.25 / 0.50 / 1.00 for all four modes, `magnitude_kind: joint`, new matched-seed
+family `phase6-small-n` (base seed 800). 35 cells (2 Type I baselines + 1 shared
+zero-effect anchor + 4 × 8), 3,500 units. A local smoke at 9 permutations ran
+at about 15 s per unit on a workstation; the pilot records the cluster median.
+It brackets where each mode's target statistic rises at n = 80.
+
+**Pilot run 2026-10-09** (`results/phase6-small-n-pilot-2026-10-09/`, `NOTES.md`
+and `PROVENANCE.txt`): 3,500 / 3,500 units, 0 failures, median 8.0 s per unit
+(8.6 core-hours). Type I is controlled. Magnitude/`delta` rises over e =
+0.02–0.25 (0.09 → 0.93) and saturates at 0.50. Orientation/`angle` and
+shape/`shape` reach only 0.24 and 0.18 at e = 1.00, the relocation
+construction's ceiling (the fraction is clamped at 1). At three stages the
+stage-mean eigengap is small (anchor median 0.11), so the `angle` null is very
+wide, and the stage-supervised PLS space attenuates the rotation.
+
+**Paper grade**, split per the pilot (spec split rule), both at 500 × 999 with
+the Phase 5 report contract and the Phase 4 gate rules as advisory targets:
+
+- `phase6_small_n_magnitude.json` — magnitude, effects 0 / 0.02 / 0.05 / 0.10 /
+  0.25 / 0.50 / 1.00; reduced magnitude gate. 30 cells, 15,000 units.
+- `phase6_small_n_study.json` — orientation, shape, translation, effects 0 /
+  0.25 / 0.50 / 0.75 / 1.00; orientation attribution. 54 cells, 27,000 units.
+
+Both copy the pilot's generator, evaluation (permutations raised to 999), base
+seed and matched-seed family, so all three profiles share their zero-effect
+anchor datasets. Each crosses `generator.group_stage_sizes` (≥30 nuclei, ≥50
+nuclei `[[10, 9, 25], [9, 9, 12]]`, n = 74) with
+`evaluation.integration_params.layers` (two blocks, `null` = three) into four
+columns. The design grid always crosses its axes, so the ≥50-nuclei
+three-block column runs too, although neither contrast needs it. The findings
+report reads cohort size as baseline vs ≥50 nuclei at two blocks and block count
+as baseline vs three blocks at n = 80, and ends with a per-statistic
+interpretability statement for the case study. Planning cost: about 10 s per
+unit, about 117 core-hours, 140 with a 20% margin.
+
+**Run 2026-10-09** — see the
+[findings report](../../docs/reports/phase6-small-n-2026-10-09.md) and
+`results/phase6-small-n-magnitude-2026-10-09/` and
+`results/phase6-small-n-2026-10-09/` (`report/`, `PROVENANCE.txt`).
+42,000 / 42,000 units, 0 failures, 150 recorded core-hours. Node n4 ran out of
+memory mid-run; its 12 stalled shards were cancelled and resumed elsewhere
+without loss. Type I is controlled (0.010–0.040).
+
+- **Magnitude** (gate PROCEED): `delta` 0.206 / 0.542 / 0.956 at e = 0.05 /
+  0.10 / 0.25, with `angle` and `shape` at the floor.
+- **Orientation/shape** (gate HOLD): `angle` 0.300 and `shape` 0.228 at the
+  construction maximum. Both constructions are detected more often by other
+  statistics.
+- **Third block** (same datasets): raises power for every mode.
+- **≥50-nuclei cohort**: leaves magnitude unchanged. It lowers orientation at
+  e = 1.00 through CV rank selection.
+
+```bash
+export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
+RUN=results/phase6-small-n-pilot-$(date -u +%F)
+CFG=examples/trajectory_power_study/phase6_small_n_pilot.json
+sbatch -p 512x1024 --cpus-per-task=1 --mem=2G --time=6:00:00 --array=0-99 \
+    --export=ALL,STUDY_CONFIG=$(pwd)/$CFG,STUDY_OUT=$(pwd)/$RUN,N_SHARDS=100 \
+    scripts/motco_study_array.sbatch
+python scripts/motco_study.py merge  --out-dir $RUN
+python scripts/motco_study.py report --config $CFG --out-dir $RUN
+```

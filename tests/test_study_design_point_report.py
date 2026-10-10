@@ -297,3 +297,32 @@ def test_design_cells_are_invisible_to_baseline_readers() -> None:
     assert set(frames.power_curves["phase"]) == {"power_primary"}
     assert set(frames.specificity_matrix["phase"]) == {"power_primary"}
     assert frames.type_i_table.empty
+
+
+def test_list_valued_design_axes_survive_a_jsonl_round_trip() -> None:
+    """Size tables and layer lists come back from JSONL as nested lists; they must still key a point."""
+
+    sizes = "generator.group_stage_sizes"
+    layers = "evaluation.integration_params.layers"
+    baseline = {sizes: [[11, 10, 28], [9, 10, 12]], layers: ["methylation", "expression"]}
+    # Same size table, layers differing only by list vs None: the three-block column.
+    three_blocks = {sizes: [[11, 10, 28], [9, 10, 12]], layers: None}
+    smaller = {sizes: [[10, 9, 25], [9, 9, 12]], layers: ["methylation", "expression"]}
+    records = [
+        record(point=baseline, phase="power_primary", mode="orientation", effect=1.0, index=i, p_angle=0.01)
+        for i in range(4)
+    ] + [
+        record(point=point, phase=DESIGN_PHASE, mode="orientation", effect=1.0, index=i, p_angle=0.9)
+        for point in (three_blocks, smaller)
+        for i in range(4)
+    ]
+    frame = resolve_operating_by_design_point(records)
+    angle = frame[frame["statistic"] == "angle"]
+    assert len(angle) == 3
+    primary = angle[angle["phase"] == "power_primary"].iloc[0]
+    assert primary["rejection_rate"] == 1.0
+    assert primary[sizes] == ((11, 10, 28), (9, 10, 12))
+    assert primary[layers] == ("methylation", "expression")
+    design = angle[angle["phase"] == DESIGN_PHASE]
+    assert design["rejection_rate"].tolist() == [0.0, 0.0]
+    assert design[layers].tolist().count(None) == 1

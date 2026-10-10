@@ -717,6 +717,8 @@ def _build_generator(raw: Mapping[str, Any]) -> SemiSyntheticTrajectoryParams:
             value = tuple(str(v) for v in value)
         if f.name == "stage_sample_prop" and value is not None:
             value = tuple(float(v) for v in value)
+        if f.name == "group_stage_sizes":
+            value = _normalize_group_stage_sizes(value)
         kwargs[f.name] = value
     # Reject an unknown construction variant at load time rather than letting
     # every work unit fail at generation. The selectable set is the generator's
@@ -755,13 +757,39 @@ def _build_attribution_settings(raw: Mapping[str, Any]) -> AttributionDiagnostic
     return AttributionDiagnosticSettings(**{key: raw[key] for key in raw})
 
 
+def _normalize_group_stage_sizes(value: Any) -> Any:
+    """Nested JSON lists → a tuple of int tuples, so equal tables hash equally.
+
+    Malformed shapes pass through unchanged for the generator to reject with
+    its own message.
+    """
+
+    if value is None or isinstance(value, str | bytes) or not isinstance(value, Sequence):
+        return value
+    rows: list[Any] = []
+    for row in value:
+        if isinstance(row, str | bytes) or not isinstance(row, Sequence):
+            return value
+        rows.append(tuple(row))
+    return tuple(rows)
+
+
+#: Axis values that need the same normalization as their baseline field.
+_AXIS_VALUE_NORMALIZERS = {"generator.group_stage_sizes": _normalize_group_stage_sizes}
+
+
+def _normalize_axis_values(axis: str, values: Sequence[Any]) -> tuple[Any, ...]:
+    normalize = _AXIS_VALUE_NORMALIZERS.get(axis)
+    return tuple(values) if normalize is None else tuple(normalize(value) for value in values)
+
+
 def _build_axes(raw: Mapping[str, Any]) -> Mapping[str, tuple[Any, ...]]:
     axes: dict[str, tuple[Any, ...]] = {}
     for axis, values in raw.items():
         _validate_axis_namespace(axis)
         if not isinstance(values, Sequence) or isinstance(values, str | bytes):
             raise StudyConfigError(f"axis {axis!r} values must be a sequence.")
-        axes[axis] = tuple(values)
+        axes[axis] = _normalize_axis_values(axis, values)
     return axes
 
 
@@ -776,7 +804,7 @@ def _build_design_grid(raw: Mapping[str, Any]) -> DesignGrid:
         _validate_axis_namespace(axis, label="design_grid.axes")
         if not isinstance(values, Sequence) or isinstance(values, str | bytes):
             raise StudyConfigError(f"design_grid.axes[{axis!r}] values must be a sequence.")
-        axes[axis] = tuple(values)
+        axes[axis] = _normalize_axis_values(axis, values)
     return DesignGrid(axes=axes)
 
 
@@ -1071,7 +1099,13 @@ def _split_axis_or_raise(axis: str) -> tuple[str, tuple[str, ...]]:
 
 def _config_to_dict(config: StudyConfig) -> dict[str, Any]:
     return {
-        "generator": _dataclass_dict(config.generator),
+        # An unset size table is omitted, as in the parameter signature, so a
+        # dumped config that never used it is unchanged.
+        "generator": {
+            key: value
+            for key, value in _dataclass_dict(config.generator).items()
+            if not (key == "group_stage_sizes" and value is None)
+        },
         "evaluation": _dataclass_dict(config.evaluation),
         "trajectory_modes": list(config.trajectory_modes),
         "effect_sizes": list(config.effect_sizes),

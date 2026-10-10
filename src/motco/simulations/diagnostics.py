@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 
 from motco.simulations.preprocessing import (
-    OMIC_LAYERS,
     FittedOmicsPreprocessor,
     concatenate_blocks,
 )
@@ -62,7 +61,13 @@ def calculate_realized_geometry(
     group_col: str = "group",
     stage_col: str = "stage",
 ) -> RealizedGeometryDiagnostics:
-    """Calculate all applicable geometry checkpoints for one replicate."""
+    """Calculate all applicable geometry checkpoints for one replicate.
+
+    Only the layers the preprocessor was fitted on are measured: per-block
+    scopes cover those layers, and every joint scope concatenates them alone.
+    """
+
+    layers = preprocessor.layers
 
     group_levels = sorted(pd.unique(dataset.metadata[group_col].astype(str)).tolist())
     stage_levels = sorted(pd.unique(dataset.metadata[stage_col].astype(str)).tolist())
@@ -72,19 +77,19 @@ def calculate_realized_geometry(
     if population is not None:
         checkpoints["population_native"] = {
             layer: geometry_from_means(population.layers[layer], group_levels, stage_levels)
-            for layer in OMIC_LAYERS
+            for layer in layers
         }
         standardized_population = preprocessor.transform_population(population)
         checkpoints["population_standardized"] = {
             layer: geometry_from_means(standardized_population[layer], group_levels, stage_levels)
-            for layer in OMIC_LAYERS
+            for layer in layers
         }
         checkpoints["population_standardized"]["joint"] = geometry_from_means(
             concatenate_blocks(standardized_population), group_levels, stage_levels
         )
 
     observed_scopes: dict[str, GeometryDiagnostic] = {}
-    for layer in OMIC_LAYERS:
+    for layer in layers:
         means = get_observed_vectors(
             dataset.metadata,
             observed_blocks[layer],
@@ -92,7 +97,7 @@ def calculate_realized_geometry(
             level_col=stage_col,
         )
         observed_scopes[layer] = geometry_from_means(means, group_levels, stage_levels)
-    observed_joint = concatenate_blocks(observed_blocks)
+    observed_joint = concatenate_blocks({layer: observed_blocks[layer] for layer in layers})
     joint_means = get_observed_vectors(
         dataset.metadata,
         observed_joint,
