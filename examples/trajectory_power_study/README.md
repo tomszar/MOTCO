@@ -743,6 +743,23 @@ as baseline vs three blocks at n = 80, and ends with a per-statistic
 interpretability statement for the case study. Planning cost: about 10 s per
 unit, about 117 core-hours, 140 with a 20% margin.
 
+**Run 2026-10-09** — see the
+[findings report](../../docs/reports/phase6-small-n-2026-10-09.md) and
+`results/phase6-small-n-magnitude-2026-10-09/` and
+`results/phase6-small-n-2026-10-09/` (`report/`, `PROVENANCE.txt`).
+42,000 / 42,000 units, 0 failures, 150 recorded core-hours. Node n4 ran out of
+memory mid-run; its 12 stalled shards were cancelled and resumed elsewhere
+without loss. Type I is controlled (0.010–0.040).
+
+- **Magnitude** (gate PROCEED): `delta` 0.206 / 0.542 / 0.956 at e = 0.05 /
+  0.10 / 0.25, with `angle` and `shape` at the floor.
+- **Orientation/shape** (gate HOLD): `angle` 0.300 and `shape` 0.228 at the
+  construction maximum. Both constructions are detected more often by other
+  statistics.
+- **Third block** (same datasets): raises power for every mode.
+- **≥50-nuclei cohort**: leaves magnitude unchanged. It lowers orientation at
+  e = 1.00 through CV rank selection.
+
 ```bash
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 RUN=results/phase6-small-n-pilot-$(date -u +%F)

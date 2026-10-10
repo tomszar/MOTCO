@@ -40,6 +40,6 @@
 
 ## 7. Paper-grade run and findings
 
-- [ ] 7.1 Run the paper-grade study on `ing`, then merge and report; verify unit and failure accounting against the enumerated count
-- [ ] 7.2 Write `docs/reports/phase6-small-n-<date>.md` following `phase5_report_template.md`, with per-statistic Type I and power, the eigengap distribution with tercile-stratified orientation power, the separate cohort-size and block-count contrasts, and the per-statistic interpretability statement; verify every required item in the findings-report spec is present
-- [ ] 7.3 Update `docs/roadmap.md` (Phase 6 status, the small-n result, and the link to the external case-study repo and pinned versions); verify the roadmap's Phase 6 section cites the report
+- [x] 7.1 Run the paper-grade study on `ing`, then merge and report; verify unit and failure accounting against the enumerated count
+- [x] 7.2 Write `docs/reports/phase6-small-n-<date>.md` following `phase5_report_template.md`, with per-statistic Type I and power, the eigengap distribution with tercile-stratified orientation power, the separate cohort-size and block-count contrasts, and the per-statistic interpretability statement; verify every required item in the findings-report spec is present
+- [x] 7.3 Update `docs/roadmap.md` (Phase 6 status, the small-n result, and the link to the external case-study repo and pinned versions); verify the roadmap's Phase 6 section cites the report

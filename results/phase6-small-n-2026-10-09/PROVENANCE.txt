@@ -1,0 +1,19 @@
+# Phase 6 small-n paper-grade study, orientation / shape / translation profile — provenance
+date_utc: 2026-10-09T22:09:46Z (first array task start; the array queued behind the magnitude profile); run directory named for the launch date
+config: examples/trajectory_power_study/phase6_small_n_study.json
+config_sha256: 18cf0fc714d3da21875e8a5f96a6f929f40c4a1169df970f34819a6443f07b4e (verified identical on the workstation and the cluster before submit)
+code_revision (records): 5325f6ddcd5e9401ecc0a0d2559c715c515b8afb (branch feat/phase6-small-n-operating-study); clean tree on the cluster (only the untracked logs/ directory)
+code_revision (report): 946e471eff0a3c5852009c44eec383810a1000b8 — the same tree plus the design-point reporting fix (sequence-valued design axes); records, signatures and statistics are untouched by it
+host: cluster.ing.uc.cl (SLURM), partition 512x1024, AMD EPYC 7662 compute nodes; venv python 3.11.16, motco 0.6.0, numpy 2.3.5, scikit-learn 1.8.0, scipy 1.16.3, pandas 2.3.3, uv 0.12.10
+blas_threads: OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 (exported at submit); STUDY_N_JOBS unset (report_contract n_jobs_override forbid)
+error_policy: record (from the sbatch template)
+shard layout: N_SHARDS=100, --array=0-99, --n-shards 100; units mapped to shards by the stable (cell_id, replicate_index) hash
+launch: sbatch -p 512x1024 --exclude=n3 --job-name=motco-p6-study --cpus-per-task=1 --mem=2G --time=8:00:00 --array=0-99 --export=ALL,STUDY_CONFIG=/home1/tgonza/MOTCO/examples/trajectory_power_study/phase6_small_n_study.json,STUDY_OUT=/home1/tgonza/MOTCO/results/phase6-small-n-2026-10-09,N_SHARDS=100 scripts/motco_study_array.sbatch; at 2026-10-09T21:30Z, before any task started, the pending array was updated to ExcNodeList=n3,n4 after n4 ran out of memory (see the magnitude profile's PROVENANCE.txt)
+job_id: 907851
+units: 54 cells x 500 replicates = 27,000 (2 Type I baselines + 4 design columns x (1 shared zero-effect anchor + 3 modes x 4 nonzero effects)); 999 permutations per unit; attribution (100 bootstraps, top-20, seed 0) on the 4 nonzero orientation power_primary cells
+n_jobs: 1 in every record, equal to evaluation.n_jobs = 1
+outcome: all 100 array tasks COMPLETED with exit 0:0 and empty stderr; 27,000/27,000 units present exactly once; all 54 enumerated cell ids present with exactly 500 replicates; every record's parameter_signature equals the enumerated cell's; 0 failed records; 0 censored surgeries; attribution computed on exactly the 2,000 selected units, not requested on the other 25,000
+wall: 2026-10-09T22:09:46Z -> 2026-10-10T03:18:18Z (5 h 08 m); tasks landed on n2 (60), n11 (26), n1 (14); shortest task 907851_18 at 50:01, longest 907851_68 at 1:48:09
+unit_timings: 27,000 units, median 13.2 s (min 11.0, mean 13.6, max 19.5), 102.4 recorded core-hours
+merge: python scripts/motco_study.py merge --out-dir results/phase6-small-n-2026-10-09 (cluster; 27,000 records); merged.jsonl sha256 6a91a47e4b0fba012a2289a02e21808375492d088543d9a863c16e48af72ed2e, verified byte-identical after rsync to the workstation; merged.jsonl and shard_*.jsonl remain gitignored
+report: python scripts/motco_study.py report --config examples/trajectory_power_study/phase6_small_n_study.json --out-dir results/phase6-small-n-2026-10-09 (cluster, at 946e471); report/ rsynced to the workstation. The first report attempt at 5325f6d crashed in resolve_operating_by_design_point (unhashable list design coordinate) before writing anything; fixed in 946e471 with a regression test.

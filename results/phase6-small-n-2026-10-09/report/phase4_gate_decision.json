@@ -1,0 +1,811 @@
+{
+  "decision": "hold",
+  "rationale": "Mandatory gate(s) failed: mandatory_power[orientation,angle] (top_rate=0.300 < floor=0.800; tolerated_monotone=True); mandatory_power[shape,shape] (top_rate=0.228 < floor=0.800; tolerated_monotone=True)",
+  "confirmation_runs": [],
+  "observations": [
+    {
+      "rule": "type_i_inflation[power_primary-1a2e4088b485,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "delta",
+      "cell_id": "power_primary-1a2e4088b485",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0260 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-1a2e4088b485",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "delta",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.026,
+        "monte_carlo_se": 0.007116740827092132,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04349358868961793,
+        "exceedance_in_se": -6.11144760591053
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-1a2e4088b485,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "angle",
+      "cell_id": "power_primary-1a2e4088b485",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0240 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-1a2e4088b485",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "angle",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.024,
+        "monte_carlo_se": 0.00684455988358638,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04549358868961793,
+        "exceedance_in_se": -6.646678451702056
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-1a2e4088b485,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "shape",
+      "cell_id": "power_primary-1a2e4088b485",
+      "effect_size": 0.0,
+      "met": true,
+      "detail": "rate=0.0200 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-1a2e4088b485",
+        "phase": "power_primary",
+        "trajectory_mode": "none",
+        "statistic": "shape",
+        "effect_size": 0.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.02,
+        "monte_carlo_se": 0.006260990336999411,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04949358868961792,
+        "exceedance_in_se": -7.905073482885744
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-3826507dca97,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-3826507dca97",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0300 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-3826507dca97",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.03,
+        "monte_carlo_se": 0.00762889244910426,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03949358868961793,
+        "exceedance_in_se": -5.176844339214015
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-3826507dca97,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-3826507dca97",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0300 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-3826507dca97",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.03,
+        "monte_carlo_se": 0.00762889244910426,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03949358868961793,
+        "exceedance_in_se": -5.176844339214015
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-3826507dca97,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-3826507dca97",
+      "effect_size": 0.75,
+      "met": true,
+      "detail": "rate=0.0300 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-3826507dca97",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.75,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.03,
+        "monte_carlo_se": 0.00762889244910426,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03949358868961793,
+        "exceedance_in_se": -5.176844339214015
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-532b91e432f9,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-532b91e432f9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0280 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-532b91e432f9",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.028,
+        "monte_carlo_se": 0.007377804551490911,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04149358868961793,
+        "exceedance_in_se": -5.624110587374245
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-532b91e432f9,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-532b91e432f9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0280 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-532b91e432f9",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.028,
+        "monte_carlo_se": 0.007377804551490911,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04149358868961793,
+        "exceedance_in_se": -5.624110587374245
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-532b91e432f9,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-532b91e432f9",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0300 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-532b91e432f9",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.03,
+        "monte_carlo_se": 0.00762889244910426,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03949358868961793,
+        "exceedance_in_se": -5.176844339214015
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-6362cb90f244,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-6362cb90f244",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0320 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-6362cb90f244",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.032,
+        "monte_carlo_se": 0.007870959280799261,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.03749358868961793,
+        "exceedance_in_se": -4.763534831272894
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-6362cb90f244,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-6362cb90f244",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0180 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-6362cb90f244",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.018,
+        "monte_carlo_se": 0.005945754788081997,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.051493588689617925,
+        "exceedance_in_se": -8.660563801392305
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-6362cb90f244,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-6362cb90f244",
+      "effect_size": 0.5,
+      "met": true,
+      "detail": "rate=0.0100 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-6362cb90f244",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.5,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.01,
+        "monte_carlo_se": 0.0044497190922573975,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.059493588689617925,
+        "exceedance_in_se": -13.370189770661701
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-c15d63dd7033,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "power_primary-c15d63dd7033",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0140 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-c15d63dd7033",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.014,
+        "monte_carlo_se": 0.00525433154644813,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.05549358868961793,
+        "exceedance_in_se": -10.56149354091121
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-c15d63dd7033,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "power_primary-c15d63dd7033",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0180 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-c15d63dd7033",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.018,
+        "monte_carlo_se": 0.005945754788081997,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.051493588689617925,
+        "exceedance_in_se": -8.660563801392305
+      }
+    },
+    {
+      "rule": "type_i_inflation[power_primary-c15d63dd7033,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "power_primary-c15d63dd7033",
+      "effect_size": 0.25,
+      "met": true,
+      "detail": "rate=0.0140 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "power_primary-c15d63dd7033",
+        "phase": "power_primary",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 0.25,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.014,
+        "monte_carlo_se": 0.00525433154644813,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.05549358868961793,
+        "exceedance_in_se": -10.56149354091121
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-74c0457435ca,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "delta",
+      "cell_id": "type_i_baseline-74c0457435ca",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0340 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-74c0457435ca",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "delta",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.034,
+        "monte_carlo_se": 0.008104813384649889,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.035493588689617925,
+        "exceedance_in_se": -4.379322139216803
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-74c0457435ca,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "angle",
+      "cell_id": "type_i_baseline-74c0457435ca",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0400 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-74c0457435ca",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "angle",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.04,
+        "monte_carlo_se": 0.008763560920082658,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.029493588689617926,
+        "exceedance_in_se": -3.365479963975619
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-74c0457435ca,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "translation",
+      "statistic": "shape",
+      "cell_id": "type_i_baseline-74c0457435ca",
+      "effect_size": 1.0,
+      "met": true,
+      "detail": "rate=0.0180 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-74c0457435ca",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "translation",
+        "statistic": "shape",
+        "effect_size": 1.0,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.018,
+        "monte_carlo_se": 0.005945754788081997,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.051493588689617925,
+        "exceedance_in_se": -8.660563801392305
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-ca766c21680e,delta]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "delta",
+      "cell_id": "type_i_baseline-ca766c21680e",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0160 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-ca766c21680e",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "delta",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.016,
+        "monte_carlo_se": 0.005611416933360059,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.05349358868961793,
+        "exceedance_in_se": -9.532991279189536
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-ca766c21680e,angle]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "angle",
+      "cell_id": "type_i_baseline-ca766c21680e",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0280 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-ca766c21680e",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "angle",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.028,
+        "monte_carlo_se": 0.007377804551490911,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.04149358868961793,
+        "exceedance_in_se": -5.624110587374245
+      }
+    },
+    {
+      "rule": "type_i_inflation[type_i_baseline-ca766c21680e,shape]",
+      "kind": "type_i_inflation",
+      "trajectory_mode": "none",
+      "statistic": "shape",
+      "cell_id": "type_i_baseline-ca766c21680e",
+      "effect_size": null,
+      "met": true,
+      "detail": "rate=0.0180 <= bound=0.0695 (alpha=0.05 + 2\u00b7SE, n=500)",
+      "observations": {
+        "cell_id": "type_i_baseline-ca766c21680e",
+        "phase": "type_i_baseline",
+        "trajectory_mode": "none",
+        "statistic": "shape",
+        "effect_size": null,
+        "alpha": 0.05,
+        "se_tolerance": 2.0,
+        "rejection_rate": 0.018,
+        "monte_carlo_se": 0.005945754788081997,
+        "available_replicates": 500,
+        "bound": 0.06949358868961793,
+        "exceedance": -0.051493588689617925,
+        "exceedance_in_se": -8.660563801392305
+      }
+    },
+    {
+      "rule": "mandatory_power[orientation,angle]",
+      "kind": "power",
+      "trajectory_mode": "orientation",
+      "statistic": "angle",
+      "cell_id": null,
+      "effect_size": 1.0,
+      "met": false,
+      "detail": "top_rate=0.300 < floor=0.800; tolerated_monotone=True",
+      "observations": {
+        "trajectory_mode": "orientation",
+        "statistic": "angle",
+        "min_power_at_top": 0.8,
+        "monotonicity_se_tolerance": 2.0,
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.024,
+            "se": 0.00684455988358638,
+            "from_shared_anchor": true
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.034,
+            "se": 0.008104813384649889,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.058,
+            "se": 0.010453324829928513,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.09,
+            "se": 0.012798437404620925,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.3,
+            "se": 0.020493901531919195,
+            "from_shared_anchor": false
+          }
+        ],
+        "top_effect_size": 1.0,
+        "top_rate": 0.3,
+        "reversals": []
+      }
+    },
+    {
+      "rule": "mandatory_power[shape,shape]",
+      "kind": "power",
+      "trajectory_mode": "shape",
+      "statistic": "shape",
+      "cell_id": null,
+      "effect_size": 1.0,
+      "met": false,
+      "detail": "top_rate=0.228 < floor=0.800; tolerated_monotone=True",
+      "observations": {
+        "trajectory_mode": "shape",
+        "statistic": "shape",
+        "min_power_at_top": 0.8,
+        "monotonicity_se_tolerance": 2.0,
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.02,
+            "se": 0.006260990336999411,
+            "from_shared_anchor": true
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.06,
+            "se": 0.010620734437881401,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.09,
+            "se": 0.012798437404620925,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.172,
+            "se": 0.0168769665520792,
+            "from_shared_anchor": false
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.228,
+            "se": 0.018762515822778138,
+            "from_shared_anchor": false
+          }
+        ],
+        "top_effect_size": 1.0,
+        "top_rate": 0.228,
+        "reversals": []
+      }
+    },
+    {
+      "rule": "descriptive[orientation,delta]",
+      "kind": "descriptive",
+      "trajectory_mode": "orientation",
+      "statistic": "delta",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.026,
+            "se": 0.007116740827092132
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.07,
+            "se": 0.011410521460476731
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.16,
+            "se": 0.016395121225535356
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.194,
+            "se": 0.01768411716767337
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.354,
+            "se": 0.021386163751360363
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[orientation,shape]",
+      "kind": "descriptive",
+      "trajectory_mode": "orientation",
+      "statistic": "shape",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.02,
+            "se": 0.006260990336999411
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.068,
+            "se": 0.011258419071965654
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.196,
+            "se": 0.01775297158224504
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.32,
+            "se": 0.020861447696648473
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.464,
+            "se": 0.022302645582979615
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[shape,delta]",
+      "kind": "descriptive",
+      "trajectory_mode": "shape",
+      "statistic": "delta",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.026,
+            "se": 0.007116740827092132
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.104,
+            "se": 0.013651666564928987
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.216,
+            "se": 0.01840347793217358
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.292,
+            "se": 0.0203340109176719
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.33,
+            "se": 0.02102855201862458
+          }
+        ]
+      }
+    },
+    {
+      "rule": "descriptive[shape,angle]",
+      "kind": "descriptive",
+      "trajectory_mode": "shape",
+      "statistic": "angle",
+      "cell_id": null,
+      "effect_size": null,
+      "met": null,
+      "detail": "Descriptive only: the constructions are known to be mixed, so this pair is reported against realized geometry rather than gated.",
+      "observations": {
+        "points": [
+          {
+            "effect_size": 0.0,
+            "rate": 0.024,
+            "se": 0.00684455988358638
+          },
+          {
+            "effect_size": 0.25,
+            "rate": 0.042,
+            "se": 0.008970618707759236
+          },
+          {
+            "effect_size": 0.5,
+            "rate": 0.076,
+            "se": 0.011851075900524812
+          },
+          {
+            "effect_size": 0.75,
+            "rate": 0.112,
+            "se": 0.014103616557464968
+          },
+          {
+            "effect_size": 1.0,
+            "rate": 0.138,
+            "se": 0.01542439626046997
+          }
+        ]
+      }
+    },
+    {
+      "rule": "diagnostic_completeness",
+      "kind": "completeness",
+      "trajectory_mode": "*",
+      "statistic": "*",
+      "cell_id": null,
+      "effect_size": null,
+      "met": true,
+      "detail": "All expected records and mandatory diagnostics present",
+      "observations": {
+        "records": 27000,
+        "completed": 27000,
+        "failed": 0,
+        "expected_units": 27000,
+        "pls_records": 27000,
+        "missing_integration_metadata": 0,
+        "missing_realized_geometry": 0,
+        "attribution_eligible": 2000,
+        "attribution_incomplete": 0
+      }
+    }
+  ]
+}
