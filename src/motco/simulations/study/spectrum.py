@@ -496,7 +496,9 @@ def _sortable(values: Any) -> Any:
     """Make design coordinates orderable across mixed value types."""
 
     if isinstance(values, tuple):
-        return tuple(_sortable(value) for value in values)
+        # Tagged like the scalars, so a sequence-valued coordinate (a size table)
+        # and a scalar or ``None`` on the same axis still compare.
+        return (2, tuple(_sortable(value) for value in values))
     if isinstance(values, bool | int | float):
         return (0, float(values))
     return (1, str(values))
@@ -514,7 +516,19 @@ def record_design_point(record: SimulationReplicateResult) -> dict[str, Any] | N
     point = (record.cell_metadata or {}).get(DESIGN_POINT_KEY)
     if not isinstance(point, Mapping):
         return None
-    return dict(point)
+    return {axis: _freeze(value) for axis, value in point.items()}
+
+
+def _freeze(value: Any) -> Any:
+    """Sequence-valued coordinates as tuples, so a design point can key a dict.
+
+    JSON persistence turns a tuple-valued axis (``generator.group_stage_sizes``,
+    ``evaluation.integration_params.layers``) into nested lists.
+    """
+
+    if isinstance(value, list | tuple):
+        return tuple(_freeze(item) for item in value)
+    return value
 
 
 #: Design-grid axis name of the retained PLS rank (nested evaluation parameter).
